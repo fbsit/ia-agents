@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+.venv/
+.streamlit/secrets.toml
+
+# Backend (Python)
+backend/.env
+backend/models/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/logs/
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/coverage/
+frontend/.env.local
+
+# Legacy frontend archive
+archive/apps-web-legacy/node_modules/
+archive/apps-web-legacy/.next/

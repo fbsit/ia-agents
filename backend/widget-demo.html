@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <title>Widget Demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(circle at 18% 16%, #e7f2ff 0%, #eef2f7 34%, #f4f6fb 100%);
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+
+      #northline-agent-widget-root {
+        position: fixed;
+        right: 15px;
+        bottom: 20px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        width: max-content;
+      }
+
+      #northline-agent-widget-toggle {
+        width: 58px;
+        height: 58px;
+        border: 0;
+        border-radius: 999px;
+        padding: 0;
+        background: #ffffff;
+        overflow: hidden;
+        cursor: pointer;
+        box-shadow: 0 18px 32px rgba(47, 128, 237, 0.35);
+      }
+
+      .widget-toggle-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      #northline-agent-widget-panel {
+        width: min(340px, calc(100vw - 20px));
+        height: min(540px, calc(100vh - 96px));
+        border-radius: 16px;
+        border: 1px solid #d9e2ee;
+        overflow: hidden;
+        background: #f4f6f9;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 22px 44px rgba(15, 23, 42, 0.2);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(12px) scale(0.98);
+        transition: opacity 0.18s ease, transform 0.18s ease;
+        margin-bottom: 10px;
+        transform-origin: right bottom;
+      }
+
+      #northline-agent-widget-root.open #northline-agent-widget-panel {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0) scale(1);
+      }
+
+      .widget-header {
+        background: linear-gradient(125deg, #111827 0%, #263548 100%);
+        color: #fff;
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+      }
+
+      .header-center {
+        display: flex;
+        align-items: center;
+      }
+
+      .header-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        background: radial-gradient(circle at 36% 30%, #87dbff 0%, #3b82f6 58%, #1d4ed8 100%);
+        margin-right: 8px;
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.65);
+      }
+
+      .header-title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .header-subtitle {
+        font-size: 11px;
+        color: #cdd8e7;
+      }
+
+      #northline-agent-widget-messages {
+        flex: 1;
+        overflow: auto;
+        padding: 12px;
+        display: grid;
+        gap: 8px;
+        align-content: start;
+      }
+
+      .northline-msg {
+        width: fit-content;
+        max-width: 88%;
+        border-radius: 10px;
+        padding: 9px 11px;
+        border: 1px solid #d6dde8;
+        color: #1f2937;
+        background: #eef2f7;
+        font-size: 14px;
+        line-height: 1.34;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .northline-msg.user {
+        margin-left: auto;
+        background: #dff3ff;
+        border-color: #bfdcf8;
+      }
+
+      .northline-muted {
+        font-size: 11px;
+        color: #8a98aa;
+        margin-bottom: -2px;
+      }
+
+      .northline-msg.typing {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 48px;
+      }
+
+      .typing-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #90a0b6;
+        animation: northline-dot 1s infinite ease-in-out;
+      }
+
+      .typing-dot:nth-child(2) {
+        animation-delay: 0.15s;
+      }
+
+      .typing-dot:nth-child(3) {
+        animation-delay: 0.3s;
+      }
+
+      #northline-agent-widget-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 7px;
+        align-items: center;
+        border-top: 1px solid #dbe3ee;
+        background: #fff;
+        padding: 10px;
+      }
+
+      #northline-agent-widget-input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 0;
+        background: transparent;
+        font-size: 13px;
+        color: #334155;
+        outline: none;
+      }
+
+      #northline-agent-widget-send {
+        border: 0;
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: #2f80ed;
+        color: #fff;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      @keyframes northline-dot {
+        0%,
+        80%,
+        100% {
+          transform: translateY(0);
+          opacity: 0.45;
+        }
+        40% {
+          transform: translateY(-3px);
+          opacity: 1;
+        }
+      }
+
+      @media (max-width: 520px) {
+        #northline-agent-widget-root {
+          right: 15px;
+          bottom: 10px;
+        }
+
+        #northline-agent-widget-panel {
+          width: calc(100vw - 20px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="northline-agent-widget-root">
+      <section id="northline-agent-widget-panel" role="dialog" aria-label="Widget de soporte">
+        <header class="widget-header">
+          <div class="header-center">
+            <span class="header-avatar" aria-hidden="true"></span>
+            <div>
+              <div class="header-title" id="northline-agent-widget-title">Kronix Bot</div>
+              <div class="header-subtitle" id="northline-agent-widget-subtitle">Soporte Kronix</div>
+            </div>
+          </div>
+        </header>
+        <div id="northline-agent-widget-messages" aria-live="polite"></div>
+        <form id="northline-agent-widget-form">
+          <input id="northline-agent-widget-input" type="text" placeholder="Escribe tu mensaje..." />
+          <button id="northline-agent-widget-send" type="submit">Enviar</button>
+        </form>
+      </section>
+      <button id="northline-agent-widget-toggle" type="button" aria-expanded="false" aria-label="Abrir chat">
+        <img src="./widget-bot.png" alt="Abrir chat" class="widget-toggle-image" />
+      </button>
+    </div>
+
+    <script>
+      (function () {
+        const cfg = {
+          apiBaseUrl: "http://localhost:8000",
+          widgetId: "ecfcc0ac96604b7690c1031bd0274509",
+          widgetToken: "46e71f3fda19a7a8ac1780e6846d929d5b2111065fdf8b1fbc4e3d513f6b75e2",
+          brandTitle: "Kronix Bot",
+          systemBotName: "Soporte Kronix"
+        };
+
+        const root = document.getElementById("northline-agent-widget-root");
+        const toggle = document.getElementById("northline-agent-widget-toggle");
+        const messages = document.getElementById("northline-agent-widget-messages");
+        const form = document.getElementById("northline-agent-widget-form");
+        const input = document.getElementById("northline-agent-widget-input");
+        const send = document.getElementById("northline-agent-widget-send");
+        const titleNode = document.getElementById("northline-agent-widget-title");
+        const subtitleNode = document.getElementById("northline-agent-widget-subtitle");
+        if (!root || !toggle || !messages || !form || !input || !send || !titleNode || !subtitleNode) return;
+
+        titleNode.textContent = cfg.brandTitle || "Kronix Bot";
+        subtitleNode.textContent = cfg.systemBotName || "Asistente";
+
+        const sessionKey = "northline_agent_widget_session_" + cfg.widgetId;
+        let sessionId = localStorage.getItem(sessionKey);
+        if (!sessionId) {
+          sessionId = window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+          localStorage.setItem(sessionKey, sessionId);
+        }
+
+        const visitorKey = "northline_agent_widget_visitor_" + cfg.widgetId;
+        let visitorId = localStorage.getItem(visitorKey);
+        if (!visitorId) {
+          visitorId = window.crypto && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+          localStorage.setItem(visitorKey, visitorId);
+        }
+
+        const externalUserId = String(window.NORTHLINE_WIDGET_EXTERNAL_USER_ID || "").trim() || null;
+
+        function setOpen(next) {
+          if (next) {
+            root.classList.add("open");
+            toggle.setAttribute("aria-expanded", "true");
+            setTimeout(function () {
+              input.focus();
+            }, 40);
+          } else {
+            root.classList.remove("open");
+            toggle.setAttribute("aria-expanded", "false");
+          }
+        }
+
+        toggle.addEventListener("click", function () {
+          setOpen(!root.classList.contains("open"));
+        });
+
+        function addBubble(role, text, muted) {
+          if (muted) {
+            const note = document.createElement("div");
+            note.className = "northline-muted";
+            note.textContent = muted;
+            messages.appendChild(note);
+          }
+
+          const row = document.createElement("div");
+          row.className = "northline-msg " + (role === "user" ? "user" : "assistant");
+          row.textContent = text;
+          messages.appendChild(row);
+          messages.scrollTop = messages.scrollHeight;
+        }
+
+        function addTyping() {
+          const row = document.createElement("div");
+          row.className = "northline-msg assistant typing";
+          row.setAttribute("aria-label", "Escribiendo");
+          row.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+          messages.appendChild(row);
+          messages.scrollTop = messages.scrollHeight;
+          return row;
+        }
+
+        addBubble("assistant", "Hola! Soy tu asistente virtual. En que te puedo ayudar hoy?");
+
+        form.addEventListener("submit", async function (ev) {
+          ev.preventDefault();
+          const text = (input.value || "").trim();
+          if (!text) return;
+
+          addBubble("user", text);
+          input.value = "";
+          send.disabled = true;
+          send.textContent = "...";
+          const typingNode = addTyping();
+
+          try {
+            const response = await fetch(cfg.apiBaseUrl + "/public/widget/chat", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                widget_id: cfg.widgetId,
+                widget_token: cfg.widgetToken,
+                session_id: sessionId,
+                visitor_id: visitorId,
+                external_user_id: externalUserId,
+                message: text
+              })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.detail || "No se pudo obtener respuesta");
+            }
+            typingNode.remove();
+            addBubble("assistant", data.answer || "Sin respuesta");
+          } catch (error) {
+            typingNode.remove();
+            const detail = error && error.message ? error.message : "sin detalle";
+            addBubble("assistant", "Error del widget: " + detail);
+          } finally {
+            send.disabled = false;
+            send.textContent = "Enviar";
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

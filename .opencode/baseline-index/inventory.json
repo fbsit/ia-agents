@@ -1,0 +1,90 @@
+{
+  "generated_at": "2026-04-02T22:54:51.230Z",
+  "workspace_root": "C:\\Users\\Felipe\\Desktop\\clasificacion-langchain-demo",
+  "items": [
+    {
+      "name": "__pycache__",
+      "path": "__pycache__",
+      "status": "excluded",
+      "reason": "no-project-marker"
+    },
+    {
+      "name": ".env.example",
+      "path": ".env.example",
+      "status": "excluded",
+      "reason": "hidden-directory"
+    },
+    {
+      "name": ".gitignore",
+      "path": ".gitignore",
+      "status": "excluded",
+      "reason": "hidden-directory"
+    },
+    {
+      "name": "AGENTS.md",
+      "path": "AGENTS.md",
+      "status": "excluded",
+      "reason": "not-a-directory"
+    },
+    {
+      "name": "app.py",
+      "path": "app.py",
+      "status": "excluded",
+      "reason": "not-a-directory"
+    },
+    {
+      "name": "ask_hybrid_agent.py",
+      "path": "ask_hybrid_agent.py",
+      "status": "excluded",
+      "reason": "not-a-directory"
+    },
+    {
+      "name": "build_rag_index.py",
+      "path": "build_rag_index.py",
+      "status": "excluded",
+      "reason": "not-a-directory"
+    },
+    {
+      "name": "chat_api.py",
+      "path": "chat_api.py",
+      "status": "excluded",
+      "reason": "not-a-directory"
+    },
+    {
+      "name": "data",
+      "path": "data",
+      "status": "excluded",
+      "reason": "no-project-marker"
+    },
+    {
+      "name": "README.md",
+      "path": "README.md",
+      "status": "excluded",
+      "reason": "not-a-directory"
+    },
+    {
+      "name": "requirements.txt",
+      "path": "requirements.txt",
+      "status": "excluded",
+      "reason": "not-a-directory"
+    },
+    {
+      "name": "SAAS_PLAN.md",
+      "path": "SAAS_PLAN.md",
+      "status": "excluded",
+      "reason": "not-a-directory"
+    },
+    {
+      "name": "src",
+      "path": "src",
+      "status": "excluded",
+      "reason": "no-project-marker"
+    },
+    {
+      "name": "train_model.py",
+      "path": "train_model.py",
+      "status": "excluded",
+      "reason": "not-a-directory"
+    }
+  ]
+}

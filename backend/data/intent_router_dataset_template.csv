@@ -1,0 +1,21 @@
+text,label
+Necesito saber el horario de atencion de la sucursal,faq_horarios
+Atienden los sabados por la tarde?,faq_horarios
+Cual es el precio del plan premium?,ventas_planes
+Me interesa contratar el servicio para mi empresa,ventas_planes
+Quiero informacion del catalogo completo,ventas_catalogo
+Tenes stock del producto modelo X?,ventas_catalogo
+No puedo ingresar a mi cuenta desde ayer,soporte_tecnico
+La app se cierra cuando intento pagar,soporte_tecnico
+Me cobraron dos veces el mismo mes,soporte_facturacion
+Necesito corregir una factura con error,soporte_facturacion
+Quiero reclamar por una mala atencion,reclamo_servicio
+No cumplieron el plazo de entrega,reclamo_servicio
+Como puedo cambiar el metodo de pago?,faq_pagos
+Aceptan transferencia bancaria o solo tarjeta?,faq_pagos
+Necesito hablar con un asesor humano,escalamiento_humano
+Pasame con una persona por favor,escalamiento_humano
+Me podes enviar los terminos y condiciones?,faq_legales
+Donde encuentro la politica de privacidad?,faq_legales
+Quiero cancelar mi suscripcion ya mismo,bajas_cancelacion
+Como doy de baja el servicio sin penalidad?,bajas_cancelacion

@@ -1,0 +1,62 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: clasi-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clasi-api
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CHAT_SESSION_BACKEND: redis
+      AGENT_CONVERSATION_STATE_BACKEND: redis
+      WHATSAPP_IDEMPOTENCY_BACKEND: redis
+      EVAL_JOB_QUEUE_BACKEND: redis
+      EVAL_JOB_QUEUE_REDIS_URL: redis://redis:6379/0
+      EVAL_EMBEDDED_WORKER_ENABLED: "false"
+      EVAL_JOB_STORAGE_BACKEND: sqlite
+      PERSISTENCE_BACKEND: sqlite
+      SQLITE_DB_PATH: /app/data/local_api.db
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./knowledge_base:/app/knowledge_base
+      - ./logs:/app/logs
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clasi-eval-worker
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - api
+    command: ["python", "evaluation_worker.py"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      EVAL_JOB_QUEUE_BACKEND: redis
+      EVAL_JOB_QUEUE_REDIS_URL: redis://redis:6379/0
+      EVAL_EMBEDDED_WORKER_ENABLED: "false"
+      EVAL_JOB_STORAGE_BACKEND: sqlite
+      PERSISTENCE_BACKEND: sqlite
+      SQLITE_DB_PATH: /app/data/local_api.db
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./knowledge_base:/app/knowledge_base
+      - ./logs:/app/logs

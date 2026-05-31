@@ -1,0 +1,789 @@
+2026-04-13 16:51:53,735 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-13 16:51:53,759 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-13 16:51:53,775 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-13 16:51:53,841 INFO backend.chat_api evaluation_worker_started
+2026-04-13 16:51:53,852 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-13 16:52:53,240 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-13 16:52:53,241 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-13 16:52:53,243 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-13 16:52:53,270 INFO backend.chat_api evaluation_worker_started
+2026-04-13 16:52:53,278 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-13 17:12:11,874 INFO backend.chat_api internal_list_agents request_id=517ad1d4-fe6c-4197-8f9e-83dca54583e2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 17:12:11,889 INFO backend.chat_api internal_list_agents request_id=7a3ae918-603b-4cde-9f62-64e08f608c54 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 17:12:15,810 INFO backend.chat_api internal_list_agents request_id=97bc2077-665b-4110-a186-1162301ba23d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 17:31:03,449 INFO backend.chat_api internal_list_agents request_id=fc4e6001-eac2-44e6-8a51-f571fa4773d9 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 17:31:03,457 INFO backend.chat_api internal_list_agents request_id=33b438e5-a976-473e-aaa1-a6588a2256a8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:21:17,971 INFO backend.chat_api internal_list_agents request_id=97ced4b9-6dc0-4307-bf62-225b81d88c86 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:21:17,978 INFO backend.chat_api internal_list_agents request_id=25108fd4-7623-4f88-aa92-2826b5efb1c8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:21:28,833 INFO backend.chat_api internal_list_agents request_id=a17e8c58-b6f1-4b99-81ca-494df171cfb8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:21:28,839 INFO backend.chat_api internal_list_agents request_id=5dbe4cc6-bfa0-4c11-bddf-e558d78a420d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:31:30,106 INFO backend.chat_api internal_list_agents request_id=5ce663a2-0b0d-44a9-a8fe-341afd8df4cb user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:33:48,498 INFO backend.chat_api internal_list_agents request_id=aa482ebf-f1b5-47a1-ad7d-9320a9c99987 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:36:56,718 INFO backend.chat_api internal_list_agents request_id=5d9acd33-e4ff-4212-899c-9507876079d8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:36:56,723 INFO backend.chat_api internal_list_agents request_id=13c9d7d2-bcc8-4077-ac99-c1ad6f26a4f5 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:36:59,226 INFO backend.chat_api internal_list_agents request_id=681f5a6e-39ce-4008-a337-4b128072d025 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:36:59,232 INFO backend.chat_api internal_list_agents request_id=5d58304e-9c87-4d80-82df-9d9ed79b7cd6 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:37:29,609 INFO backend.chat_api internal_create_agent request_id=af89f274-6a8d-4b48-af15-6864ad753ff2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:37:31,413 INFO backend.chat_api internal_setup_status request_id=aaf7c4fc-8a5e-4595-bb3d-135a751dcf2e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:37:31,427 INFO backend.chat_api internal_setup_status request_id=9bd19d4f-8d72-48ab-bdd3-71776723f558 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:37:41,327 INFO backend.chat_api internal_list_agents request_id=0012cd11-7efb-46c6-87ac-0006fcf38551 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:37:41,334 INFO backend.chat_api internal_list_agents request_id=daaaec81-1890-4fb1-8701-e7d4d387c450 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:38:37,271 INFO backend.chat_api internal_list_agents request_id=b14e0517-08c7-435a-8a1e-64b665cf0474 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:39:38,096 INFO backend.chat_api internal_list_agents request_id=c20bfc5a-e6b1-42b8-8483-93dab81f0be4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:39:46,323 INFO backend.chat_api internal_list_agents request_id=42c98403-2258-44c3-9134-dd3994ae3488 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:39:46,861 INFO backend.chat_api internal_list_agents request_id=f8666793-0a32-435c-9564-3831101ad2bb user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:42:58,321 INFO backend.chat_api internal_list_agents request_id=28d5af83-7aa2-4302-b270-06e1b58e52b3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:44:24,802 INFO backend.chat_api internal_list_agents request_id=db920074-dcee-4ce4-8f6c-6212446497ff user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:44:58,384 INFO backend.chat_api internal_list_agents request_id=22876747-49f0-49c6-8f15-acbae31199fa user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:44:58,392 INFO backend.chat_api internal_list_agents request_id=6dc21b82-773f-443b-898b-7d7ae05c7771 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:47:58,256 INFO backend.chat_api internal_list_agents request_id=4ba67a2a-a73e-4a7e-a3cf-43512a508013 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:48:06,500 INFO backend.chat_api internal_list_agents request_id=d50bf82d-e224-4d72-ac53-8566cc9ac3e8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:48:29,237 INFO backend.chat_api internal_list_agents request_id=09cd8fe2-11b9-4e4f-adc2-f000060152af user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:48:59,082 INFO backend.chat_api internal_setup_status request_id=0849974b-e863-4466-8a4a-48aa48f9bad5 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:48:59,086 INFO backend.chat_api internal_feedback_summary request_id=1c621aaa-61aa-447d-aeef-c11db0a61c67 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:48:59,091 INFO backend.chat_api internal_setup_status request_id=a3339470-d755-4b2a-a3da-7fdee370b1c7 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:48:59,094 INFO backend.chat_api internal_feedback_summary request_id=795c43e4-b048-43e0-89b1-b0c4d13c8178 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:29,805 INFO backend.chat_api internal_list_agents request_id=e2fb3160-dd3d-412c-a583-2b9b6b4c2ed2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:49:29,810 INFO backend.chat_api internal_list_agents request_id=f8b4fbd7-2ff6-4ff4-8684-3a0b04a63400 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:49:29,867 INFO backend.chat_api internal_feedback_summary request_id=f64200ba-aa3b-4475-ad61-a46b09399d1d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:29,869 INFO backend.chat_api internal_setup_status request_id=4fab16bc-decc-4302-9077-c956a0e0241d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:29,873 INFO backend.chat_api internal_feedback_summary request_id=c26e41a4-9759-4635-ac77-96c87c611d99 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:29,874 INFO backend.chat_api internal_setup_status request_id=ee074f53-8fca-4304-af5f-ac519bcf4283 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:31,815 INFO backend.chat_api internal_list_agents request_id=19e2ca05-638f-4e85-8d7e-3a8ea28dc26c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:49:31,819 INFO backend.chat_api internal_list_agents request_id=9a9e9079-d571-41fe-8f39-9a2d1fcb82e2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:49:31,873 INFO backend.chat_api internal_setup_status request_id=d52581b7-49c2-4061-9f08-7eb1d2e54a5f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:31,873 INFO backend.chat_api internal_feedback_summary request_id=cadc007f-1669-43a0-b2ff-348937108969 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:31,878 INFO backend.chat_api internal_feedback_summary request_id=059fa6a4-2f73-44d2-9b56-ea498ea9938f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:31,893 INFO backend.chat_api internal_setup_status request_id=2f454c57-27e1-4c8b-92ce-e622ad212d2b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,318 INFO backend.chat_api internal_list_agents request_id=ea5bb5aa-09cc-4116-ad4f-2c23a23f0d83 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:49:32,322 INFO backend.chat_api internal_list_agents request_id=0fd5cd4a-cf22-40f0-a7cd-9e3c7e0e47d5 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:49:32,372 INFO backend.chat_api internal_feedback_summary request_id=e3f90825-a953-4074-8c42-03e52ff13a3a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,373 INFO backend.chat_api internal_setup_status request_id=779baddf-1695-431f-89b3-e50f65a8be7c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,378 INFO backend.chat_api internal_setup_status request_id=52096247-2f43-4031-bf87-6d90bef8f56f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,389 INFO backend.chat_api internal_feedback_summary request_id=7d536540-77a2-476c-a10f-00b3afb30852 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,548 INFO backend.chat_api internal_list_agents request_id=aca17256-fe43-46f0-8548-e2b39dd47d43 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:49:32,552 INFO backend.chat_api internal_list_agents request_id=4e6ad109-eb54-4bbb-bace-b1e23edb417d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:49:32,601 INFO backend.chat_api internal_setup_status request_id=87943a28-fa77-432b-b4f9-e21dc0d1d939 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,601 INFO backend.chat_api internal_feedback_summary request_id=2d52c683-f4ba-4de5-8af9-fe72d7403237 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,607 INFO backend.chat_api internal_feedback_summary request_id=fc4e2012-20cf-4c79-ad0c-a56d5ad9cd1f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,607 INFO backend.chat_api internal_setup_status request_id=2af554fb-cbe4-4d25-ab5d-981aa2d684ae user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,850 INFO backend.chat_api internal_list_agents request_id=85ee956b-5106-4a76-9cf8-f76ef4afe35d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:49:32,853 INFO backend.chat_api internal_list_agents request_id=ecc301f4-aaa7-447e-8390-c128072cecfe user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 18:49:32,903 INFO backend.chat_api internal_feedback_summary request_id=0582fa50-4d75-46a6-8890-dcef90d389a4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,903 INFO backend.chat_api internal_setup_status request_id=ab80aadd-1b9c-4114-8a26-58035c9ed57c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,908 INFO backend.chat_api internal_feedback_summary request_id=7274628c-522d-47c5-b786-f898a229f0c4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:32,921 INFO backend.chat_api internal_setup_status request_id=3ae1d18c-8026-4afd-8c48-f3649be883e0 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:40,657 INFO backend.chat_api internal_list_documents request_id=eafd2221-8f7c-4b67-8f5c-fe790dd7b85a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:40,657 INFO backend.chat_api internal_index_status request_id=1be6886c-5c37-42be-8f12-a240cb89e454 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:40,665 INFO backend.chat_api internal_index_status request_id=45b04e33-4de8-4f69-89a7-3f47aec1d137 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:49:40,668 INFO backend.chat_api internal_list_documents request_id=078f627c-5a8d-4d03-8802-89e231a1f876 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:51:02,300 INFO backend.chat_api internal_index_status request_id=3d3c0566-7258-4d5a-a5ae-64d7afd85002 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:51:02,301 INFO backend.chat_api internal_list_documents request_id=e05db334-ea4c-4b3c-b221-035a5972531c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:51:04,034 INFO backend.chat_api internal_feedback_summary request_id=42187412-f011-4293-ab44-c0569858ab04 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:51:04,034 INFO backend.chat_api internal_setup_status request_id=3eee77a2-1c8c-4397-95ba-07a223080ba4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:51:04,041 INFO backend.chat_api internal_feedback_summary request_id=800427db-83b1-4d0b-81e2-7d668e4023db user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 18:51:04,045 INFO backend.chat_api internal_setup_status request_id=bd08e6e3-b211-4ff4-9f2c-24701eb607db user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:11:44,472 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-13 19:11:44,473 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-13 19:11:44,475 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-13 19:11:44,532 INFO backend.chat_api evaluation_worker_started
+2026-04-13 19:11:44,540 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-13 19:18:56,970 INFO backend.chat_api internal_list_agents request_id=c93a03af-cd7d-4cd2-a868-9585393cebff user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 19:18:56,975 INFO backend.chat_api internal_list_agents request_id=832fd0b0-f41c-434c-9baa-08a2f1758aa3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 19:19:14,780 INFO backend.chat_api internal_list_agents request_id=e516ed6d-4a57-4e5a-aec5-887122d671af user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 19:19:14,784 INFO backend.chat_api internal_list_agents request_id=d7c3c7ea-4a20-4659-81a5-6dc606ceda4a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 19:19:14,850 INFO backend.chat_api internal_setup_status request_id=4dcecb6a-fb60-477a-b297-1074f62dfaf2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:19:14,853 INFO backend.chat_api internal_feedback_summary request_id=fbe5f0d6-c6e4-4078-b4cb-225309e83220 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:19:14,857 INFO backend.chat_api internal_setup_status request_id=71b7bf46-9aa0-47ed-96d5-ff6e90876e50 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:19:14,859 INFO backend.chat_api internal_feedback_summary request_id=9c07420b-c4fc-439a-9688-d5d8abedd9d6 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:19:17,312 INFO backend.chat_api internal_list_documents request_id=d0450189-7df2-4d47-9db9-c36bf04c3c93 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:19:17,312 INFO backend.chat_api internal_index_status request_id=79e899f4-21c9-44f1-a5d4-2983c2be3dbb user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:19:17,320 INFO backend.chat_api internal_index_status request_id=f2df0e07-65ca-4d6b-a210-6d0627785abe user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:19:17,320 INFO backend.chat_api internal_list_documents request_id=9b9c7424-4da9-442a-a53f-10090008e22b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:22:07,501 INFO backend.chat_api internal_list_documents request_id=25bc0847-65bc-43f1-bf3d-59109e6c6b63 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:22:07,502 INFO backend.chat_api internal_index_status request_id=d5d4c973-a87f-460f-b88f-e3a9b79f75f2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:26:25,798 INFO backend.chat_api internal_list_documents request_id=edc40749-eee8-4c38-ac27-d171d66897cd user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:26:25,799 INFO backend.chat_api internal_index_status request_id=c760685d-3c08-4a8d-805b-90878ec5431a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:27:26,126 INFO backend.chat_api internal_index_status request_id=46936a67-20ee-465a-a18d-bacb4ce793db user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:27:26,126 INFO backend.chat_api internal_list_documents request_id=0cb6c502-eb94-4f43-9f4d-3cd44625bd3e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:28:53,853 INFO backend.chat_api internal_index_status request_id=825de805-7d4b-43a3-9988-7733e1528142 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:28:53,854 INFO backend.chat_api internal_list_documents request_id=16f99825-135e-460e-ba75-a2d57cffbec3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:41:34,450 INFO backend.chat_api internal_list_agents request_id=2276e080-eacf-4938-9711-569580289501 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 19:41:34,455 INFO backend.chat_api internal_list_agents request_id=e22364a3-486c-44cc-91c4-10e6f8a4fe16 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 19:41:35,972 INFO backend.chat_api internal_list_agents request_id=2b7d8413-b63d-4295-bc54-687bb838b2d0 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 19:41:35,977 INFO backend.chat_api internal_list_agents request_id=277b7768-dd21-4129-83f0-6ca0101e9206 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 19:41:36,047 INFO backend.chat_api internal_feedback_summary request_id=4017def0-8cb0-45da-85b3-9374b65c5570 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:41:36,048 INFO backend.chat_api internal_setup_status request_id=b28725f8-3e3b-457b-a9d6-9a192ce27ef6 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:41:36,054 INFO backend.chat_api internal_setup_status request_id=7298503e-3871-4a6e-abee-9121fe341f1a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:41:36,054 INFO backend.chat_api internal_feedback_summary request_id=ef3c6102-0867-4dbc-b2a1-6ce002b36042 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:41:40,169 INFO backend.chat_api internal_index_status request_id=dff2033a-3a6a-4b4a-8a2f-8d8741ee4a8d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:41:40,169 INFO backend.chat_api internal_list_documents request_id=a4d99ce6-0612-4680-82d7-a41ac02abd21 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:41:40,176 INFO backend.chat_api internal_list_documents request_id=ffbca0d0-a5d6-487b-aa39-8c7a8d752e4a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:41:40,176 INFO backend.chat_api internal_index_status request_id=fc568372-3b04-4823-95bb-ce0d19bd2a08 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:41:44,681 INFO backend.chat_api internal_upload_document request_id=1900ca1a-008f-4c28-afda-60cb8db41183 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:43:13,190 INFO backend.chat_api internal_list_documents request_id=63070b52-a559-4217-bb8d-0bf4034ec3bf user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:43:13,191 INFO backend.chat_api internal_index_status request_id=e1102555-7e65-4a65-9d20-8e1ef8291d36 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:43:15,753 INFO backend.chat_api internal_upload_document request_id=210e5033-07ce-472a-809f-fe754903c1ce user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:43:18,000 INFO backend.chat_api internal_index_status request_id=12ecf075-f628-42e7-82a9-bd42cc7a6b7c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:43:18,001 INFO backend.chat_api internal_list_documents request_id=b9989ab3-2aaf-4fda-8ce7-3310616b369a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:44:49,067 INFO backend.chat_api internal_list_documents request_id=61ba39d4-d739-4cd7-8279-7ec964207866 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:44:49,068 INFO backend.chat_api internal_index_status request_id=48da8eb3-0365-44ca-a530-1da732339ef4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 19:47:11,026 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-13 19:47:11,026 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-13 19:47:11,028 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-13 19:47:11,051 INFO backend.chat_api evaluation_worker_started
+2026-04-13 19:47:11,058 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-13 21:42:00,862 INFO backend.chat_api internal_list_agents request_id=3862ec99-ff54-4852-82f8-1717ced98168 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 21:42:00,869 INFO backend.chat_api internal_list_agents request_id=6bc4616f-666b-412d-8413-0d979bdf23f5 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 21:42:02,492 INFO backend.chat_api internal_list_agents request_id=5957b474-9333-4107-87ac-dfd73cb9cb97 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 21:42:02,497 INFO backend.chat_api internal_list_agents request_id=c0dac7dd-0be4-4c66-9773-4c04fc88537c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-13 21:42:02,575 INFO backend.chat_api internal_setup_status request_id=52608d35-880c-48f4-94a1-4f2e5c375d47 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 21:42:02,576 INFO backend.chat_api internal_feedback_summary request_id=62f52dfa-437a-406a-be6f-380fbc13e0b5 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 21:42:02,582 INFO backend.chat_api internal_feedback_summary request_id=b5197a0a-ce68-499d-95bf-4528ba6daa08 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 21:42:02,582 INFO backend.chat_api internal_setup_status request_id=612075f5-3fd8-466a-b63b-c3dcc18153b4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 21:42:03,682 INFO backend.chat_api internal_list_documents request_id=7bf44f0a-d384-4826-8edc-52d0de8d9ab8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 21:42:03,682 INFO backend.chat_api internal_index_status request_id=19aecc75-c86d-4e7d-8603-2770f7c79c28 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 21:42:03,686 INFO backend.chat_api internal_list_documents request_id=b26d20dc-7f2a-429f-9da3-c20db47e2b7e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 21:42:03,698 INFO backend.chat_api internal_index_status request_id=11810012-d16e-440c-a968-72b5bb3519cc user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-13 21:42:07,009 INFO backend.chat_api internal_upload_document request_id=39d1baad-ee90-4e7a-80f6-f9637bde1fd0 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-14 13:26:17,511 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-14 13:26:17,523 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-14 13:26:17,526 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-14 13:26:17,585 INFO backend.chat_api evaluation_worker_started
+2026-04-14 13:26:17,596 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-15 15:28:14,690 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-15 15:28:14,699 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-15 15:28:14,702 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-15 15:28:14,761 INFO backend.chat_api evaluation_worker_started
+2026-04-15 15:28:14,770 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-15 15:33:27,365 INFO backend.chat_api internal_list_agents request_id=5df86d6f-501b-47ba-9d90-210a5e67b5db user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:33:27,378 INFO backend.chat_api internal_list_agents request_id=aeb01226-d7a4-4d19-9aff-039b70aedf65 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:33:41,169 INFO backend.chat_api internal_list_agents request_id=90e01367-2d32-4dc2-bbf6-bcee5f6aebd3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:33:41,176 INFO backend.chat_api internal_list_agents request_id=c8c764da-1639-484e-ac44-2619aa120be3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:33:41,605 INFO backend.chat_api internal_setup_status request_id=5da47936-bb82-4396-9348-7e6717b537d3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:41,606 INFO backend.chat_api internal_feedback_summary request_id=98db84f5-ec93-498a-824a-5874109fe114 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:41,617 INFO backend.chat_api internal_feedback_summary request_id=6bf6ddac-f30a-4761-8eeb-efed2684fa8d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:41,620 INFO backend.chat_api internal_setup_status request_id=5855c699-f2d5-4501-8a5a-aa0ea9cfe470 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:46,729 INFO backend.chat_api internal_list_agents request_id=20f8d4a6-44d2-4ab1-9aaf-f59125479c78 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:33:46,737 INFO backend.chat_api internal_list_agents request_id=2ad2c777-2666-4c1b-b86b-1976f95996be user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:33:46,822 INFO backend.chat_api internal_feedback_summary request_id=3aabd686-3ea1-4c17-90ca-ecf0009dd524 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:46,823 INFO backend.chat_api internal_setup_status request_id=1f69e8bf-9c5c-4bc9-b76b-b0796e929c5c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:46,832 INFO backend.chat_api internal_feedback_summary request_id=935ecdae-8b97-44ee-8f31-f8e22c16ccec user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:46,832 INFO backend.chat_api internal_setup_status request_id=9397d09e-ec31-482f-bebb-43b1f9ef28b3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:50,726 INFO backend.chat_api internal_list_agents request_id=2608d815-fc79-458c-8f1a-d0ef20d5d21f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:33:50,782 INFO backend.chat_api internal_setup_status request_id=e1ca9a6d-cee1-425c-8be8-2d6f42149185 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:50,782 INFO backend.chat_api internal_feedback_summary request_id=c9c1179e-79f2-4761-8f10-9caa18c2f8ce user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:50,791 INFO backend.chat_api internal_setup_status request_id=5bd3a660-7340-4ba2-946d-a97a38ba830e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:33:50,805 INFO backend.chat_api internal_feedback_summary request_id=ab40d23b-6118-48cc-9d48-dac2dbfb99d0 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-15 15:39:21,143 INFO backend.chat_api internal_list_agents request_id=a050fa61-4036-45f8-aa66-f7daf37ebd7e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:39:21,150 INFO backend.chat_api internal_list_agents request_id=2e83a39d-78dd-4011-a5d2-b94bff320061 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:35,637 INFO backend.chat_api internal_list_agents request_id=7b8ba1c2-79c3-4aa9-9a16-363c29c196ef user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:35,643 INFO backend.chat_api internal_list_agents request_id=3a06941c-be72-41ea-829d-27b527131f00 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:37,313 INFO backend.chat_api internal_list_agents request_id=391533b3-2b8e-4e3f-a2fa-c0d4e2f0ca39 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:37,319 INFO backend.chat_api internal_list_agents request_id=6598ab86-73cb-411a-a5e9-82a664b6e4d1 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:40,881 INFO backend.chat_api internal_list_agents request_id=50178706-7fa7-486f-9b08-1e15bf1d8930 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:40,885 INFO backend.chat_api internal_list_agents request_id=8858d56d-eb93-442f-82b4-7f648b1224ff user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:42,847 INFO backend.chat_api internal_list_agents request_id=53659824-5e7d-422c-8152-8dd111e9338a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:42,855 INFO backend.chat_api internal_list_agents request_id=053a8474-8a78-42ee-b3d1-021f4cdba10d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:45,614 INFO backend.chat_api internal_list_agents request_id=723bc60e-1adb-493a-ab62-59cc1cbb05d8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:45,618 INFO backend.chat_api internal_list_agents request_id=bf9e3173-3dd5-48a5-9e4c-1a519ac016ed user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:49,396 INFO backend.chat_api internal_list_agents request_id=7b7bbd3d-9df0-4e74-98af-b24e37974371 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:45:49,400 INFO backend.chat_api internal_list_agents request_id=df53d32a-9f86-43f0-a5f0-685b9115a292 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:48:42,063 INFO backend.chat_api internal_list_agents request_id=488bba04-7e84-4be7-bd85-fb65f978b833 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:48:42,068 INFO backend.chat_api internal_list_agents request_id=d45b85da-2967-4152-a630-be4b8aabed96 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:48:43,872 INFO backend.chat_api internal_list_agents request_id=7a9e9b2a-4ff9-4c21-8530-9ac24a19df1f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:48:43,877 INFO backend.chat_api internal_list_agents request_id=16127cfa-a6e1-4d24-ab21-deebae792822 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:48:44,806 INFO backend.chat_api internal_list_agents request_id=8797bfbd-292c-4a0d-96c5-bd16460d3aca user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:48:44,811 INFO backend.chat_api internal_list_agents request_id=256ef157-9356-4073-a480-d7b3c0b51b5c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:48:45,637 INFO backend.chat_api internal_list_agents request_id=3c6609bc-fb9d-4402-9487-2bb86392566d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:48:45,642 INFO backend.chat_api internal_list_agents request_id=a3210d26-15fc-4b66-ad70-90f16523f5c8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:50:00,158 INFO backend.chat_api internal_list_agents request_id=ac94d5e1-abe5-46e8-b420-0d24f76a161e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:50:00,162 INFO backend.chat_api internal_list_agents request_id=31bd43b1-029c-4444-b615-a69a225b4621 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:50:04,159 INFO backend.chat_api internal_list_agents request_id=2e6f667e-683b-411c-9456-069a45f259e0 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:50:04,163 INFO backend.chat_api internal_list_agents request_id=173a069d-10f5-4473-8111-ede6b3f21366 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:52:29,214 INFO backend.chat_api internal_list_agents request_id=d4619ea1-0275-4edb-a26f-0867aa4dc224 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:52:29,219 INFO backend.chat_api internal_list_agents request_id=74f23ecf-1110-4d77-bddb-76dde3b2442e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:58:00,332 INFO backend.chat_api internal_list_agents request_id=12b636b1-cacd-4f5c-bb2f-119fbdd15465 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:58:00,337 INFO backend.chat_api internal_list_agents request_id=abf604d4-e378-450a-9239-5a661307ac88 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:58:01,470 INFO backend.chat_api internal_list_agents request_id=8de81070-73ab-4358-b108-eb4b169f007b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:58:01,474 INFO backend.chat_api internal_list_agents request_id=16e0d783-79b4-4aab-9ffd-720102267fe1 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:58:02,146 INFO backend.chat_api internal_list_agents request_id=d9c8c542-31f6-4de1-b993-f10db1d29914 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-15 15:58:02,150 INFO backend.chat_api internal_list_agents request_id=107ec3a2-fc10-4e93-b72e-64630ec6fdda user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-16 13:32:52,614 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-16 13:32:52,625 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-16 13:32:52,629 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-16 13:32:52,682 INFO backend.chat_api evaluation_worker_started
+2026-04-16 13:32:52,691 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-16 13:38:09,152 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-16 13:38:09,153 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-16 13:38:09,155 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-16 13:38:09,187 INFO backend.chat_api evaluation_worker_started
+2026-04-16 13:38:09,197 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-16 13:51:24,233 INFO backend.chat_api internal_list_agents request_id=54555e7d-47ae-410d-a291-69c8030117e1 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-16 13:51:24,252 INFO backend.chat_api internal_list_agents request_id=57465374-9b6e-49c9-b989-41f428ccd287 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-16 13:51:25,980 INFO backend.chat_api internal_list_agents request_id=e07582c2-3c08-4f38-9063-68c1ea6c7bc4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-16 13:51:25,986 INFO backend.chat_api internal_list_agents request_id=c970d29c-17a0-451d-9c39-57d4de67b9a6 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-16 14:04:26,492 INFO backend.chat_api internal_list_agents request_id=c95b12e9-0831-4f57-85b8-ed20f4456f81 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-16 14:04:26,498 INFO backend.chat_api internal_list_agents request_id=979e3a94-ba39-4ba1-8617-0b856714053b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-16 14:04:27,998 INFO backend.chat_api internal_setup_status request_id=44a93214-7927-4bb3-b870-67b682198c90 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-16 14:04:27,999 INFO backend.chat_api internal_feedback_summary request_id=0c7adeb8-ab68-49d1-a31c-578685be6eac user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-16 14:04:28,010 INFO backend.chat_api internal_feedback_summary request_id=2ed32f6e-1ac2-428e-b245-b72e224cd41f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-16 14:04:28,012 INFO backend.chat_api internal_setup_status request_id=8f564e8c-8ef5-4f52-b81d-90a1c6fe2f4d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-16 14:04:31,064 INFO backend.chat_api internal_setup_status request_id=a9bc66ed-a581-45e6-a6df-6c2620b9d4b3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-16 14:04:31,069 INFO backend.chat_api internal_setup_status request_id=cca687b8-2253-4772-9d48-703177816cca user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-16 14:04:32,918 INFO backend.chat_api internal_index_status request_id=b888f8e7-3b81-4f53-a5cf-a9af38c653de user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-16 14:04:32,918 INFO backend.chat_api internal_list_documents request_id=b342218e-98d7-4a78-b06b-5293498d968b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-16 14:04:32,925 INFO backend.chat_api internal_list_documents request_id=bff0b109-15ab-4443-8416-68da2740e1fe user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-16 14:04:32,937 INFO backend.chat_api internal_index_status request_id=d5a02e62-2cff-487c-a06f-28b79d58d29d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 22:57:49,013 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-20 22:57:49,014 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-20 22:57:49,028 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-20 22:57:49,032 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-20 22:57:49,041 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-20 22:57:49,044 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-20 22:57:49,096 INFO backend.chat_api evaluation_worker_started
+2026-04-20 22:57:49,096 INFO backend.chat_api evaluation_worker_started
+2026-04-20 22:57:49,107 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-20 22:57:49,107 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-20 23:00:34,230 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-20 23:00:34,230 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-20 23:00:34,232 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-20 23:00:34,258 INFO backend.chat_api evaluation_worker_started
+2026-04-20 23:00:34,266 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-20 23:00:34,317 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-20 23:00:34,318 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-20 23:00:34,321 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-20 23:00:34,349 INFO backend.chat_api evaluation_worker_started
+2026-04-20 23:00:34,357 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-20 23:01:19,305 INFO backend.chat_api internal_list_agents request_id=300d48a4-e1a1-432b-a3aa-83353a22b824 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:01:19,324 INFO backend.chat_api internal_list_agents request_id=404dc6e9-0f1c-4f89-994c-7b888d1846ef user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:01:21,830 INFO backend.chat_api internal_list_agents request_id=6a75aa83-046e-4f79-a7a4-593c5f3abdb1 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:01:21,835 INFO backend.chat_api internal_list_agents request_id=ac6d1cff-a0ed-4da8-aa13-a93878be945e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:01:35,962 INFO backend.chat_api internal_list_agents request_id=5d110ccb-fdee-4c0c-9fce-cca5a6865e5d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:01:35,968 INFO backend.chat_api internal_list_agents request_id=ac7b84f6-0fc1-4460-911c-db6451468970 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:01:37,358 INFO backend.chat_api internal_setup_status request_id=a67585ed-b77f-4e33-a75b-5d30bf66cf97 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:37,360 INFO backend.chat_api internal_feedback_summary request_id=6f91baca-4b16-41f1-906d-00af0af68d52 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:37,368 INFO backend.chat_api internal_feedback_summary request_id=a7767618-d766-4564-b983-7fcebd79eb3f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:37,372 INFO backend.chat_api internal_setup_status request_id=fe262b54-ec99-460e-95c1-66e0eb69c5f8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:40,118 INFO backend.chat_api internal_list_documents request_id=b8f4a00a-5bfe-46a6-8d3d-05285d12dee9 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:40,119 INFO backend.chat_api internal_index_status request_id=c6ab99e7-ff35-450f-aeda-257479bed98e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:40,127 INFO backend.chat_api internal_list_documents request_id=2e1ba7f7-6c46-4498-9535-acea54f5067d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:40,138 INFO backend.chat_api internal_index_status request_id=e34b0258-0488-4bca-83e7-92726a9a171c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:40,382 INFO backend.chat_api internal_setup_status request_id=97268063-abd7-478b-8719-d1c39fb3641f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:40,382 INFO backend.chat_api internal_feedback_summary request_id=df9fd237-99f4-4433-b845-3284f8d06136 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:40,388 INFO backend.chat_api internal_setup_status request_id=a48ecb17-e040-4f73-8da0-75de2ad9f116 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:01:40,391 INFO backend.chat_api internal_feedback_summary request_id=e528e9c5-413d-40ed-829f-376d5419e848 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:11:18,382 INFO backend.chat_api internal_list_documents request_id=b778a196-c1d7-4869-acbc-550f75b94108 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:11:18,383 INFO backend.chat_api internal_index_status request_id=68b967d0-41bb-4f1b-99c6-9f9e6da571b0 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:11:18,391 INFO backend.chat_api internal_index_status request_id=ee4b4cca-61e8-48af-ab16-c408561f78be user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:11:18,391 INFO backend.chat_api internal_list_documents request_id=6196dbaf-a6c9-4fa1-b1f1-6df7e47f113b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:18:15,069 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-20 23:18:15,098 INFO backend.chat_api evaluation_worker_started
+2026-04-20 23:18:15,106 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-20 23:21:37,715 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-20 23:21:37,716 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-20 23:21:37,719 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-20 23:21:37,759 INFO backend.chat_api evaluation_worker_started
+2026-04-20 23:21:37,769 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-20 23:22:40,442 INFO backend.chat_api internal_list_agents request_id=2406b996-fca2-4ad7-8696-4f8b2079c5b4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:22:40,448 INFO backend.chat_api internal_list_agents request_id=f8214109-8bea-4361-98da-9436e2c93b8d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:22:54,683 INFO backend.chat_api internal_list_agents request_id=1aba66cb-ce20-4450-8cd1-5ff1d3cf8e72 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:22:54,689 INFO backend.chat_api internal_list_agents request_id=f2da8b33-bf77-48e9-ad6b-b3e1b1107086 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:22:56,197 INFO backend.chat_api internal_setup_status request_id=d9a711bf-bda6-45a0-8517-a2253e7c7c08 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:22:56,198 INFO backend.chat_api internal_feedback_summary request_id=e06e38a8-6f55-413b-84a4-6c890b57a7dc user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:22:56,204 INFO backend.chat_api internal_feedback_summary request_id=ac401e1b-bdbe-4c00-bbf0-8de95eb738a3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:22:56,204 INFO backend.chat_api internal_setup_status request_id=3a9e4917-81c4-4b73-be65-40017adc8491 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:22:59,077 INFO backend.chat_api internal_list_agents request_id=d2713f21-afbc-4ace-a942-298fdb54d1e3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:22:59,082 INFO backend.chat_api internal_list_agents request_id=238eee21-ea75-4cdb-abaa-e443cefdfe43 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:28:57,487 INFO backend.chat_api internal_feedback_summary request_id=2b467c2e-e23c-49e0-bede-9bc11f565eeb user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:28:57,488 INFO backend.chat_api internal_setup_status request_id=0fb798f7-74b1-4af3-ab04-d55525d80483 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:28:57,495 INFO backend.chat_api internal_feedback_summary request_id=c2a3f4b4-c611-4aa5-8b75-1864a41c18cf user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:28:57,495 INFO backend.chat_api internal_setup_status request_id=f08cf57a-f34b-46db-b7ee-ab9143ef2e98 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:34,332 INFO backend.chat_api internal_setup_status request_id=5c4a24b3-8127-43fd-985e-6437c9394ccd user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:34,333 INFO backend.chat_api internal_feedback_summary request_id=a1b329d9-97d0-4f75-901c-98a2921dfccd user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:43,096 INFO backend.chat_api internal_list_documents request_id=9644e007-dba2-40ca-8843-4401bb21ecb6 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:43,096 INFO backend.chat_api internal_index_status request_id=ee4be36b-b9b0-4da0-9af8-0620e76cb0e8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:43,104 INFO backend.chat_api internal_index_status request_id=b471d60a-8840-46a0-9c87-59190c14e45a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:43,114 INFO backend.chat_api internal_list_documents request_id=11699af0-5798-4e45-8e21-9eb5c343902a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:44,192 INFO backend.chat_api internal_setup_status request_id=ba30b9e2-bd33-4447-9214-0f43fe6f3550 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:44,200 INFO backend.chat_api internal_setup_status request_id=3916ad97-4052-482a-952e-18b6b836af3a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:44,649 INFO backend.chat_api internal_whatsapp_get_config request_id=65129562-9af3-4338-84a9-de24a8104c03 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:44,649 INFO backend.chat_api internal_widget_config request_id=aa68f930-8c45-49ed-8789-bfad1b4bd42c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:44,658 INFO backend.chat_api internal_whatsapp_get_config request_id=592c0ca3-4c99-4863-980c-a79f2cff23b1 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:44,659 INFO backend.chat_api internal_widget_config request_id=ccdb941e-952a-4c0d-80ba-ecd279f28ad5 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:45,232 INFO backend.chat_api internal_list_agents request_id=5add07e7-5605-4014-aa13-b88e8d708671 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:31:45,238 INFO backend.chat_api internal_list_agents request_id=24c86aab-909f-45f8-916e-beb81cb8cffd user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:31:48,636 INFO backend.chat_api internal_setup_status request_id=857f5a48-e166-4a92-8acd-8b74c2cd52eb user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:48,639 INFO backend.chat_api internal_feedback_summary request_id=ea5e8b08-374c-4416-bda6-ad1bfe30965c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:48,642 INFO backend.chat_api internal_setup_status request_id=151148fd-70e4-4f17-b9fe-1c52ce794616 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:48,643 INFO backend.chat_api internal_feedback_summary request_id=1e094b62-aff6-4418-afa0-27af9fd22a46 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:50,513 INFO backend.chat_api internal_whatsapp_get_config request_id=0b0d7de3-2c02-46e0-a6c9-39d910869781 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:50,513 INFO backend.chat_api internal_widget_config request_id=253892a3-dd1b-4653-bf59-3e5e1a34a5fa user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:50,519 INFO backend.chat_api internal_whatsapp_get_config request_id=0a9b9300-9c55-40f8-86f6-664785bfc2da user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:50,531 INFO backend.chat_api internal_widget_config request_id=b9e1c434-fc31-42b8-88b9-f62eccf57344 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:51,971 INFO backend.chat_api internal_setup_status request_id=93dbebb1-d81c-4bd2-a1d7-db9e3d52370b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:51,971 INFO backend.chat_api internal_feedback_summary request_id=5945aea7-9605-4b69-b948-dd6e466a63b7 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:51,976 INFO backend.chat_api internal_feedback_summary request_id=61bbab17-15e5-4e6f-b37c-eb1fdf7a0101 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:31:51,993 INFO backend.chat_api internal_setup_status request_id=ba721b50-30d7-41e9-ac9f-7b254d641373 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:35:20,940 INFO backend.chat_api internal_index_status request_id=fb6b7b3e-1007-414c-9d89-2b052102ba7e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:35:20,941 INFO backend.chat_api internal_list_documents request_id=5faada03-b369-43e5-bd5e-6015cb202b0f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:35:20,949 INFO backend.chat_api internal_index_status request_id=1225b1f6-054f-4918-8662-88d0658b50d8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:35:20,949 INFO backend.chat_api internal_list_documents request_id=6ed9b108-ca78-4738-922a-a4d58289298e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:36:38,247 INFO backend.chat_api internal_upload_document request_id=cf07a41b-8db7-454f-a886-4f4a0247187d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:36:38,495 INFO backend.chat_api internal_list_documents request_id=b882c990-76f6-4a9d-8d69-f3f88b2021c4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:36:38,497 INFO backend.chat_api internal_index_status request_id=da031abf-1838-49b6-88de-10219b7d3ea9 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:57:31,374 INFO backend.chat_api internal_list_agents request_id=e451816b-d2b1-4d29-a8d3-95f86fe261dd user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:57:31,381 INFO backend.chat_api internal_list_agents request_id=3f4f6899-4246-4669-8609-538afb6ab668 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:57:34,195 INFO backend.chat_api internal_list_agents request_id=5147d02b-0542-4223-a454-71573ece17d6 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:57:34,200 INFO backend.chat_api internal_list_agents request_id=d1154460-9445-42f0-9f40-f2fe6acb5640 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:57:35,253 INFO backend.chat_api internal_feedback_summary request_id=e5d64a1a-dfaf-449b-a5b5-d59f0bd57e68 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:57:35,255 INFO backend.chat_api internal_setup_status request_id=179d11e0-368c-46cb-87eb-49e89e3e42c8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:57:35,260 INFO backend.chat_api internal_feedback_summary request_id=a91a2766-094a-4a79-8664-2ed4a88ce46f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:57:35,263 INFO backend.chat_api internal_setup_status request_id=6e327110-622a-4c41-ab47-0d6e2b0fc19d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-20 23:57:40,159 INFO backend.chat_api internal_agent_chat_request request_id=d8f9ec9b-8f91-456c-aa2b-eaeac1d2a369 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-20 23:57:40,163 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=openai model=gpt-4o-mini top_k=4 uploaded_docs=True
+2026-04-20 23:57:40,163 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=smalltalk_greeting route=greeting reason=smalltalk_greeting
+2026-04-20 23:57:40,163 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=greeting sources=0 answer_chars=197
+2026-04-20 23:57:57,105 INFO backend.chat_api internal_list_agents request_id=7477821a-7cdf-40a6-9c34-a5d1b43378b8 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-20 23:57:57,110 INFO backend.chat_api internal_list_agents request_id=166f0845-41f2-4a70-8adf-0f318af1e1cd user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:08:57,546 INFO backend.chat_api internal_list_agents request_id=975edaf6-ea74-4981-aa1a-b9913e6c83f0 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:08:57,550 INFO backend.chat_api internal_list_agents request_id=ab803f55-150b-43da-b0d9-10186ff9e63b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:09:01,800 INFO backend.chat_api internal_list_agents request_id=02d603a4-d430-4d26-8fd8-6a435c57c5a1 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:09:01,804 INFO backend.chat_api internal_list_agents request_id=e64d5ffc-584c-4fa5-8c20-5d764c7ba406 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:09:03,058 INFO backend.chat_api internal_feedback_summary request_id=791ae401-f3fb-4b7d-8f26-087337657819 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:09:03,060 INFO backend.chat_api internal_setup_status request_id=cc5a3943-8c56-44b4-981f-fb1fbef0418b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:09:03,067 INFO backend.chat_api internal_feedback_summary request_id=c77e3309-7d54-447c-b709-89855e5793ca user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:09:03,067 INFO backend.chat_api internal_setup_status request_id=4f8b2545-d272-43a9-b26a-c08811db3f1b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:09:04,920 INFO backend.chat_api internal_index_status request_id=51016be3-8789-43ad-be71-b09d8420077d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:09:04,920 INFO backend.chat_api internal_list_documents request_id=943ad993-0a97-4025-8c91-359d9a836134 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:09:04,928 INFO backend.chat_api internal_index_status request_id=5dd99c8d-7542-4e1a-869d-6a16cd5afb83 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:09:04,928 INFO backend.chat_api internal_list_documents request_id=16042c90-8d89-45c5-9399-b9240f206374 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:09:07,183 INFO backend.chat_api internal_list_agents request_id=4cc18696-6cef-4284-81b3-5387f1c02993 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:09:07,188 INFO backend.chat_api internal_list_agents request_id=ac8db1a2-688b-4c1f-9025-afe159060e5b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:15:32,551 INFO backend.chat_api internal_list_agents request_id=605ff5dd-2e4f-4ec7-801c-533bfe3cf5e7 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:15:32,557 INFO backend.chat_api internal_list_agents request_id=d8a4412f-1b1d-493e-b69d-365690977a00 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:15:33,784 INFO backend.chat_api internal_list_agents request_id=eab9088e-abd9-4f9f-a2c7-dca0cf7e81ae user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:15:33,790 INFO backend.chat_api internal_list_agents request_id=45ce61f3-1681-48bb-b393-64a5bba8de3c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:15:35,066 INFO backend.chat_api internal_feedback_summary request_id=a6ad4664-4a8c-4b8e-96de-063fd25442e7 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:15:35,067 INFO backend.chat_api internal_setup_status request_id=0150a20a-f466-4380-87dd-7f98c1a7579f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:15:35,072 INFO backend.chat_api internal_feedback_summary request_id=0aa844c5-eea9-46d7-85a1-7d042afd62de user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:15:35,073 INFO backend.chat_api internal_setup_status request_id=e9e64bf3-7091-4d77-8970-c6fb7f1fd334 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:15:36,459 INFO backend.chat_api internal_index_status request_id=20bf183e-8a13-4107-822d-d97e01f21a7d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:15:36,460 INFO backend.chat_api internal_list_documents request_id=03f49d61-d0f0-4168-bb20-a868cc56c5d3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:15:36,466 INFO backend.chat_api internal_list_documents request_id=e69e20f3-0a95-4ac4-aa72-1839d8a4e89d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:15:36,470 INFO backend.chat_api internal_index_status request_id=039c973f-64c0-4388-b209-90365006f930 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:15:41,192 INFO backend.chat_api internal_agent_chat_request request_id=b5b4dab2-b9be-4ab3-bac6-11d9b0e05c93 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 00:15:41,195 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=openai model=gpt-4o-mini top_k=4 uploaded_docs=True
+2026-04-21 00:15:41,195 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=smalltalk_greeting route=greeting reason=smalltalk_greeting
+2026-04-21 00:15:41,195 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=greeting sources=0 answer_chars=197
+2026-04-21 00:15:44,027 INFO backend.chat_api internal_list_agents request_id=280ab557-b55e-4c0b-b676-4a75006f3574 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:15:44,031 INFO backend.chat_api internal_list_agents request_id=724e490b-1ca7-4bda-b80f-67de7cb03e84 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:18:13,284 INFO backend.chat_api internal_list_agents request_id=adfca286-4462-4e7d-9210-510841bf76ff user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:18:13,290 INFO backend.chat_api internal_list_agents request_id=7986635f-f4e9-48ce-9592-55f8ef3cc700 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:18:17,040 INFO backend.chat_api internal_list_agents request_id=6621c25e-88a1-48ef-87cd-9f5919f9c15a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:18:17,045 INFO backend.chat_api internal_list_agents request_id=c8e8dd9c-6c92-45c3-8e3c-e0f0bfd0d94c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:18:18,384 INFO backend.chat_api internal_setup_status request_id=a4371dba-0b1a-49c2-bb28-be52a6f1375b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:18:18,386 INFO backend.chat_api internal_feedback_summary request_id=8304ccb5-6c0e-462a-8092-e1a1e65806f6 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:18:18,395 INFO backend.chat_api internal_setup_status request_id=eb24b87d-2e86-476c-ace4-1603212daf85 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:18:18,395 INFO backend.chat_api internal_feedback_summary request_id=84732b57-ee5e-4675-855c-43a79edc46dd user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:18:19,896 INFO backend.chat_api internal_list_documents request_id=01788310-e4b8-4fb5-b0b1-1b6f8f0d9c83 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:18:19,896 INFO backend.chat_api internal_index_status request_id=dc63994d-2047-4255-b4b6-d24815a3d9c7 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:18:19,904 INFO backend.chat_api internal_list_documents request_id=18e89255-5f9b-4041-91b0-49a228cc18b2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:18:19,905 INFO backend.chat_api internal_index_status request_id=cefd4808-97e6-42b8-bc17-905fb03d830e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:18:22,686 INFO backend.chat_api internal_list_agents request_id=499e3999-fdb3-4924-8069-02f6f1346db7 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:18:22,691 INFO backend.chat_api internal_list_agents request_id=2abeea33-0fda-4157-8031-119b8ba23bc5 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:23:09,105 INFO backend.chat_api internal_list_agents request_id=e3946118-1df7-4153-bdf9-1465705dce7b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:23:09,112 INFO backend.chat_api internal_list_agents request_id=61d7fcb7-2687-4a14-878d-a8f556d84877 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:26:43,426 INFO backend.chat_api internal_list_agents request_id=fa35c95e-c3b3-4dca-84d1-f7b1eec433b2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:26:43,426 INFO backend.chat_api internal_list_agents request_id=d8236cb1-deed-40c6-9697-17ede9f1a3dc user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:32:32,737 INFO backend.chat_api internal_list_agents request_id=9e1e9763-2410-41ff-acde-7e4cc19d374c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:32:32,740 INFO backend.chat_api internal_list_agents request_id=27bfa6c1-735c-45c7-9cf4-88c20852004e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:34:23,124 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-21 00:34:23,125 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-21 00:34:23,129 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-21 00:34:23,198 INFO backend.chat_api evaluation_worker_started
+2026-04-21 00:34:23,210 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-21 00:34:45,655 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-21 00:34:45,657 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-21 00:34:45,659 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-21 00:34:45,703 INFO backend.chat_api evaluation_worker_started
+2026-04-21 00:34:45,712 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-21 00:45:41,683 INFO backend.chat_api internal_list_agents request_id=c8757349-4ae1-4ec5-95dd-9c3cc192d7d4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:45:41,684 INFO backend.chat_api internal_list_agents request_id=0c90e542-bf21-445b-b7d6-b8d482ae1605 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:45:45,110 INFO backend.chat_api internal_list_agents request_id=3f05ad81-76b6-4f32-8552-ce2a957c4649 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:45:45,110 INFO backend.chat_api internal_list_agents request_id=a8e5d6ca-e2da-4157-a11f-b3d826343d50 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:45:46,369 INFO backend.chat_api internal_setup_status request_id=878a18be-4cee-4dfa-a58d-446d0f20ff5a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:45:46,370 INFO backend.chat_api internal_feedback_summary request_id=50046499-66ae-4c01-8f13-8ab3f675bd8d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:45:46,372 INFO backend.chat_api internal_feedback_summary request_id=72ddfc31-7faf-4fdc-a729-9a83748cd961 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:45:46,375 INFO backend.chat_api internal_setup_status request_id=522bb1b8-3b3b-4944-8bd7-c17854414da7 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 00:45:47,811 INFO backend.chat_api internal_list_agents request_id=404184fd-24b1-406a-98c6-276099581d97 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:45:47,811 INFO backend.chat_api internal_list_agents request_id=fabec459-b28f-4356-840f-be6d9e2ba00f user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:46:58,111 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-21 00:46:58,112 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-21 00:46:58,114 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-21 00:46:58,162 INFO backend.chat_api evaluation_worker_started
+2026-04-21 00:46:58,172 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-21 00:49:16,209 INFO backend.chat_api internal_list_agents request_id=7644df9d-4a67-4f77-be44-750a49e77151 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 00:49:16,209 INFO backend.chat_api internal_list_agents request_id=7986f6f1-2c97-4a1e-ab47-262a791864e5 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:32:25,490 INFO backend.chat_api internal_list_agents request_id=dd528abd-349a-4a5d-99f5-c6da75113305 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:32:25,494 INFO backend.chat_api internal_list_agents request_id=c341939c-4fca-4b0b-b66d-fa9f86da707d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:32:27,724 INFO backend.chat_api internal_list_agents request_id=2b1364a2-b296-4012-bc3b-92ad7fcc8d0b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:32:27,724 INFO backend.chat_api internal_list_agents request_id=0177d8ff-e708-4b6c-bff7-01172262fbd4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:32:35,811 INFO backend.chat_api internal_setup_status request_id=55c1447b-bba6-418f-ba31-488aa3a70433 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:35,812 INFO backend.chat_api internal_setup_status request_id=0cbdcbfc-cf35-4f84-bd4d-47ea5a8ebe11 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:35,813 INFO backend.chat_api internal_feedback_summary request_id=b966c4eb-cd30-41fe-9644-ab6aa625a587 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:35,813 INFO backend.chat_api internal_feedback_summary request_id=ae4d4379-c65a-4382-81e0-64bfc33ebba7 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:38,390 INFO backend.chat_api internal_list_documents request_id=665bb9b7-1f23-4e3d-9a4c-9934c100d542 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:38,391 INFO backend.chat_api internal_list_documents request_id=8ed66108-0ce3-489d-9b00-ba3ed41d2d24 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:38,393 INFO backend.chat_api internal_index_status request_id=3bad820a-c2eb-4da5-9948-3b4a5d88b8e2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:38,393 INFO backend.chat_api internal_index_status request_id=f63241d5-e371-4462-87d6-f73c59e206ab user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:45,113 INFO backend.chat_api internal_list_agents request_id=115741ac-5997-45fb-b597-04f4ebd4229b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:32:45,113 INFO backend.chat_api internal_list_agents request_id=9b085f35-983b-4a90-8c3a-cf3c44b86c7d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:32:56,503 INFO backend.chat_api internal_list_agents request_id=0c2f14f0-2c88-4f11-9f46-65306aa380a9 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:32:56,504 INFO backend.chat_api internal_list_agents request_id=8394039d-e1b6-4f80-a506-571924e221bb user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:32:57,698 INFO backend.chat_api internal_feedback_summary request_id=31df53f8-78cc-4748-baff-44324d735f62 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:57,698 INFO backend.chat_api internal_feedback_summary request_id=fcee1ee4-7491-4ea5-8e5e-d02bd9696b93 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:57,700 INFO backend.chat_api internal_setup_status request_id=63a5ae93-a03f-44c3-b594-aca2ce1d4c4a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:32:57,700 INFO backend.chat_api internal_setup_status request_id=25263a7d-e8dd-49cf-901e-7814ec36fa74 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:42:48,787 INFO backend.chat_api internal_agent_chat_request request_id=04b6381b-f7e4-4ad0-9c9e-550b56c95f3b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:42:48,792 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-3-5-haiku-latest top_k=4 uploaded_docs=True
+2026-04-21 01:42:48,793 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:42:49,125 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 01:42:55,636 INFO backend.chat_api internal_agent_chat_request request_id=11e0d2f6-caba-496b-ab96-c56d1998f6e4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:42:55,638 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-3-5-haiku-latest top_k=4 uploaded_docs=True
+2026-04-21 01:42:55,638 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:42:55,967 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 01:44:20,675 INFO backend.chat_api internal_agent_chat_request request_id=a5d7289c-69e2-42d2-b8b1-8cd230986c16 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:44:20,678 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=openai model=gpt-4o-mini top_k=4 uploaded_docs=True
+2026-04-21 01:44:20,678 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:44:20,787 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 01:44:27,406 INFO backend.chat_api internal_agent_chat_request request_id=95e6604a-b63e-4aa1-890f-ea55fce044f6 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:44:27,409 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-opus-4-1 top_k=4 uploaded_docs=True
+2026-04-21 01:44:27,409 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:44:27,517 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 01:44:40,986 INFO backend.chat_api internal_agent_chat_request request_id=b3d38bdd-5589-4e66-a25a-5471d2378eb7 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:44:40,988 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-opus-4-1 top_k=4 uploaded_docs=True
+2026-04-21 01:44:40,988 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:44:41,095 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 01:44:42,816 INFO backend.chat_api internal_agent_chat_request request_id=c359e921-9cc3-496f-aae5-8a3810440190 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:44:42,818 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-opus-4-1 top_k=4 uploaded_docs=True
+2026-04-21 01:44:42,818 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:44:42,926 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 01:46:06,357 INFO backend.chat_api internal_agent_chat_request request_id=3b2fc3c8-e912-4b75-9256-73c45b28c593 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:46:06,359 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-opus-4-1 top_k=4 uploaded_docs=True
+2026-04-21 01:46:06,359 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:46:06,550 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 01:46:07,449 INFO backend.chat_api internal_agent_chat_request request_id=12df598a-61b0-46f2-9d35-64954362a323 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:46:07,451 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-opus-4-1 top_k=4 uploaded_docs=True
+2026-04-21 01:46:07,451 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:46:07,557 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 01:46:15,102 INFO backend.chat_api internal_agent_chat_request request_id=e1c4c224-ae3c-432d-9524-c8ee59a8935e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:46:15,105 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=openai model=gpt-4o-mini top_k=4 uploaded_docs=True
+2026-04-21 01:46:15,105 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:46:15,215 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 01:46:17,708 INFO backend.chat_api internal_agent_chat_request request_id=8084f88b-5694-4d40-8a57-05619597fbe4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:46:17,710 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-sonnet-4-5 top_k=4 uploaded_docs=True
+2026-04-21 01:46:17,710 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:46:17,810 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 01:48:04,329 INFO backend.chat_api internal_list_agents request_id=cd9d1681-694f-4837-bd31-47f078db5c96 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:48:04,330 INFO backend.chat_api internal_list_agents request_id=5a07666f-6bca-4b4c-afed-6aa48da9f22c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:48:05,683 INFO backend.chat_api internal_list_agents request_id=7d2d543d-6fa7-4b6b-8731-369847a955e1 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:48:05,683 INFO backend.chat_api internal_list_agents request_id=6756e0dd-8c1a-40e0-8ba7-3794b4acbd63 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:48:06,469 INFO backend.chat_api internal_feedback_summary request_id=dee58564-eb5f-481f-ac02-9d36436f3a83 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:48:06,469 INFO backend.chat_api internal_setup_status request_id=e28bf35c-6b07-4955-879a-6096302f4cba user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:48:06,472 INFO backend.chat_api internal_feedback_summary request_id=3a97f369-50ff-4ffe-838d-a53e38b65e3b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:48:06,474 INFO backend.chat_api internal_setup_status request_id=27f086fd-09b9-4c56-ada1-72b02a144017 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:48:07,592 INFO backend.chat_api internal_index_status request_id=f0f6adcd-c4af-4c52-ba35-3123490e2a65 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:48:07,593 INFO backend.chat_api internal_list_documents request_id=ddc70485-6fc9-4803-97d5-eab2f1066e00 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:48:07,593 INFO backend.chat_api internal_list_documents request_id=cd40e8e1-de3f-46f0-a614-4da7b37c2337 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:48:07,595 INFO backend.chat_api internal_index_status request_id=b8fd01f6-bef7-4e85-aaa7-f84ab588a57a user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:48:14,802 INFO backend.chat_api internal_agent_chat_request request_id=7bc2edf8-fcf3-4915-a43e-35752d29f328 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:48:14,804 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-opus-4-1 top_k=4 uploaded_docs=True
+2026-04-21 01:48:14,804 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=smalltalk_greeting route=greeting reason=smalltalk_greeting
+2026-04-21 01:48:14,804 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=greeting sources=0 answer_chars=197
+2026-04-21 01:55:02,968 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-21 01:55:02,970 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-21 01:55:02,973 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-21 01:55:03,043 INFO backend.chat_api evaluation_worker_started
+2026-04-21 01:55:03,055 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-21 01:55:48,688 INFO backend.chat_api internal_agent_chat_request request_id=e7a458ed-c2a0-488b-92de-8089bafed48b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:55:48,690 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-sonnet-4-5 top_k=4 uploaded_docs=True
+2026-04-21 01:55:48,690 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=smalltalk_greeting route=greeting reason=smalltalk_greeting
+2026-04-21 01:55:48,690 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=greeting sources=0 answer_chars=197
+2026-04-21 01:56:00,076 INFO backend.chat_api internal_agent_chat_request request_id=5431271a-aadd-4e20-873e-89d0edb2acf1 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:56:00,079 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=anthropic model=claude-sonnet-4-5 top_k=4 uploaded_docs=True
+2026-04-21 01:56:00,079 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=general_knowledge route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 01:56:00,264 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=146
+2026-04-21 01:58:49,966 INFO backend.chat_api internal_list_agents request_id=4ffcc15f-4260-4944-bdde-eca349e96155 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:58:49,966 INFO backend.chat_api internal_list_agents request_id=e0617770-301e-4787-8a5e-17aa129a9e57 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:58:58,469 INFO backend.chat_api internal_list_agents request_id=b1ce2323-24a7-4c84-95b2-977eaed5f84e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:58:58,484 INFO backend.chat_api internal_list_agents request_id=948d946b-8c6d-429a-bed0-5971d215aa99 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 01:58:59,184 INFO backend.chat_api internal_feedback_summary request_id=af301f8e-d254-4e17-9c31-6d9974a480c3 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:58:59,185 INFO backend.chat_api internal_setup_status request_id=a2171441-c920-44c6-a8ee-c8fbbd78606d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:58:59,186 INFO backend.chat_api internal_setup_status request_id=c96678cd-c3b1-4943-bfe3-c21aa2949792 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:58:59,189 INFO backend.chat_api internal_feedback_summary request_id=8e2fc48f-e9cd-4734-b607-3fd04540de78 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 01:59:06,228 INFO backend.chat_api internal_agent_chat_request request_id=c7a1c5c0-8a5c-4972-9819-734802fef34b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 01:59:06,230 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 01:59:06,230 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=smalltalk_greeting route=greeting reason=smalltalk_greeting
+2026-04-21 01:59:06,230 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=greeting sources=0 answer_chars=197
+2026-04-21 02:01:18,144 INFO backend.chat_api internal_agent_chat_request request_id=f940449f-f2f0-4eed-9da4-96df1369f463 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 02:01:19,505 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 02:01:19,505 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 02:01:20,150 WARNING clasificacion_langchain.agents.service agent_chat_llm_generation_failed agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:01:20,610 WARNING clasificacion_langchain.agents.service agent_general_llm_generation_failed company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:01:20,611 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=223
+2026-04-21 02:01:33,053 INFO backend.chat_api internal_agent_chat_request request_id=8aabdf65-fe6c-4b08-9acb-11aea0337bb4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 02:01:33,056 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=openai model=gpt-4o-mini top_k=4 uploaded_docs=True
+2026-04-21 02:01:33,056 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 02:01:33,162 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=142
+2026-04-21 02:01:44,110 INFO backend.chat_api internal_agent_chat_request request_id=b5ea12e9-6474-4768-a553-11c61c919155 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 02:01:44,652 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 02:01:44,652 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 02:01:45,165 WARNING clasificacion_langchain.agents.service agent_chat_llm_generation_failed agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:01:45,373 WARNING clasificacion_langchain.agents.service agent_general_llm_generation_failed company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:01:45,373 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=220
+2026-04-21 02:04:38,772 INFO backend.chat_api internal_list_agents request_id=3c56d609-4c55-4c86-8481-e4f2d93993e4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 02:04:38,772 INFO backend.chat_api internal_list_agents request_id=652200c9-17a9-4820-ab12-2d741ab93d2d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 02:05:42,387 INFO backend.chat_api internal_list_agents request_id=1bca0402-4a00-44d3-b964-abea0f59f752 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 02:05:42,388 INFO backend.chat_api internal_list_agents request_id=7100a8ed-11e7-4a19-aa4c-ccb80b667427 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 02:05:43,420 INFO backend.chat_api internal_feedback_summary request_id=b3266b9f-a8ee-4fbc-b174-cb1d76657d57 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 02:05:43,420 INFO backend.chat_api internal_setup_status request_id=5204a198-405d-4e99-b0fd-b28d0e95f677 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 02:05:43,422 INFO backend.chat_api internal_setup_status request_id=dad72594-2d89-45c3-9379-b4877b0654c4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 02:05:43,424 INFO backend.chat_api internal_feedback_summary request_id=d11e5d5c-a040-4967-a8e8-bd3251e9d49b user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 02:05:52,381 INFO backend.chat_api internal_agent_chat_request request_id=74a9ef57-bf76-4cbf-96c3-77ca281f7fd9 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 02:05:52,788 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 02:05:52,788 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 02:05:53,123 WARNING clasificacion_langchain.agents.service agent_chat_llm_generation_failed agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:05:53,345 WARNING clasificacion_langchain.agents.service agent_general_llm_generation_failed company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:05:53,345 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=220
+2026-04-21 02:09:57,259 INFO backend.chat_api sqlite_db_path=data/local_api.db
+2026-04-21 02:09:57,260 INFO backend.chat_api identity_store_backend=sqlite
+2026-04-21 02:09:57,261 INFO backend.chat_api agent_repository_backend=sqlite
+2026-04-21 02:09:57,287 INFO backend.chat_api evaluation_worker_started
+2026-04-21 02:09:57,295 INFO backend.chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-21 02:10:10,648 INFO backend.chat_api internal_agent_chat_request request_id=943ce11c-e175-4c9a-ba1d-c55ca5945a97 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 02:10:10,650 INFO clasificacion_langchain.agents.service agent_chat_llm_context agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 anthropic_model=claude-sonnet-4-6 use_llm=True openai_key=True anthropic_key=True
+2026-04-21 02:10:10,651 INFO clasificacion_langchain.agents.service agent_chat_llm_generator agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 available=True
+2026-04-21 02:10:11,200 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 02:10:11,200 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 02:10:11,594 WARNING clasificacion_langchain.agents.service agent_chat_llm_generation_failed agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:10:11,828 WARNING clasificacion_langchain.agents.service agent_general_llm_generation_failed company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:10:11,829 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=220
+2026-04-21 02:10:44,969 INFO backend.chat_api internal_agent_chat_request request_id=cb655e95-84d4-4ff0-aed9-b81b8be765b4 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 02:10:44,971 INFO clasificacion_langchain.agents.service agent_chat_llm_context agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 anthropic_model=claude-sonnet-4-6 use_llm=True openai_key=True anthropic_key=True
+2026-04-21 02:10:44,972 INFO clasificacion_langchain.agents.service agent_chat_llm_generator agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 available=True
+2026-04-21 02:10:46,252 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 02:10:46,252 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 02:10:46,641 WARNING clasificacion_langchain.agents.service agent_chat_llm_generation_failed agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:10:46,848 WARNING clasificacion_langchain.agents.service agent_general_llm_generation_failed company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:10:46,848 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=220
+2026-04-21 02:15:05,496 INFO backend.chat_api internal_agent_chat_request request_id=9f7d698e-9914-48ab-ac5b-69de4eeaa1cb user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 02:15:05,497 INFO clasificacion_langchain.agents.service agent_chat_llm_context agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 anthropic_model=claude-sonnet-4-6 use_llm=True openai_key=True anthropic_key=True
+2026-04-21 02:15:05,498 INFO clasificacion_langchain.agents.service agent_chat_llm_generator agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 available=True
+2026-04-21 02:15:05,498 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 02:15:05,498 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=smalltalk_greeting route=greeting reason=smalltalk_greeting
+2026-04-21 02:15:05,498 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=greeting sources=0 answer_chars=197
+2026-04-21 02:15:17,464 INFO backend.chat_api internal_agent_chat_request request_id=7636e9f5-dff9-4a58-a73a-662a1ed2156d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 02:15:17,466 INFO clasificacion_langchain.agents.service agent_chat_llm_context agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 anthropic_model=claude-sonnet-4-6 use_llm=True openai_key=True anthropic_key=True
+2026-04-21 02:15:17,467 INFO clasificacion_langchain.agents.service agent_chat_llm_generator agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 available=True
+2026-04-21 02:15:17,871 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 02:15:17,871 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 02:15:18,173 WARNING clasificacion_langchain.agents.service agent_chat_llm_generation_failed agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:15:18,364 WARNING clasificacion_langchain.agents.service agent_general_llm_generation_failed company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 02:15:18,364 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=220
+2026-04-21 10:43:49,527 INFO backend.chat_api internal_list_agents request_id=a848ea86-68aa-4df8-90c7-f4022c5bae1e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 10:43:49,528 INFO backend.chat_api internal_list_agents request_id=ca90a67c-3126-4bc7-ac1f-405bfdeb0ce2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 10:43:54,924 INFO backend.chat_api internal_list_agents request_id=be6a395b-f39f-41d6-a9b5-d6ddcaf0a728 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 10:43:54,925 INFO backend.chat_api internal_list_agents request_id=12919f5c-3620-46e1-aad0-c2ff82f75591 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351
+2026-04-21 10:43:56,457 INFO backend.chat_api internal_feedback_summary request_id=e85fa747-daa0-44ad-9ef6-31ac3e60c857 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 10:43:56,457 INFO backend.chat_api internal_setup_status request_id=994fbfff-2d56-4bac-a850-795750ce8ce2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 10:43:56,463 INFO backend.chat_api internal_setup_status request_id=76a5a534-3157-4197-98c3-092afda91a68 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 10:43:56,465 INFO backend.chat_api internal_feedback_summary request_id=84d9fc37-c452-4466-b38f-19a32b11d65d user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 10:43:58,033 INFO backend.chat_api internal_index_status request_id=02883751-c28d-455c-a0ff-976f6c69f6aa user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 10:43:58,034 INFO backend.chat_api internal_list_documents request_id=9160d475-4b62-4be9-a8d6-d09cca643748 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 10:43:58,036 INFO backend.chat_api internal_list_documents request_id=5ece9466-24df-449c-88bc-e5feca1cdbf2 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 10:43:58,037 INFO backend.chat_api internal_index_status request_id=7acbc8c5-df91-459b-a278-1758c2e9dc58 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e org_id=4232ce8d-380b-4b66-a427-77849df01da6 company_id=kronix-ai-93067351 agent_id=ebf574842c8a441fa08bb497615a8955
+2026-04-21 10:44:04,528 INFO backend.chat_api internal_agent_chat_request request_id=c6f5762d-24e0-4e92-8def-623fd3d0bda7 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 10:44:04,531 INFO clasificacion_langchain.agents.service agent_chat_llm_context agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4o-mini anthropic_model=claude-sonnet-4-6 use_llm=False openai_key=True anthropic_key=True
+2026-04-21 10:44:04,532 INFO clasificacion_langchain.agents.service agent_chat_llm_generator agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 available=True
+2026-04-21 10:44:04,532 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=openai model=gpt-4o-mini top_k=4 uploaded_docs=True
+2026-04-21 10:44:04,532 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=smalltalk_greeting route=greeting reason=smalltalk_greeting
+2026-04-21 10:44:04,532 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=greeting sources=0 answer_chars=197
+2026-04-21 10:44:07,781 INFO backend.chat_api internal_agent_chat_request request_id=a00c6600-5cda-4016-9656-20fccdcb7b46 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 10:44:07,784 INFO clasificacion_langchain.agents.service agent_chat_llm_context agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4o-mini anthropic_model=claude-sonnet-4-6 use_llm=False openai_key=True anthropic_key=True
+2026-04-21 10:44:07,784 INFO clasificacion_langchain.agents.service agent_chat_llm_generator agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 available=True
+2026-04-21 10:44:07,784 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=False provider=openai model=gpt-4o-mini top_k=4 uploaded_docs=True
+2026-04-21 10:44:07,784 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 10:44:07,913 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=137
+2026-04-21 10:44:13,872 INFO backend.chat_api internal_agent_chat_request request_id=111f419b-e908-4dc2-b0e6-1b931ae80c8e user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 10:44:13,874 INFO clasificacion_langchain.agents.service agent_chat_llm_context agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 anthropic_model=claude-sonnet-4-6 use_llm=True openai_key=True anthropic_key=True
+2026-04-21 10:44:13,874 INFO clasificacion_langchain.agents.service agent_chat_llm_generator agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 available=True
+2026-04-21 10:44:14,958 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 10:44:14,958 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 10:44:16,322 WARNING clasificacion_langchain.agents.service agent_chat_llm_generation_failed agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 10:44:16,679 WARNING clasificacion_langchain.agents.service agent_general_llm_generation_failed company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 10:44:16,679 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=220
+2026-04-21 10:49:05,721 INFO backend.chat_api internal_agent_chat_request request_id=c72def7b-b042-4bfc-8c62-35a5fcca97c5 user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 10:49:05,723 INFO clasificacion_langchain.agents.service agent_chat_llm_context agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 anthropic_model=claude-sonnet-4-6 use_llm=True openai_key=True anthropic_key=True
+2026-04-21 10:49:05,724 INFO clasificacion_langchain.agents.service agent_chat_llm_generator agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 available=True
+2026-04-21 10:49:06,129 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 10:49:06,130 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 10:49:06,714 WARNING clasificacion_langchain.agents.service agent_chat_llm_generation_failed agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 10:49:06,908 WARNING clasificacion_langchain.agents.service agent_general_llm_generation_failed company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 10:49:06,908 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=220
+2026-04-21 10:51:17,292 INFO backend.chat_api internal_agent_chat_request request_id=eb33b8fb-8254-4526-a99e-89931c1fef1c user_id=88f12b17-5f30-483a-bb6a-64e59a785a5e agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 org_id=4232ce8d-380b-4b66-a427-77849df01da6 top_k=4
+2026-04-21 10:51:17,294 INFO clasificacion_langchain.agents.service agent_chat_llm_context agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 anthropic_model=claude-sonnet-4-6 use_llm=True openai_key=True anthropic_key=True
+2026-04-21 10:51:17,294 INFO clasificacion_langchain.agents.service agent_chat_llm_generator agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 available=True
+2026-04-21 10:51:17,754 INFO clasificacion_langchain.agents.service agent_chat_start agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 use_llm=True provider=openai model=gpt-4.1 top_k=4 uploaded_docs=True
+2026-04-21 10:51:17,754 INFO clasificacion_langchain.agents.service agent_chat_orchestrated agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 intent=unknown route=rag_live_docs reason=uploaded_documents_present
+2026-04-21 10:51:18,401 WARNING clasificacion_langchain.agents.service agent_chat_llm_generation_failed agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 10:51:18,824 WARNING clasificacion_langchain.agents.service agent_general_llm_generation_failed company_id=kronix-ai-93067351 provider=openai model=gpt-4.1 detail=Error HTTP de OpenAI: {
+    "error": {
+        "message": "Project `proj_n4Y6K06eqJnOVPWpKdy3nScR` does not have access to model `gpt-4.1`",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_found"
+    }
+}
+
+2026-04-21 10:51:18,824 INFO clasificacion_langchain.agents.service agent_chat_ok agent_id=ebf574842c8a441fa08bb497615a8955 company_id=kronix-ai-93067351 mode=live_docs_general_fallback sources=0 answer_chars=220
+2026-04-21 13:18:08,258 INFO chat_api evaluation_worker_started
+2026-04-21 13:18:08,270 INFO chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-04-21 13:18:44,303 INFO chat_api evaluation_worker_started
+2026-04-21 13:18:44,312 INFO chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs

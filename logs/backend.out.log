@@ -1,0 +1,17 @@
+INFO:     127.0.0.1:62562 - "GET /internal/ai/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62562 - "GET /internal/ai/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62562 - "GET /internal/ai/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62562 - "GET /internal/ai/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61270 - "GET /internal/ai/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61270 - "GET /internal/ai/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60899 - "GET /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/feedback/summary?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61270 - "GET /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/setup-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61270 - "GET /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/feedback/summary?days=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61270 - "GET /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/setup-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61270 - "GET /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/setup-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61270 - "GET /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/setup-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61270 - "GET /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61270 - "GET /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60899 - "GET /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/index/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60899 - "GET /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/index/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62119 - "POST /internal/ai/agents/ebf574842c8a441fa08bb497615a8955/chat HTTP/1.1" 422 Unprocessable Content
