@@ -918,6 +918,10 @@ def _public_widget_snippet(api_base_url: str, widget_id: str, widget_token: str)
 
 def _build_service() -> ChatService:
     load_dotenv()
+    configured_backend = os.getenv("CHAT_SESSION_BACKEND", "auto").strip().lower()
+    if configured_backend == "auto":
+        configured_backend = "redis" if os.getenv("REDIS_URL", "").strip() else "memory"
+
     config = ChatServiceConfig(
         rag_index_path=os.getenv("RAG_INDEX_PATH", "models/rag_index.joblib"),
         intent_model_path=os.getenv("INTENT_MODEL_PATH", "models/intent_router.joblib"),
@@ -927,7 +931,7 @@ def _build_service() -> ChatService:
         anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
         confidence_threshold=float(os.getenv("CHAT_CONFIDENCE_THRESHOLD", "0.45")),
         rag_intents=_parse_rag_intents(os.getenv("CHAT_RAG_INTENTS", "")),
-        session_backend=os.getenv("CHAT_SESSION_BACKEND", "memory"),
+        session_backend=configured_backend,
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         redis_key_prefix=os.getenv("REDIS_KEY_PREFIX", "chat_session"),
         redis_ttl_seconds=int(os.getenv("REDIS_TTL_SECONDS", "86400")),
@@ -946,6 +950,31 @@ def _build_service() -> ChatService:
         store = InMemorySessionStore(max_turns=config.max_session_turns)
 
     return ChatService(config=config, session_store=store)
+
+
+def _build_session_store_for_agents(
+    *,
+    max_turns: int,
+):
+    backend = os.getenv("AGENT_CHAT_SESSION_BACKEND", "auto").strip().lower()
+    if backend == "auto":
+        backend = "redis" if os.getenv("REDIS_URL", "").strip() else "memory"
+
+    if backend == "redis":
+        redis_url = os.getenv("REDIS_URL", "").strip()
+        if not redis_url:
+            logger.warning(
+                "AGENT_CHAT_SESSION_BACKEND=redis pero REDIS_URL no esta definido; fallback memory"
+            )
+        else:
+            return RedisSessionStore(
+                redis_url=redis_url,
+                key_prefix=os.getenv("AGENT_CHAT_REDIS_KEY_PREFIX", "agent_chat_session"),
+                max_turns=max_turns,
+                ttl_seconds=int(os.getenv("AGENT_CHAT_REDIS_TTL_SECONDS", "86400")),
+            )
+
+    return InMemorySessionStore(max_turns=max_turns)
 
 
 def _chat_auth_compat_mode() -> bool:
@@ -1037,10 +1066,14 @@ def _build_agent_service(llm_settings_service: TenantLlmSettingsService | None) 
 
     logger.info("agent_repository_backend=%s", backend)
     conversation_policy = build_conversation_policy_from_env()
+    session_store = _build_session_store_for_agents(
+        max_turns=int(os.getenv("AGENT_CHAT_MAX_SESSION_TURNS", "12")),
+    )
     return AgentService(
         repository=repository,
         llm_settings_service=llm_settings_service,
         conversation_policy=conversation_policy,
+        session_store=session_store,
         knowledge_root=os.getenv("AGENTS_KNOWLEDGE_ROOT", "knowledge_base/agents"),
         index_root=os.getenv("AGENTS_INDEX_ROOT", "models/agents"),
     )

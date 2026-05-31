@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import java.util.Base64;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.stereotype.Service;
 
@@ -39,15 +40,18 @@ public class AiGatewayService {
     private final AuthService authService;
     private final TenancyService tenancyService;
     private final AiEngineClient aiEngineClient;
+    private final String integrationServiceToken;
 
     public AiGatewayService(
         AuthService authService,
         TenancyService tenancyService,
-        AiEngineClient aiEngineClient
+        AiEngineClient aiEngineClient,
+        @Value("${app.integration.service-token:}") String integrationServiceToken
     ) {
         this.authService = authService;
         this.tenancyService = tenancyService;
         this.aiEngineClient = aiEngineClient;
+        this.integrationServiceToken = integrationServiceToken == null ? "" : integrationServiceToken.trim();
     }
 
     public AiAgentResponse createAgent(
@@ -411,6 +415,25 @@ public class AiGatewayService {
         String requestedOrgId,
         String requestId
     ) {
+        if (isIntegrationServiceAuth(authorization)) {
+            String companyId = requestedCompanyId != null ? requestedCompanyId.trim() : "";
+            String orgId = requestedOrgId != null ? requestedOrgId.trim() : "";
+            if (companyId.isBlank() || orgId.isBlank()) {
+                throw new IllegalArgumentException(
+                    "company_id y org_id son requeridos para token de integracion"
+                );
+            }
+            String effectiveRequestId = requestId == null || requestId.isBlank()
+                ? UUID.randomUUID().toString()
+                : requestId;
+            return new AiRequestContext(
+                companyId,
+                orgId,
+                "service:clubhx",
+                effectiveRequestId
+            );
+        }
+
         var profile = authService.me(authorization);
         var organizations = tenancyService.listOrganizations(authorization);
         if (organizations.isEmpty()) {
@@ -428,6 +451,14 @@ public class AiGatewayService {
             profile.user().userId(),
             effectiveRequestId
         );
+    }
+
+    private boolean isIntegrationServiceAuth(String authorization) {
+        if (integrationServiceToken.isBlank()) return false;
+        if (authorization == null || authorization.isBlank()) return false;
+        if (!authorization.startsWith("Bearer ")) return false;
+        String token = authorization.substring("Bearer ".length()).trim();
+        return integrationServiceToken.equals(token);
     }
 
     private TenancyService.OrganizationMembershipView selectOrganization(
