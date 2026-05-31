@@ -2,6 +2,7 @@ package com.clasificacion.platformapi.ai.dto;
 
 public record UpdateTenantLlmSettingsRequest(
     String company_id,
+    String org_id,
     String generation_provider,
     String openai_model,
     String anthropic_model,

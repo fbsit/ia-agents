@@ -390,10 +390,15 @@ public class AiGatewayService {
         String requestId,
         UpdateTenantLlmSettingsRequest request
     ) {
+        String requestedOrgId = request.org_id();
+        if (requestedOrgId == null || requestedOrgId.isBlank()) {
+            requestedOrgId = request.company_id();
+        }
+
         AiRequestContext context = resolveContext(
             authorization,
             request.company_id(),
-            null,
+            requestedOrgId,
             requestId
         );
         AiTenantLlmSettingsUpdateRequest payload = new AiTenantLlmSettingsUpdateRequest(
