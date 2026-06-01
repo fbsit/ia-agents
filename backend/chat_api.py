@@ -98,6 +98,7 @@ from clasificacion_langchain.analytics.feedback_audit import (
     build_agent_feedback_service_from_env,
 )
 from clasificacion_langchain.agent_tools import AgentToolset
+from clasificacion_langchain.clubhx_tools_client import ClubHxToolsClient
 
 
 load_dotenv()
@@ -105,6 +106,44 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[str, dict[str, Any]] | None:
+    label = (intent_label or "").strip().lower()
+    if label in {"product_lookup", "catalog_query", "availability_check"}:
+        return "get_product_availability", {"query": message, "limit": 5, "session_id": session_id}
+    if label in {"delivery_quote", "shipping_options", "shipping_select"}:
+        return "get_shipping_options", {"commune": message, "session_id": session_id}
+    if label in {"payment_options", "payment_select", "checkout_payment"}:
+        return "get_payment_options", {"session_id": session_id}
+    return None
+
+
+def _format_canonical_tool_answer(result: dict[str, Any]) -> str | None:
+    if not result.get("ok"):
+        return None
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    tool = str(result.get("tool") or "")
+    if tool == "get_product_availability":
+        items = data.get("items") if isinstance(data.get("items"), list) else []
+        if not items:
+            return "No encontré productos con ese criterio."
+        first = items[0] if isinstance(items[0], dict) else {}
+        name = str(first.get("name") or "Producto").strip()
+        price = str(first.get("price") or "N/D").strip()
+        units = str(first.get("available_units") or "0").strip()
+        return f"Sí, {name} está disponible. Precio: {price}. Stock: {units}."
+    if tool == "get_shipping_options":
+        options = data.get("options") if isinstance(data.get("options"), list) else []
+        names = [str((o or {}).get("name") or "").strip() for o in options if isinstance(o, dict)]
+        names = [n for n in names if n]
+        return f"Opciones de despacho: {', '.join(names)}." if names else "No hay opciones de despacho activas ahora."
+    if tool == "get_payment_options":
+        options = data.get("options") if isinstance(data.get("options"), list) else []
+        names = [str((o or {}).get("name") or "").strip() for o in options if isinstance(o, dict)]
+        names = [n for n in names if n]
+        return f"Medios de pago: {', '.join(names)}." if names else "No hay medios de pago activos ahora."
+    return None
 
 
 _PUBLIC_WIDGET_RATE_LOCK = threading.Lock()
@@ -149,6 +188,16 @@ def _configure_agent_usage_logging() -> None:
 
 
 _configure_agent_usage_logging()
+
+_clubhx_tools_client: ClubHxToolsClient | None = None
+_clubhx_base = os.getenv("CLUBHX_API_BASE_URL", "").strip()
+_clubhx_token = os.getenv("CLUBHX_SERVICE_TOKEN", "").strip()
+if _clubhx_base and _clubhx_token:
+    _clubhx_tools_client = ClubHxToolsClient(
+        base_url=_clubhx_base,
+        service_token=_clubhx_token,
+        timeout_seconds=int(os.getenv("CLUBHX_TOOLS_TIMEOUT_SECONDS", "12") or "12"),
+    )
 
 
 class ChatRequestPayload(BaseModel):
@@ -4076,6 +4125,39 @@ def internal_chat_with_agent(
             generation_provider=payload.generation_provider,
             generation_model=payload.generation_model,
         )
+
+        routed_tool = _tool_for_intent(rag_result.intent_label or "", payload.message, effective_session_id)
+        if _clubhx_tools_client and routed_tool:
+            try:
+                canonical = _clubhx_tools_client.execute_canonical(
+                    tenant_id=agent.company_id,
+                    tool=routed_tool[0],
+                    channel="api",
+                    user_id=user_id,
+                    arguments=routed_tool[1],
+                )
+                tool_answer = _format_canonical_tool_answer(canonical)
+                if tool_answer:
+                    return AgentChatResponsePayload(
+                        agent_id=agent.agent_id,
+                        company_id=agent.company_id,
+                        session_id=effective_session_id,
+                        answer=tool_answer,
+                        sources=[],
+                        intent_label=rag_result.intent_label,
+                        route="tool",
+                        route_reason="canonical_tool",
+                        response_mode="tool_only",
+                        fallback_applied=False,
+                        retrieval_min_score=None,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "agent_tool_route_failed request_id=%s tool=%s detail=%s",
+                    request_id,
+                    routed_tool[0],
+                    exc,
+                )
     except AgentNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AgentForbiddenError as exc:
@@ -4203,6 +4285,39 @@ def chat_with_agent(
             generation_provider=payload.generation_provider,
             generation_model=payload.generation_model,
         )
+
+        routed_tool = _tool_for_intent(rag_result.intent_label or "", payload.message, effective_session_id)
+        if _clubhx_tools_client and routed_tool:
+            try:
+                canonical = _clubhx_tools_client.execute_canonical(
+                    tenant_id=agent.company_id,
+                    tool=routed_tool[0],
+                    channel="api",
+                    user_id=principal.user_id,
+                    arguments=routed_tool[1],
+                )
+                tool_answer = _format_canonical_tool_answer(canonical)
+                if tool_answer:
+                    return AgentChatResponsePayload(
+                        agent_id=agent.agent_id,
+                        company_id=agent.company_id,
+                        session_id=effective_session_id,
+                        answer=tool_answer,
+                        sources=[],
+                        intent_label=rag_result.intent_label,
+                        route="tool",
+                        route_reason="canonical_tool",
+                        response_mode="tool_only",
+                        fallback_applied=False,
+                        retrieval_min_score=None,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "agent_tool_route_failed user_id=%s tool=%s detail=%s",
+                    principal.user_id,
+                    routed_tool[0],
+                    exc,
+                )
     except AgentNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AgentForbiddenError as exc:
