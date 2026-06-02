@@ -34,7 +34,6 @@ from clasificacion_langchain.agents.conversation_policy import (
 from clasificacion_langchain.agents.role_knowledge import (
     RoleContext,
     build_role_context,
-    load_local_knowledge_documents,
     sync_shared_knowledge,
 )
 from clasificacion_langchain.chat.memory_store import InMemorySessionStore
@@ -1797,10 +1796,7 @@ class AgentService:
     def _load_agent_knowledge_documents(self, agent: AgentRecord) -> list[KnowledgeDocument]:
         sync_shared_knowledge(agent_root=Path(agent.knowledge_dir), company_id=agent.company_id)
         documents = self.repository.list_documents(agent.agent_id)
-        knowledge_documents = load_local_knowledge_documents(
-            agent_root=Path(agent.knowledge_dir),
-            company_id=agent.company_id,
-        )
+        knowledge_documents: list[KnowledgeDocument] = []
 
         for document in documents:
             if document.status == "failed":
