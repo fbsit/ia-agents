@@ -317,14 +317,31 @@ def _configure_agent_usage_logging() -> None:
 _configure_agent_usage_logging()
 
 _clubhx_tools_client: ClubHxToolsClient | None = None
-_clubhx_base = os.getenv("CLUBHX_API_BASE_URL", "").strip()
-_clubhx_token = os.getenv("CLUBHX_SERVICE_TOKEN", "").strip()
-if _clubhx_base and _clubhx_token:
-    _clubhx_tools_client = ClubHxToolsClient(
-        base_url=_clubhx_base,
-        service_token=_clubhx_token,
-        timeout_seconds=int(os.getenv("CLUBHX_TOOLS_TIMEOUT_SECONDS", "12") or "12"),
-    )
+_clubhx_tools_signature: tuple[str, str, int] | None = None
+
+
+def _get_clubhx_tools_client() -> ClubHxToolsClient | None:
+    global _clubhx_tools_client, _clubhx_tools_signature
+
+    base_url = os.getenv("CLUBHX_API_BASE_URL", "").strip()
+    service_token = os.getenv("CLUBHX_SERVICE_TOKEN", "").strip()
+    timeout_seconds = int(os.getenv("CLUBHX_TOOLS_TIMEOUT_SECONDS", "12") or "12")
+
+    if not base_url or not service_token:
+        _clubhx_tools_client = None
+        _clubhx_tools_signature = None
+        return None
+
+    signature = (base_url, service_token, timeout_seconds)
+    if _clubhx_tools_client is None or _clubhx_tools_signature != signature:
+        _clubhx_tools_client = ClubHxToolsClient(
+            base_url=base_url,
+            service_token=service_token,
+            timeout_seconds=timeout_seconds,
+        )
+        _clubhx_tools_signature = signature
+
+    return _clubhx_tools_client
 
 
 class ChatRequestPayload(BaseModel):
@@ -4246,6 +4263,7 @@ def internal_chat_with_agent(
             raise HTTPException(status_code=403, detail="company_id sin acceso al agente")
 
         effective_session_id = payload.session_id or user_id
+        clubhx_tools_client = _get_clubhx_tools_client()
         rag_result = agent_service.chat(
             agent=agent,
             message=payload.message,
@@ -4262,9 +4280,9 @@ def internal_chat_with_agent(
         routed_tool = _tool_for_intent(rag_result.intent_label or "", payload.message, effective_session_id)
         if not routed_tool and rag_result.route == "no_knowledge":
             routed_tool = _forced_commerce_tool(payload.message, effective_session_id)
-        if _clubhx_tools_client and routed_tool:
+        if clubhx_tools_client and routed_tool:
             try:
-                canonical = _clubhx_tools_client.execute_canonical(
+                canonical = clubhx_tools_client.execute_canonical(
                     tenant_id=agent.company_id,
                     tool=routed_tool[0],
                     channel="api",
@@ -4409,6 +4427,7 @@ def chat_with_agent(
     try:
         agent = agent_service.get_accessible_agent(agent_id, allowed_org_ids)
         effective_session_id = payload.session_id or principal.user_id
+        clubhx_tools_client = _get_clubhx_tools_client()
         rag_result = agent_service.chat(
             agent=agent,
             message=payload.message,
@@ -4425,9 +4444,9 @@ def chat_with_agent(
         routed_tool = _tool_for_intent(rag_result.intent_label or "", payload.message, effective_session_id)
         if not routed_tool and rag_result.route == "no_knowledge":
             routed_tool = _forced_commerce_tool(payload.message, effective_session_id)
-        if _clubhx_tools_client and routed_tool:
+        if clubhx_tools_client and routed_tool:
             try:
-                canonical = _clubhx_tools_client.execute_canonical(
+                canonical = clubhx_tools_client.execute_canonical(
                     tenant_id=agent.company_id,
                     tool=routed_tool[0],
                     channel="api",
@@ -5131,6 +5150,7 @@ def public_widget_chat(
     started = time.perf_counter()
 
     try:
+        clubhx_tools_client = _get_clubhx_tools_client()
         rag_result = agent_service.chat(
             agent=agent,
             message=payload.message,
@@ -5153,9 +5173,9 @@ def public_widget_chat(
     )
     if not routed_tool and rag_result.route == "no_knowledge":
         routed_tool = _forced_commerce_tool(payload.message, effective_session_id)
-    if _clubhx_tools_client and routed_tool:
+    if clubhx_tools_client and routed_tool:
         try:
-            canonical = _clubhx_tools_client.execute_canonical(
+            canonical = clubhx_tools_client.execute_canonical(
                 tenant_id=agent.company_id,
                 tool=routed_tool[0],
                 channel="widget_public",
