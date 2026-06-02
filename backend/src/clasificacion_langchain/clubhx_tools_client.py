@@ -11,16 +11,29 @@ from urllib import request as urllib_request
 class ClubHxToolsClient:
     base_url: str
     service_token: str
+    shop_domain: str | None = None
     timeout_seconds: int = 12
+
+    def _build_url(self, path: str) -> str:
+        base = self.base_url.rstrip("/")
+        normalized_path = path if path.startswith("/") else f"/{path}"
+        if base.endswith("/api/v1") and normalized_path.startswith("/api/v1/"):
+            normalized_path = normalized_path[len("/api/v1") :]
+        return f"{base}{normalized_path}"
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         body = json.dumps(payload).encode("utf-8")
         req = urllib_request.Request(
-            url=f"{self.base_url.rstrip('/')}{path}",
+            url=self._build_url(path),
             method="POST",
             headers={
                 "Content-Type": "application/json",
                 "X-Club-Service-Token": self.service_token,
+                **(
+                    {"X-Shop-Domain": self.shop_domain}
+                    if self.shop_domain and self.shop_domain.strip()
+                    else {}
+                ),
             },
             data=body,
         )

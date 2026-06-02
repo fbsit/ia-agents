@@ -340,6 +340,10 @@ def _get_clubhx_tools_client() -> ClubHxToolsClient | None:
 
     base_url = os.getenv("CLUBHX_API_BASE_URL", "").strip()
     service_token = os.getenv("CLUBHX_SERVICE_TOKEN", "").strip()
+    shop_domain = (
+        os.getenv("CLUBHX_SHOP_DOMAIN", "").strip()
+        or os.getenv("SHOP_DOMAIN", "").strip()
+    )
     timeout_seconds = int(os.getenv("CLUBHX_TOOLS_TIMEOUT_SECONDS", "12") or "12")
 
     if not base_url or not service_token:
@@ -352,16 +356,18 @@ def _get_clubhx_tools_client() -> ClubHxToolsClient | None:
         _clubhx_tools_signature = None
         return None
 
-    signature = (base_url, service_token, timeout_seconds)
+    signature = (base_url, service_token, shop_domain, timeout_seconds)
     if _clubhx_tools_client is None or _clubhx_tools_signature != signature:
         logger.info(
-            "clubhx_tools_client_init base_url=%s timeout_seconds=%s",
+            "clubhx_tools_client_init base_url=%s shop_domain=%s timeout_seconds=%s",
             base_url,
+            shop_domain,
             timeout_seconds,
         )
         _clubhx_tools_client = ClubHxToolsClient(
             base_url=base_url,
             service_token=service_token,
+            shop_domain=shop_domain or None,
             timeout_seconds=timeout_seconds,
         )
         _clubhx_tools_signature = signature
