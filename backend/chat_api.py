@@ -153,6 +153,113 @@ def _format_canonical_tool_answer(result: dict[str, Any]) -> str | None:
     return None
 
 
+def _extract_widget_add_to_cart(message: str) -> dict[str, Any] | None:
+    text = (message or "").strip().lower()
+    if not text:
+        return None
+    match = re.search(
+        r"(?:quiero|agrega|agregar|sumar|suma|llevo|pon|poner|mete|anade|añade)?\s*(\d{1,3})\s+(.+)",
+        text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    quantity = max(1, min(99, int(match.group(1) or "1")))
+    product_query = re.sub(r"\bal\s+carrito\b", " ", match.group(2) or "", flags=re.IGNORECASE)
+    product_query = re.sub(r"\?+", " ", product_query).strip()
+    if not product_query:
+        return None
+    return {"quantity": quantity, "product_query": product_query}
+
+
+def _format_public_widget_tool_payload(
+    result: dict[str, Any],
+    *,
+    user_message: str,
+    intent_label: str | None,
+) -> dict[str, Any] | None:
+    if not result.get("ok"):
+        return None
+
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    tool = str(result.get("tool") or "").strip().lower()
+    intent = (intent_label or "").strip().lower()
+
+    if tool == "get_product_availability":
+        items = data.get("items") if isinstance(data.get("items"), list) else []
+        safe_items = [item for item in items if isinstance(item, dict)]
+        if not safe_items:
+            return {"answer": "No encontre productos con ese criterio.", "products": []}
+
+        products = []
+        for item in safe_items[:3]:
+            product_id = str(item.get("id") or "").strip()
+            variant_id = str(item.get("id") or "").strip()
+            checkout_product_id = str(item.get("code") or item.get("id") or "").strip()
+            products.append(
+                {
+                    "id": product_id,
+                    "checkout_product_id": checkout_product_id,
+                    "variant_id": variant_id,
+                    "name": str(item.get("name") or "Producto").strip(),
+                    "price": str(item.get("price") or "N/D").strip(),
+                    "stock": str(item.get("available_units") or "0").strip(),
+                    "image_url": str(item.get("image_url") or "").strip() or None,
+                }
+            )
+
+        cart_request = _extract_widget_add_to_cart(user_message)
+        if cart_request and intent in {"product_lookup", "catalog_query", "availability_check", ""}:
+            first = products[0] if products else None
+            if first and first.get("id"):
+                return {
+                    "answer": f"Listo, agregue {cart_request['quantity']} {first['name']} al carrito. Si queres, seguimos con checkout cuando me digas \"quiero pagar\".",
+                    "products": products,
+                    "cart_action": {
+                        "type": "add_to_cart",
+                        "item": {
+                            "product_id": first["checkout_product_id"] or first["id"],
+                            "checkout_product_id": first["checkout_product_id"] or first["id"],
+                            "variant_id": first["variant_id"] or first["id"],
+                            "quantity": cart_request["quantity"],
+                            "name": first["name"],
+                        },
+                    },
+                }
+
+        availability_tokens = ["tienen ", "tenes ", "hay ", "stock", "disponible", "precio", "cuesta"]
+        normalized_message = (user_message or "").strip().lower()
+        if any(token in normalized_message for token in availability_tokens):
+            first = products[0]
+            return {
+                "answer": f"Si, {first['name']} esta disponible ahora. Precio: {first['price']}. Stock: {first['stock']}.",
+                "products": products[:1],
+            }
+
+        return {"answer": "Te paso estas opciones disponibles:", "products": products}
+
+    if tool == "get_shipping_options":
+        options = data.get("options") if isinstance(data.get("options"), list) else []
+        names = [str((o or {}).get("name") or "").strip() for o in options if isinstance(o, dict)]
+        names = [name for name in names if name]
+        return {
+            "answer": f"Opciones de despacho: {', '.join(names)}." if names else "No hay opciones de despacho activas ahora.",
+        }
+
+    if tool == "get_payment_options":
+        options = data.get("options") if isinstance(data.get("options"), list) else []
+        names = [str((o or {}).get("name") or "").strip() for o in options if isinstance(o, dict)]
+        names = [name for name in names if name]
+        return {
+            "answer": f"Medios de pago: {', '.join(names)}." if names else "No hay medios de pago activos ahora.",
+        }
+
+    tool_answer = _format_canonical_tool_answer(result)
+    if not tool_answer:
+        return None
+    return {"answer": tool_answer}
+
+
 _PUBLIC_WIDGET_RATE_LOCK = threading.Lock()
 _PUBLIC_WIDGET_RATE_EVENTS: dict[str, list[float]] = {}
 
@@ -464,6 +571,9 @@ class PublicWidgetChatResponsePayload(BaseModel):
     route: str | None = None
     intent_label: str | None = None
     response_mode: str | None = None
+    redirect_to: str | None = None
+    cart_action: dict[str, Any] | None = None
+    products: list[dict[str, Any]] | None = None
 
 
 class ChatAuditSummaryRowPayload(BaseModel):
@@ -5031,9 +5141,13 @@ def public_widget_chat(
                 user_id=payload.external_user_id or payload.visitor_id or client_id,
                 arguments=routed_tool[1],
             )
-            tool_answer = _format_canonical_tool_answer(canonical)
-            if tool_answer:
-                final_answer = tool_answer
+            tool_payload = _format_public_widget_tool_payload(
+                canonical,
+                user_message=payload.message,
+                intent_label=rag_result.intent_label,
+            )
+            if tool_payload and tool_payload.get("answer"):
+                final_answer = str(tool_payload.get("answer") or "").strip()
                 response_latency_ms = int((time.perf_counter() - started) * 1000)
 
                 _record_chat_audit(
@@ -5081,6 +5195,9 @@ def public_widget_chat(
                     route="tool",
                     intent_label=rag_result.intent_label,
                     response_mode="tool_only",
+                    redirect_to=str(tool_payload.get("redirect_to") or "").strip() or None,
+                    cart_action=tool_payload.get("cart_action") if isinstance(tool_payload.get("cart_action"), dict) else None,
+                    products=tool_payload.get("products") if isinstance(tool_payload.get("products"), list) else None,
                 )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
