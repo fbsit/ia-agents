@@ -131,10 +131,25 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
     if not text:
         return None
     if any(token in text for token in ["tienes ", "tienen ", "tiene ", "tenes ", "hay ", "stock", "disponible", "precio", "cuesta"]):
+        logger.info(
+            "forced_commerce_tool_match kind=product_lookup session_id=%s message=%s",
+            session_id,
+            message,
+        )
         return "get_product_availability", {"query": message, "limit": 5, "session_id": session_id}
     if any(token in text for token in ["despacho", "envio", "envío", "retiro", "chilexpress", "comuna"]):
+        logger.info(
+            "forced_commerce_tool_match kind=shipping_options session_id=%s message=%s",
+            session_id,
+            message,
+        )
         return "get_shipping_options", {"commune": message, "session_id": session_id}
     if any(token in text for token in ["pago", "pagar", "transferencia", "mercado pago", "tarjeta"]):
+        logger.info(
+            "forced_commerce_tool_match kind=payment_options session_id=%s message=%s",
+            session_id,
+            message,
+        )
         return "get_payment_options", {"session_id": session_id}
     return None
 
@@ -328,12 +343,22 @@ def _get_clubhx_tools_client() -> ClubHxToolsClient | None:
     timeout_seconds = int(os.getenv("CLUBHX_TOOLS_TIMEOUT_SECONDS", "12") or "12")
 
     if not base_url or not service_token:
+        logger.warning(
+            "clubhx_tools_client_unavailable base_url_present=%s token_present=%s",
+            bool(base_url),
+            bool(service_token),
+        )
         _clubhx_tools_client = None
         _clubhx_tools_signature = None
         return None
 
     signature = (base_url, service_token, timeout_seconds)
     if _clubhx_tools_client is None or _clubhx_tools_signature != signature:
+        logger.info(
+            "clubhx_tools_client_init base_url=%s timeout_seconds=%s",
+            base_url,
+            timeout_seconds,
+        )
         _clubhx_tools_client = ClubHxToolsClient(
             base_url=base_url,
             service_token=service_token,
@@ -4280,6 +4305,14 @@ def internal_chat_with_agent(
         routed_tool = _tool_for_intent(rag_result.intent_label or "", payload.message, effective_session_id)
         if not routed_tool and rag_result.route == "no_knowledge":
             routed_tool = _forced_commerce_tool(payload.message, effective_session_id)
+        logger.info(
+            "internal_agent_chat_tool_routing request_id=%s intent=%s route=%s routed_tool=%s client_ready=%s",
+            request_id,
+            rag_result.intent_label,
+            rag_result.route,
+            routed_tool[0] if routed_tool else None,
+            bool(clubhx_tools_client),
+        )
         if clubhx_tools_client and routed_tool:
             try:
                 canonical = clubhx_tools_client.execute_canonical(
@@ -4444,6 +4477,14 @@ def chat_with_agent(
         routed_tool = _tool_for_intent(rag_result.intent_label or "", payload.message, effective_session_id)
         if not routed_tool and rag_result.route == "no_knowledge":
             routed_tool = _forced_commerce_tool(payload.message, effective_session_id)
+        logger.info(
+            "api_agent_chat_tool_routing user_id=%s intent=%s route=%s routed_tool=%s client_ready=%s",
+            principal.user_id,
+            rag_result.intent_label,
+            rag_result.route,
+            routed_tool[0] if routed_tool else None,
+            bool(clubhx_tools_client),
+        )
         if clubhx_tools_client and routed_tool:
             try:
                 canonical = clubhx_tools_client.execute_canonical(
@@ -5173,6 +5214,14 @@ def public_widget_chat(
     )
     if not routed_tool and rag_result.route == "no_knowledge":
         routed_tool = _forced_commerce_tool(payload.message, effective_session_id)
+    logger.info(
+        "public_widget_chat_tool_routing widget_id=%s intent=%s route=%s routed_tool=%s client_ready=%s",
+        payload.widget_id,
+        rag_result.intent_label,
+        rag_result.route,
+        routed_tool[0] if routed_tool else None,
+        bool(clubhx_tools_client),
+    )
     if clubhx_tools_client and routed_tool:
         try:
             canonical = clubhx_tools_client.execute_canonical(
