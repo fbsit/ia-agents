@@ -1148,9 +1148,11 @@ def _chat_auth_compat_mode() -> bool:
 
 
 def _persistence_backend() -> str:
-    backend = os.getenv("PERSISTENCE_BACKEND", "sqlite").strip().lower()
+    backend = os.getenv("PERSISTENCE_BACKEND", "").strip().lower()
     if backend in {"sqlite", "memory", "postgres"}:
         return backend
+    if os.getenv("POSTGRES_DSN", "").strip() or os.getenv("DATABASE_URL", "").strip():
+        return "postgres"
     return "sqlite"
 
 

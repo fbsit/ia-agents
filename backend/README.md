@@ -282,7 +282,12 @@ Persistencia local:
 
 - En `PERSISTENCE_BACKEND=sqlite`, la API crea automaticamente la base SQLite local en `SQLITE_DB_PATH` al iniciar.
 - En `PERSISTENCE_BACKEND=postgres`, la API crea/actualiza schema base en `POSTGRES_DSN` o `DATABASE_URL` al iniciar.
+- Si `PERSISTENCE_BACKEND` no esta definido pero existe `POSTGRES_DSN` o `DATABASE_URL`, la API usa Postgres automaticamente.
 - Se persisten usuarios, refresh tokens, organizaciones, membresias, agentes, documentos de agente y settings LLM por tenant.
+
+Importante:
+
+- La persistencia real de agentes vive en este servicio AI engine. `platform-api` solo orquesta y proxyea; no almacena agentes por su cuenta.
 
 Se agregaron endpoints base de identidad:
 
