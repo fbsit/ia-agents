@@ -117,7 +117,7 @@ def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[
         return "get_shipping_options", {"commune": message, "session_id": session_id}
     if label in {"payment_options", "payment_select", "checkout_payment"}:
         return "get_payment_options", {"session_id": session_id}
-    if any(token in message_text for token in ["tienen ", "hay ", "busco ", "stock", "precio", "cuesta", "disponible"]):
+    if any(token in message_text for token in ["tienes ", "tienen ", "tenes ", "hay ", "busco ", "stock", "precio", "cuesta", "disponible"]):
         return "get_product_availability", {"query": message, "limit": 5, "session_id": session_id}
     if any(token in message_text for token in ["despacho", "envio", "retiro", "chilexpress", "comuna"]):
         return "get_shipping_options", {"commune": message, "session_id": session_id}
