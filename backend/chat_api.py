@@ -111,6 +111,9 @@ logger.setLevel(logging.INFO)
 def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[str, dict[str, Any]] | None:
     label = (intent_label or "").strip().lower()
     message_text = (message or "").strip().lower()
+    cart_request = _extract_widget_add_to_cart(message)
+    if label in {"add_to_cart", "cart_add", "cart_update", "checkout_cart"} and cart_request:
+        return "get_product_availability", {"query": cart_request["product_query"], "limit": 5, "session_id": session_id}
     if label in {"product_lookup", "catalog_query", "availability_check"}:
         return "get_product_availability", {"query": message, "limit": 5, "session_id": session_id}
     if label in {"delivery_quote", "shipping_options", "shipping_select"}:
@@ -119,6 +122,8 @@ def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[
         return "get_payment_options", {"session_id": session_id}
     if any(token in message_text for token in ["tienes ", "tienen ", "tenes ", "hay ", "busco ", "stock", "precio", "cuesta", "disponible"]):
         return "get_product_availability", {"query": message, "limit": 5, "session_id": session_id}
+    if cart_request:
+        return "get_product_availability", {"query": cart_request["product_query"], "limit": 5, "session_id": session_id}
     if any(token in message_text for token in ["despacho", "envio", "retiro", "chilexpress", "comuna"]):
         return "get_shipping_options", {"commune": message, "session_id": session_id}
     if any(token in message_text for token in ["pago", "pagar", "transferencia", "mercado pago", "tarjeta"]):
@@ -130,6 +135,16 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
     text = (message or "").strip().lower()
     if not text:
         return None
+    cart_request = _extract_widget_add_to_cart(message)
+    if cart_request:
+        logger.info(
+            "forced_commerce_tool_match kind=add_to_cart session_id=%s message=%s product_query=%s quantity=%s",
+            session_id,
+            message,
+            cart_request["product_query"],
+            cart_request["quantity"],
+        )
+        return "get_product_availability", {"query": cart_request["product_query"], "limit": 5, "session_id": session_id}
     if any(token in text for token in ["tienes ", "tienen ", "tiene ", "tenes ", "hay ", "stock", "disponible", "precio", "cuesta"]):
         logger.info(
             "forced_commerce_tool_match kind=product_lookup session_id=%s message=%s",
