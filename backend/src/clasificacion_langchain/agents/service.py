@@ -31,6 +31,11 @@ from clasificacion_langchain.agents.conversation_policy import (
     ConversationKey,
     ConversationPolicyEngine,
 )
+from clasificacion_langchain.agents.role_knowledge import (
+    build_role_context,
+    load_local_knowledge_documents,
+    sync_shared_knowledge,
+)
 from clasificacion_langchain.chat.memory_store import InMemorySessionStore
 from clasificacion_langchain.chat.session_store import SessionStore
 from clasificacion_langchain.rag.chunking import chunk_documents
@@ -253,6 +258,7 @@ class AgentService:
         agent_root = self.knowledge_root / created.agent_id
         company_root = agent_root / company_id
         company_root.mkdir(parents=True, exist_ok=True)
+        sync_shared_knowledge(agent_root=agent_root, company_id=company_id)
         index_path = self.index_root / f"{created.agent_id}.joblib"
 
         created.knowledge_dir = str(agent_root)
@@ -1197,17 +1203,24 @@ class AgentService:
         session_id: str | None = None,
         visitor_id: str | None = None,
         external_user_id: str | None = None,
+        channel: str = "api",
         use_openai: bool | None = None,
         generation_provider: str | None = None,
         generation_model: str | None = None,
     ) -> RAGAnswer:
+        sync_shared_knowledge(agent_root=Path(agent.knowledge_dir), company_id=agent.company_id)
+        role_context = build_role_context(agent=agent, channel=channel)
         clean_session_id = (session_id or "").strip()
         history = self._session_history(
             company_id=company_id,
             agent_id=agent.agent_id,
             session_id=clean_session_id,
         )
-        contextual_query = self._build_query(message=message, history=history)
+        contextual_query = self._build_query(
+            message=message,
+            history=history,
+            runtime_context=role_context.runtime_context,
+        )
         policy_key = None
         if self.conversation_policy is not None and clean_session_id:
             policy_key = ConversationKey(
@@ -1424,11 +1437,20 @@ class AgentService:
         return [(turn.role, turn.text) for turn in turns]
 
     @staticmethod
-    def _build_query(message: str, history: list[tuple[str, str]]) -> str:
+    def _build_query(
+        message: str,
+        history: list[tuple[str, str]],
+        runtime_context: str | None = None,
+    ) -> str:
         history_block = _format_history_for_query(history)
-        if not history_block:
-            return message
-        return f"{history_block}\n\nConsulta actual: {message}"
+        context_block = (runtime_context or "").strip()
+        parts: list[str] = []
+        if context_block:
+            parts.append(context_block)
+        if history_block:
+            parts.append(history_block)
+        parts.append(f"Consulta actual: {message}")
+        return "\n\n".join(parts)
 
     def _resolve_chat_response(
         self,
@@ -1460,8 +1482,9 @@ class AgentService:
                 anthropic_model=anthropic_model,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
-                objective=agent.objective,
-                tone=agent.tone,
+                objective=role_context.objective,
+                tone=role_context.tone,
+                system_rules=role_context.system_rules,
                 allow_general_llm=True,
             )
             return result, "general_llm"
@@ -1477,8 +1500,9 @@ class AgentService:
                 anthropic_model=anthropic_model,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
-                objective=agent.objective,
-                tone=agent.tone,
+                objective=role_context.objective,
+                tone=role_context.tone,
+                system_rules=role_context.system_rules,
                 allow_general_llm=False,
             )
             return result, "no_knowledge"
@@ -1497,6 +1521,9 @@ class AgentService:
                 anthropic_model=anthropic_model,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
+                objective=role_context.objective,
+                tone=role_context.tone,
+                system_rules=role_context.system_rules,
             )
             return self._apply_general_fallback_when_rag_has_no_evidence(
                 primary_result=primary,
@@ -1511,8 +1538,9 @@ class AgentService:
                 anthropic_model=anthropic_model,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
-                objective=agent.objective,
-                tone=agent.tone,
+                objective=role_context.objective,
+                tone=role_context.tone,
+                system_rules=role_context.system_rules,
             )
 
         try:
@@ -1530,8 +1558,9 @@ class AgentService:
                 company_id=company_id,
                 top_k=top_k,
                 min_score=min_score,
-                objective=agent.objective,
-                tone=agent.tone,
+                objective=role_context.objective,
+                tone=role_context.tone,
+                system_rules=role_context.system_rules,
             )
             return self._apply_general_fallback_when_rag_has_no_evidence(
                 primary_result=primary,
@@ -1546,8 +1575,9 @@ class AgentService:
                 anthropic_model=anthropic_model,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
-                objective=agent.objective,
-                tone=agent.tone,
+                objective=role_context.objective,
+                tone=role_context.tone,
+                system_rules=role_context.system_rules,
             )
         except FileNotFoundError:
             logger.info(
@@ -1568,6 +1598,9 @@ class AgentService:
                 anthropic_model=anthropic_model,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
+                objective=role_context.objective,
+                tone=role_context.tone,
+                system_rules=role_context.system_rules,
             )
             return self._apply_general_fallback_when_rag_has_no_evidence(
                 primary_result=primary,
@@ -1582,8 +1615,9 @@ class AgentService:
                 anthropic_model=anthropic_model,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
-                objective=agent.objective,
-                tone=agent.tone,
+                objective=role_context.objective,
+                tone=role_context.tone,
+                system_rules=role_context.system_rules,
             )
 
     @staticmethod
@@ -1602,6 +1636,7 @@ class AgentService:
         anthropic_api_key: str | None,
         objective: str | None,
         tone: str | None,
+        system_rules: str | None,
     ) -> tuple[RAGAnswer, str]:
         if primary_result.sources:
             return primary_result, primary_mode
@@ -1620,6 +1655,7 @@ class AgentService:
             anthropic_api_key=anthropic_api_key,
             objective=objective,
             tone=tone,
+            system_rules=system_rules,
             allow_general_llm=True,
         )
         return fallback, f"{primary_mode}_general_fallback"
@@ -1638,6 +1674,9 @@ class AgentService:
         anthropic_model: str,
         openai_api_key: str | None,
         anthropic_api_key: str | None,
+        objective: str | None,
+        tone: str | None,
+        system_rules: str | None,
     ) -> RAGAnswer:
         documents = self._load_agent_knowledge_documents(agent)
 
@@ -1653,8 +1692,9 @@ class AgentService:
                 anthropic_model=anthropic_model,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
-                objective=agent.objective,
-                tone=agent.tone,
+                objective=objective,
+                tone=tone,
+                system_rules=system_rules,
                 allow_general_llm=False,
             )
 
@@ -1671,8 +1711,9 @@ class AgentService:
                 anthropic_model=anthropic_model,
                 openai_api_key=openai_api_key,
                 anthropic_api_key=anthropic_api_key,
-                objective=agent.objective,
-                tone=agent.tone,
+                objective=objective,
+                tone=tone,
+                system_rules=system_rules,
                 allow_general_llm=False,
             )
 
@@ -1697,8 +1738,9 @@ class AgentService:
                 answer_text = remote_generator.generate(
                     query=contextual_query,
                     chunks=retrieved_chunks,
-                    objective=agent.objective,
-                    tone=agent.tone,
+                    objective=objective,
+                    tone=tone,
+                    system_rules=system_rules,
                 )
             except RuntimeError as exc:
                 logger.warning(
@@ -1719,8 +1761,9 @@ class AgentService:
                 fallback_answer = fallback_generator.generate(
                     query=contextual_query,
                     chunks=retrieved_chunks,
-                    objective=agent.objective,
-                    tone=agent.tone,
+                    objective=objective,
+                    tone=tone,
+                    system_rules=system_rules,
                 )
                 answer_text = (
                     "Nota: el proveedor LLM no estuvo disponible temporalmente, respondo en modo "
@@ -1734,8 +1777,9 @@ class AgentService:
             ).generate(
                 query=contextual_query,
                 chunks=retrieved_chunks,
-                objective=agent.objective,
-                tone=agent.tone,
+                objective=objective,
+                tone=tone,
+                system_rules=system_rules,
             )
 
         sources = sorted({chunk.source for chunk in retrieved_chunks})
@@ -1748,8 +1792,12 @@ class AgentService:
         )
 
     def _load_agent_knowledge_documents(self, agent: AgentRecord) -> list[KnowledgeDocument]:
+        sync_shared_knowledge(agent_root=Path(agent.knowledge_dir), company_id=agent.company_id)
         documents = self.repository.list_documents(agent.agent_id)
-        knowledge_documents: list[KnowledgeDocument] = []
+        knowledge_documents = load_local_knowledge_documents(
+            agent_root=Path(agent.knowledge_dir),
+            company_id=agent.company_id,
+        )
 
         for document in documents:
             if document.status == "failed":
@@ -1805,6 +1853,7 @@ class AgentService:
         anthropic_api_key: str | None,
         objective: str | None,
         tone: str | None,
+        system_rules: str | None,
         allow_general_llm: bool,
     ) -> RAGAnswer:
         remote_generator = build_remote_generator(
@@ -1822,6 +1871,7 @@ class AgentService:
                     chunks=[],
                     objective=objective,
                     tone=tone,
+                    system_rules=system_rules,
                 )
             except RuntimeError as exc:
                 logger.warning(
@@ -1842,6 +1892,7 @@ class AgentService:
                     chunks=[],
                     objective=objective,
                     tone=tone,
+                    system_rules=system_rules,
                 )
         else:
             answer_text = ExtractiveAnswerGenerator(
@@ -1852,6 +1903,7 @@ class AgentService:
                 chunks=[],
                 objective=objective,
                 tone=tone,
+                system_rules=system_rules,
             )
 
         return RAGAnswer(

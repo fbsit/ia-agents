@@ -4128,6 +4128,7 @@ def internal_chat_with_agent(
             top_k=payload.top_k,
             session_id=effective_session_id,
             external_user_id=user_id,
+            channel="api_internal",
             use_openai=payload.use_openai_generation,
             generation_provider=payload.generation_provider,
             generation_model=payload.generation_model,
@@ -4288,6 +4289,7 @@ def chat_with_agent(
             top_k=payload.top_k,
             session_id=effective_session_id,
             external_user_id=principal.user_id,
+            channel="api",
             use_openai=payload.use_openai_generation,
             generation_provider=payload.generation_provider,
             generation_model=payload.generation_model,
@@ -5008,6 +5010,7 @@ def public_widget_chat(
             session_id=effective_session_id,
             visitor_id=payload.visitor_id,
             external_user_id=payload.external_user_id,
+            channel="widget_public",
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

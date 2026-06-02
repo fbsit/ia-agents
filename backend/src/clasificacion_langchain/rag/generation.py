@@ -238,6 +238,7 @@ class AnswerGenerator(Protocol):
         chunks: list[RetrievedChunk],
         objective: str | None = None,
         tone: str | None = None,
+        system_rules: str | None = None,
     ) -> str:
         ...
 
@@ -253,6 +254,7 @@ class ExtractiveAnswerGenerator:
         chunks: list[RetrievedChunk],
         objective: str | None = None,
         tone: str | None = None,
+        system_rules: str | None = None,
     ) -> str:
         if not chunks:
             lines = [_fallback_no_context_answer(query)]
@@ -373,7 +375,8 @@ class OpenAIAnswerGenerator:
                         "Usa solo la evidencia del contexto recuperado. "
                         "Si no alcanza la evidencia, dilo explicitamente y pedi mas contexto. "
                         "Objetivo del agente: {objective}. "
-                        "Tono requerido: {tone}."
+                        "Tono requerido: {tone}. "
+                        "Reglas del rol y conocimiento compartido: {system_rules}."
                     ),
                 ),
                 (
@@ -401,6 +404,7 @@ class OpenAIAnswerGenerator:
         chunks: list[RetrievedChunk],
         objective: str | None = None,
         tone: str | None = None,
+        system_rules: str | None = None,
     ) -> str:
         if not chunks:
             rules = _no_context_rules()
@@ -413,7 +417,9 @@ class OpenAIAnswerGenerator:
                             "Responde SIEMPRE en espanol natural y cercano. "
                             "No hay documentos internos cargados para esta consulta. "
                             "Reglas obligatorias:\n"
-                            f"{rules}"
+                            f"{rules}\n\n"
+                            "Reglas del rol y conocimiento compartido:\n"
+                            f"{system_rules or 'Sin reglas adicionales.'}"
                         ),
                     ),
                     (
@@ -431,6 +437,7 @@ class OpenAIAnswerGenerator:
                 query=query,
                 objective=objective or "Resolver consultas de negocio con precision",
                 tone=tone or "profesional",
+                system_rules=system_rules or "Sin reglas adicionales.",
             )
             content = self._openai_completion(messages).strip()
             if not content:
@@ -447,6 +454,7 @@ class OpenAIAnswerGenerator:
                 "context_block": context_block,
                 "objective": objective or "Resolver consultas de negocio con precision",
                 "tone": tone or "profesional",
+                "system_rules": system_rules or "Sin reglas adicionales.",
             }
         )
 
@@ -526,6 +534,7 @@ class AnthropicAnswerGenerator:
         chunks: list[RetrievedChunk],
         objective: str | None = None,
         tone: str | None = None,
+        system_rules: str | None = None,
     ) -> str:
         if not chunks:
             rules = _no_context_rules()
@@ -534,7 +543,9 @@ class AnthropicAnswerGenerator:
                 "Responde SIEMPRE en espanol natural y cercano. "
                 "No hay documentos internos cargados para esta consulta. "
                 "Reglas obligatorias:\n"
-                f"{rules}"
+                f"{rules}\n\n"
+                "Reglas del rol y conocimiento compartido:\n"
+                f"{system_rules or 'Sin reglas adicionales.'}"
             )
             user_prompt = (
                 f"Consulta del usuario: {query}\n"
@@ -554,7 +565,8 @@ class AnthropicAnswerGenerator:
             "Usa solo la evidencia del contexto recuperado. "
             "Si no alcanza la evidencia, dilo explicitamente y pedi mas contexto. "
             f"Objetivo del agente: {objective or 'Resolver consultas de negocio con precision'}. "
-            f"Tono requerido: {tone or 'profesional'}."
+            f"Tono requerido: {tone or 'profesional'}. "
+            f"Reglas del rol y conocimiento compartido: {system_rules or 'Sin reglas adicionales.'}."
         )
         user_prompt = (
             "Pregunta del usuario:\n"

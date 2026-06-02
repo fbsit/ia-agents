@@ -92,6 +92,7 @@ class RAGPipeline:
         min_score: float = 0.05,
         objective: str | None = None,
         tone: str | None = None,
+        system_rules: str | None = None,
         generation_provider: str | None = None,
         generation_model: str | None = None,
         use_openai_generation: bool | None = None,
@@ -163,6 +164,7 @@ class RAGPipeline:
                     chunks=[],
                     objective=objective,
                     tone=tone,
+                    system_rules=system_rules,
                 )
                 return RAGAnswer(
                     answer=answer_text,
@@ -189,6 +191,7 @@ class RAGPipeline:
                 chunks=chunks,
                 objective=objective,
                 tone=tone,
+                system_rules=system_rules,
             )
         except RuntimeError as exc:
             if not is_remote_generator(generator):
@@ -209,6 +212,7 @@ class RAGPipeline:
                 chunks=chunks,
                 objective=objective,
                 tone=tone,
+                system_rules=system_rules,
             )
             answer_text = (
                 "Nota: el proveedor LLM no estuvo disponible temporalmente, respondo en modo "
