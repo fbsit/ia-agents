@@ -32,6 +32,7 @@ from clasificacion_langchain.agents.conversation_policy import (
     ConversationPolicyEngine,
 )
 from clasificacion_langchain.agents.role_knowledge import (
+    RoleContext,
     build_role_context,
     load_local_knowledge_documents,
     sync_shared_knowledge,
@@ -1373,6 +1374,7 @@ class AgentService:
             anthropic_model=selected_anthropic_model,
             openai_api_key=openai_api_key,
             anthropic_api_key=anthropic_api_key,
+            role_context=role_context,
         )
         fallback_applied = mode.endswith("_general_fallback")
         result = replace(
@@ -1467,6 +1469,7 @@ class AgentService:
         anthropic_model: str,
         openai_api_key: str | None,
         anthropic_api_key: str | None,
+        role_context: RoleContext,
     ) -> tuple[RAGAnswer, str]:
         if decision.route == "greeting":
             return self._greeting_answer(company_id=company_id), "greeting"
