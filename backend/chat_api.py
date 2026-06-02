@@ -126,6 +126,19 @@ def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[
     return None
 
 
+def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str, Any]] | None:
+    text = (message or "").strip().lower()
+    if not text:
+        return None
+    if any(token in text for token in ["tienes ", "tienen ", "tiene ", "tenes ", "hay ", "stock", "disponible", "precio", "cuesta"]):
+        return "get_product_availability", {"query": message, "limit": 5, "session_id": session_id}
+    if any(token in text for token in ["despacho", "envio", "envío", "retiro", "chilexpress", "comuna"]):
+        return "get_shipping_options", {"commune": message, "session_id": session_id}
+    if any(token in text for token in ["pago", "pagar", "transferencia", "mercado pago", "tarjeta"]):
+        return "get_payment_options", {"session_id": session_id}
+    return None
+
+
 def _format_canonical_tool_answer(result: dict[str, Any]) -> str | None:
     if not result.get("ok"):
         return None
@@ -4247,6 +4260,8 @@ def internal_chat_with_agent(
         )
 
         routed_tool = _tool_for_intent(rag_result.intent_label or "", payload.message, effective_session_id)
+        if not routed_tool and rag_result.route == "no_knowledge":
+            routed_tool = _forced_commerce_tool(payload.message, effective_session_id)
         if _clubhx_tools_client and routed_tool:
             try:
                 canonical = _clubhx_tools_client.execute_canonical(
@@ -4408,6 +4423,8 @@ def chat_with_agent(
         )
 
         routed_tool = _tool_for_intent(rag_result.intent_label or "", payload.message, effective_session_id)
+        if not routed_tool and rag_result.route == "no_knowledge":
+            routed_tool = _forced_commerce_tool(payload.message, effective_session_id)
         if _clubhx_tools_client and routed_tool:
             try:
                 canonical = _clubhx_tools_client.execute_canonical(
@@ -5134,6 +5151,8 @@ def public_widget_chat(
         payload.message,
         effective_session_id,
     )
+    if not routed_tool and rag_result.route == "no_knowledge":
+        routed_tool = _forced_commerce_tool(payload.message, effective_session_id)
     if _clubhx_tools_client and routed_tool:
         try:
             canonical = _clubhx_tools_client.execute_canonical(
