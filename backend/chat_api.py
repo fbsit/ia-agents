@@ -110,11 +110,18 @@ logger.setLevel(logging.INFO)
 
 def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[str, dict[str, Any]] | None:
     label = (intent_label or "").strip().lower()
+    message_text = (message or "").strip().lower()
     if label in {"product_lookup", "catalog_query", "availability_check"}:
         return "get_product_availability", {"query": message, "limit": 5, "session_id": session_id}
     if label in {"delivery_quote", "shipping_options", "shipping_select"}:
         return "get_shipping_options", {"commune": message, "session_id": session_id}
     if label in {"payment_options", "payment_select", "checkout_payment"}:
+        return "get_payment_options", {"session_id": session_id}
+    if any(token in message_text for token in ["tienen ", "hay ", "busco ", "stock", "precio", "cuesta", "disponible"]):
+        return "get_product_availability", {"query": message, "limit": 5, "session_id": session_id}
+    if any(token in message_text for token in ["despacho", "envio", "retiro", "chilexpress", "comuna"]):
+        return "get_shipping_options", {"commune": message, "session_id": session_id}
+    if any(token in message_text for token in ["pago", "pagar", "transferencia", "mercado pago", "tarjeta"]):
         return "get_payment_options", {"session_id": session_id}
     return None
 
@@ -5006,6 +5013,80 @@ def public_widget_chat(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    routed_tool = _tool_for_intent(
+        rag_result.intent_label or "",
+        payload.message,
+        effective_session_id,
+    )
+    if _clubhx_tools_client and routed_tool:
+        try:
+            canonical = _clubhx_tools_client.execute_canonical(
+                tenant_id=agent.company_id,
+                tool=routed_tool[0],
+                channel="widget_public",
+                user_id=payload.external_user_id or payload.visitor_id or client_id,
+                arguments=routed_tool[1],
+            )
+            tool_answer = _format_canonical_tool_answer(canonical)
+            if tool_answer:
+                final_answer = tool_answer
+                response_latency_ms = int((time.perf_counter() - started) * 1000)
+
+                _record_chat_audit(
+                    ChatAuditRecord(
+                        company_id=agent.company_id,
+                        agent_id=agent.agent_id,
+                        session_id=effective_session_id,
+                        channel="widget_public",
+                        user_message=payload.message,
+                        assistant_message=final_answer,
+                        intent_label=rag_result.intent_label,
+                        route="tool",
+                        response_mode="tool_only",
+                        sources_count=0,
+                        used_llm=agent.use_openai_generation,
+                        cached_response=False,
+                        latency_ms=response_latency_ms,
+                        visitor_id=payload.visitor_id,
+                        external_user_id=payload.external_user_id,
+                    )
+                )
+                _record_retrieval_audit(
+                    RetrievalAuditRecord(
+                        company_id=agent.company_id,
+                        agent_id=agent.agent_id,
+                        channel="widget_public",
+                        route="tool",
+                        response_mode="tool_only",
+                        retrieved_chunks=len(rag_result.retrieved_chunks),
+                        sources_count=0,
+                        avg_retrieval_score=None,
+                        max_retrieval_score=None,
+                        min_score_threshold=rag_result.retrieval_min_score,
+                        fallback_applied=False,
+                        latency_ms=response_latency_ms,
+                        rag_backend=agent.rag_backend,
+                    )
+                )
+
+                return PublicWidgetChatResponsePayload(
+                    widget_id=payload.widget_id,
+                    session_id=effective_session_id,
+                    answer=final_answer,
+                    sources=[],
+                    route="tool",
+                    intent_label=rag_result.intent_label,
+                    response_mode="tool_only",
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "public_widget_tool_route_failed widget_id=%s agent_id=%s tool=%s detail=%s",
+                payload.widget_id,
+                agent.agent_id,
+                routed_tool[0],
+                exc,
+            )
 
     if rag_result.response_mode in {"repeat_cached", "repeat_generic", "conversation_closed"}:
         final_answer = rag_result.answer
