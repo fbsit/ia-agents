@@ -11,6 +11,8 @@ import re
 import sqlite3
 import threading
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 import sys
 from typing import Any
@@ -173,6 +175,161 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
 def _effective_chat_channel(channel: str | None, default: str) -> str:
     normalized = (channel or "").strip()
     return normalized or default
+
+
+def _normalize_media_filename(filename: str | None, mime_type: str | None) -> str:
+    clean_name = (filename or "audio").strip() or "audio"
+    if "." in clean_name:
+        return clean_name
+    clean_mime = (mime_type or "").strip().lower()
+    if "ogg" in clean_mime:
+        return f"{clean_name}.ogg"
+    if "mpeg" in clean_mime or "mp3" in clean_mime:
+        return f"{clean_name}.mp3"
+    if "wav" in clean_mime:
+        return f"{clean_name}.wav"
+    if "m4a" in clean_mime or "mp4" in clean_mime:
+        return f"{clean_name}.m4a"
+    if "webm" in clean_mime:
+        return f"{clean_name}.webm"
+    return f"{clean_name}.bin"
+
+
+def _build_multipart_body(fields: dict[str, str], file_field: tuple[str, str, bytes, str]) -> tuple[bytes, str]:
+    boundary = f"----clasificacion-{uuid4().hex}"
+    chunks: list[bytes] = []
+
+    def add_text_field(name: str, value: str) -> None:
+        chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+        chunks.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+        chunks.append(value.encode("utf-8"))
+        chunks.append(b"\r\n")
+
+    for key, value in fields.items():
+        if value:
+            add_text_field(key, value)
+
+    field_name, filename, content, mime_type = file_field
+    chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+    chunks.append(
+        (
+            f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'
+            f"Content-Type: {mime_type}\r\n\r\n"
+        ).encode("utf-8")
+    )
+    chunks.append(content)
+    chunks.append(b"\r\n")
+    chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return b"".join(chunks), boundary
+
+
+def _transcribe_audio_bytes(
+    *,
+    audio_bytes: bytes,
+    filename: str,
+    mime_type: str | None,
+    language_hint: str | None,
+) -> MediaTranscriptionPayload | None:
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return None
+
+    clean_filename = _normalize_media_filename(filename, mime_type)
+    clean_mime = (mime_type or "application/octet-stream").strip() or "application/octet-stream"
+    fields: dict[str, str] = {
+        "model": "whisper-1",
+        "response_format": "verbose_json",
+    }
+    if language_hint and language_hint.strip():
+        fields["language"] = language_hint.strip()
+
+    body, boundary = _build_multipart_body(fields, ("file", clean_filename, audio_bytes, clean_mime))
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/audio/transcriptions",
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            raw = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
+        raise HTTPException(status_code=503, detail=f"No se pudo transcribir audio: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise HTTPException(status_code=503, detail=f"No se pudo conectar al servicio de transcripcion: {exc.reason}") from exc
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=503, detail="Respuesta de transcripcion invalida") from exc
+
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        return None
+
+    duration_seconds = payload.get("duration")
+    duration_ms = None
+    if isinstance(duration_seconds, (int, float)):
+        duration_ms = int(float(duration_seconds) * 1000)
+
+    return MediaTranscriptionPayload(
+        text=text,
+        language=str(payload.get("language") or "").strip() or None,
+        confidence=None,
+        duration_ms=duration_ms,
+        provider="openai",
+    )
+
+
+def _download_whatsapp_media_bytes(
+    client: MetaWhatsAppClient | None,
+    phone_number_id: str,
+    media_id: str,
+) -> tuple[bytes, str | None, str | None] | None:
+    access_token = client.access_token if client is not None else os.getenv("WHATSAPP_ACCESS_TOKEN", "").strip()
+    if not access_token:
+        return None
+
+    api_version = client.api_version if client is not None else os.getenv("WHATSAPP_API_VERSION", "v21.0")
+    timeout_seconds = client.timeout_seconds if client is not None else int(os.getenv("WHATSAPP_API_TIMEOUT", "30"))
+
+    media_meta_url = f"https://graph.facebook.com/{api_version}/{media_id}"
+    meta_req = urllib.request.Request(
+        media_meta_url,
+        method="GET",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    try:
+        with urllib.request.urlopen(meta_req, timeout=timeout_seconds) as response:
+            meta = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return None
+
+    media_url = str(meta.get("url") or "").strip()
+    if not media_url:
+        return None
+
+    media_req = urllib.request.Request(
+        media_url,
+        method="GET",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    try:
+        with urllib.request.urlopen(media_req, timeout=timeout_seconds) as response:
+            content = response.read()
+            mime_type = str(meta.get("mime_type") or response.headers.get("content-type") or "").strip() or None
+    except Exception:
+        return None
+
+    filename = _normalize_media_filename(media_id, mime_type)
+    return content, mime_type, filename
 
 
 def _format_canonical_tool_answer(result: dict[str, Any]) -> str | None:
@@ -669,6 +826,26 @@ class PublicWidgetChatResponsePayload(BaseModel):
     redirect_to: str | None = None
     cart_action: dict[str, Any] | None = None
     products: list[dict[str, Any]] | None = None
+
+
+class MediaTranscriptionPayload(BaseModel):
+    text: str
+    language: str | None = None
+    confidence: float | None = None
+    duration_ms: int | None = None
+    provider: str | None = None
+
+
+class MediaTranscriptionRequestPayload(BaseModel):
+    filename: str = Field(min_length=1)
+    content_base64: str = Field(min_length=4)
+    mime_type: str | None = None
+    language_hint: str | None = None
+    channel: str | None = None
+    source: str | None = None
+    session_id: str | None = None
+    conversation_id: str | None = None
+    phone_number_id: str | None = None
 
 
 class ChatAuditSummaryRowPayload(BaseModel):
@@ -4477,6 +4654,41 @@ def internal_chat_with_agent(
     )
 
 
+@app.post("/internal/ai/media/transcriptions", response_model=MediaTranscriptionPayload)
+def internal_transcribe_media(
+    payload: MediaTranscriptionRequestPayload,
+    x_company_id: str | None = Header(default=None, alias="X-Company-Id"),
+    x_org_id: str | None = Header(default=None, alias="X-Org-Id"),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_request_id: str | None = Header(default=None, alias="X-Request-Id"),
+    x_platform_signature: str | None = Header(default=None, alias="X-Platform-Signature"),
+    x_platform_timestamp: str | None = Header(default=None, alias="X-Platform-Timestamp"),
+) -> MediaTranscriptionPayload:
+    _require_internal_context(
+        x_company_id=x_company_id,
+        x_org_id=x_org_id,
+        x_user_id=x_user_id,
+        x_request_id=x_request_id,
+        x_platform_signature=x_platform_signature,
+        x_platform_timestamp=x_platform_timestamp,
+    )
+
+    try:
+        audio_bytes = base64.b64decode(payload.content_base64, validate=True)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail="content_base64 invalido") from exc
+
+    result = _transcribe_audio_bytes(
+        audio_bytes=audio_bytes,
+        filename=payload.filename,
+        mime_type=payload.mime_type,
+        language_hint=payload.language_hint,
+    )
+    if result is None:
+        raise HTTPException(status_code=503, detail="Servicio de transcripcion no disponible")
+    return result
+
+
 @app.post("/agents/{agent_id}/chat", response_model=AgentChatResponsePayload)
 def chat_with_agent(
     agent_id: str,
@@ -5521,14 +5733,50 @@ def whatsapp_webhook(
             skipped_duplicates += 1
             continue
 
+        message_text = incoming.text.strip()
+        if not message_text and incoming.media_id:
+            media_payload = _download_whatsapp_media_bytes(
+                whatsapp_client,
+                incoming.phone_number_id,
+                incoming.media_id,
+            )
+            if media_payload is not None:
+                audio_bytes, mime_type, filename = media_payload
+                transcription = _transcribe_audio_bytes(
+                    audio_bytes=audio_bytes,
+                    filename=filename or incoming.media_id,
+                    mime_type=mime_type or incoming.mime_type,
+                    language_hint="es",
+                )
+                message_text = (transcription.text if transcription else "").strip()
+
+            if not message_text and whatsapp_client is not None:
+                try:
+                    _deliver_whatsapp_sync(
+                        client=whatsapp_client,
+                        phone_number_id=incoming.phone_number_id,
+                        to_number=incoming.from_number,
+                        text="Recibi tu audio, pero no pude transcribirlo. Si quieres, reenvialo o escribemelo por texto.",
+                    )
+                except Exception:
+                    logger.exception(
+                        "whatsapp_audio_transcription_failed company_id=%s message_id=%s",
+                        incoming.company_id,
+                        incoming.message_id,
+                    )
+                continue
+
+        if not message_text:
+            continue
+
         request = ChatRequest(
             company_id=incoming.company_id,
             session_id=incoming.session_id,
-            message=incoming.text,
+            message=message_text,
             top_k=4,
         )
         result = chat_service.chat(request)
-        tuned_answer = tune_answer_style(result.answer, query=incoming.text)
+        tuned_answer = tune_answer_style(result.answer, query=message_text)
         responses.append(
             ChatResponsePayload(
                 trace_id=result.trace_id,

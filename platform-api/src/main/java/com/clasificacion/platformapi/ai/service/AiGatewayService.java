@@ -18,6 +18,8 @@ import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppValidationRespon
 import com.clasificacion.platformapi.ai.contract.AiAgentWidgetConfigResponse;
 import com.clasificacion.platformapi.ai.contract.AiDeleteResponse;
 import com.clasificacion.platformapi.ai.contract.AiDocumentDeleteResponse;
+import com.clasificacion.platformapi.ai.contract.AiMediaTranscriptionRequest;
+import com.clasificacion.platformapi.ai.contract.AiMediaTranscriptionResponse;
 import com.clasificacion.platformapi.ai.contract.AiTenantLlmSettingsResponse;
 import com.clasificacion.platformapi.ai.contract.AiTenantLlmSettingsUpdateRequest;
 import com.clasificacion.platformapi.ai.dto.AgentChatRequest;
@@ -28,9 +30,9 @@ import com.clasificacion.platformapi.ai.dto.UpdateAgentRequest;
 import com.clasificacion.platformapi.auth.service.AuthService;
 import com.clasificacion.platformapi.tenancy.service.TenancyService;
 import java.io.IOException;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
-import java.util.Base64;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.stereotype.Service;
@@ -246,6 +248,53 @@ public class AiGatewayService {
             operationalSection
         );
         return aiEngineClient.uploadAgentDocument(context, agentId, payload);
+    }
+
+    public AiMediaTranscriptionResponse transcribeMedia(
+        String authorization,
+        String requestId,
+        String requestedCompanyId,
+        String requestedOrgId,
+        MultipartFile file,
+        String mimeType,
+        String languageHint,
+        String channel,
+        String source,
+        String sessionId,
+        String conversationId,
+        String phoneNumberId
+    ) {
+        AiRequestContext context = resolveContext(
+            authorization,
+            requestedCompanyId,
+            requestedOrgId,
+            requestId
+        );
+
+        String filename = file.getOriginalFilename();
+        if (filename == null || filename.isBlank()) {
+            filename = "audio.webm";
+        }
+
+        byte[] content;
+        try {
+            content = file.getBytes();
+        } catch (IOException exc) {
+            throw new IllegalStateException("No se pudo leer archivo", exc);
+        }
+
+        AiMediaTranscriptionRequest payload = new AiMediaTranscriptionRequest(
+            filename,
+            Base64.getEncoder().encodeToString(content),
+            mimeType,
+            languageHint,
+            channel,
+            source,
+            sessionId,
+            conversationId,
+            phoneNumberId
+        );
+        return aiEngineClient.transcribeMedia(context, payload);
     }
 
     public AiDocumentDeleteResponse deleteAgentDocument(

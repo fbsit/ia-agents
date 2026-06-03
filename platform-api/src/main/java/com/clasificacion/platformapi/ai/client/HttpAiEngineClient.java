@@ -20,6 +20,8 @@ import com.clasificacion.platformapi.ai.contract.AiDeleteResponse;
 import com.clasificacion.platformapi.ai.contract.AiDocumentDeleteResponse;
 import com.clasificacion.platformapi.ai.contract.AiEngineHeaders;
 import com.clasificacion.platformapi.ai.contract.AiErrorResponse;
+import com.clasificacion.platformapi.ai.contract.AiMediaTranscriptionRequest;
+import com.clasificacion.platformapi.ai.contract.AiMediaTranscriptionResponse;
 import com.clasificacion.platformapi.ai.contract.AiTenantLlmSettingsResponse;
 import com.clasificacion.platformapi.ai.contract.AiTenantLlmSettingsUpdateRequest;
 import com.clasificacion.platformapi.ai.contract.AiRuntimeExecuteRequest;
@@ -150,6 +152,24 @@ public class HttpAiEngineClient implements AiEngineClient {
                 .body(payload)
                 .retrieve()
                 .body(AiAgentDocumentResponse.class);
+        } catch (RestClientResponseException exc) {
+            throw mapError(exc);
+        }
+    }
+
+    @Override
+    public AiMediaTranscriptionResponse transcribeMedia(
+        AiRequestContext context,
+        AiMediaTranscriptionRequest payload
+    ) {
+        String uri = buildUri("/internal/ai/media/transcriptions");
+        try {
+            return restClient.post()
+                .uri(uri)
+                .headers(headers -> enrichHeaders(headers, context))
+                .body(payload)
+                .retrieve()
+                .body(AiMediaTranscriptionResponse.class);
         } catch (RestClientResponseException exc) {
             throw mapError(exc);
         }

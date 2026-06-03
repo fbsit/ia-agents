@@ -11,6 +11,9 @@ class IncomingWhatsAppMessage:
     phone_number_id: str
     from_number: str
     message_id: str
+    message_type: str = "text"
+    media_id: str | None = None
+    mime_type: str | None = None
 
 
 def parse_whatsapp_messages(
@@ -55,14 +58,25 @@ def parse_whatsapp_messages(
                 sender = str(item.get("from", ""))
                 incoming_id = str(item.get("id", ""))
                 message_type = str(item.get("type", ""))
-                if message_type != "text":
+                text = ""
+                media_id = None
+                mime_type = None
+
+                if message_type == "text":
+                    text_block = item.get("text", {})
+                    if not isinstance(text_block, dict):
+                        continue
+                    text = str(text_block.get("body", "")).strip()
+                elif message_type in {"audio", "voice"}:
+                    media_block = item.get("audio", {})
+                    if not isinstance(media_block, dict):
+                        media_block = item.get("voice", {}) if isinstance(item.get("voice", {}), dict) else {}
+                    media_id = str(media_block.get("id", "")).strip() or None
+                    mime_type = str(media_block.get("mime_type", "")).strip() or None
+                else:
                     continue
 
-                text_block = item.get("text", {})
-                if not isinstance(text_block, dict):
-                    continue
-                text = str(text_block.get("body", "")).strip()
-                if not text or not sender:
+                if not sender or (not text and not media_id):
                     continue
 
                 messages.append(
@@ -73,6 +87,9 @@ def parse_whatsapp_messages(
                         phone_number_id=phone_number_id,
                         from_number=sender,
                         message_id=incoming_id,
+                        message_type=message_type,
+                        media_id=media_id,
+                        mime_type=mime_type,
                     )
                 )
 

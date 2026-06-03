@@ -17,6 +17,8 @@ import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppValidationRespon
 import com.clasificacion.platformapi.ai.contract.AiAgentWidgetConfigResponse;
 import com.clasificacion.platformapi.ai.contract.AiDeleteResponse;
 import com.clasificacion.platformapi.ai.contract.AiDocumentDeleteResponse;
+import com.clasificacion.platformapi.ai.contract.AiMediaTranscriptionRequest;
+import com.clasificacion.platformapi.ai.contract.AiMediaTranscriptionResponse;
 import com.clasificacion.platformapi.ai.contract.AiTenantLlmSettingsResponse;
 import com.clasificacion.platformapi.ai.contract.AiTenantLlmSettingsUpdateRequest;
 import com.clasificacion.platformapi.ai.contract.AiRuntimeExecuteRequest;
@@ -40,6 +42,8 @@ public interface AiEngineClient {
         String agentId,
         AiAgentDocumentUploadRequest payload
     );
+
+    AiMediaTranscriptionResponse transcribeMedia(AiRequestContext context, AiMediaTranscriptionRequest payload);
 
     AiDocumentDeleteResponse deleteAgentDocument(
         AiRequestContext context,

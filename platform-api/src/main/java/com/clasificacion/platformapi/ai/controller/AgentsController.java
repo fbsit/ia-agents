@@ -19,6 +19,7 @@ import com.clasificacion.platformapi.ai.dto.TenantLlmSettingsResponse;
 import com.clasificacion.platformapi.ai.dto.UpdateTenantLlmSettingsRequest;
 import com.clasificacion.platformapi.ai.dto.UpdateAgentWhatsAppConfigRequest;
 import com.clasificacion.platformapi.ai.dto.UpdateAgentRequest;
+import com.clasificacion.platformapi.ai.dto.MediaTranscriptionResponse;
 import com.clasificacion.platformapi.ai.service.AiGatewayService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -306,6 +307,44 @@ public class AgentsController {
             uploaded.operational_section(),
             uploaded.learning_summary(),
             uploaded.summary_updated_at()
+        );
+    }
+
+    @PostMapping(value = "/media/transcriptions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public MediaTranscriptionResponse transcribeMedia(
+        @RequestParam("file") MultipartFile file,
+        @RequestParam(value = "mime_type", required = false) String mimeType,
+        @RequestParam(value = "language_hint", required = false) String languageHint,
+        @RequestParam(value = "channel", required = false) String channel,
+        @RequestParam(value = "source", required = false) String source,
+        @RequestParam(value = "session_id", required = false) String sessionId,
+        @RequestParam(value = "conversation_id", required = false) String conversationId,
+        @RequestParam(value = "phone_number_id", required = false) String phoneNumberId,
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestHeader(value = "X-Request-Id", required = false) String requestId,
+        @RequestParam(value = "company_id", required = false) String companyId,
+        @RequestParam(value = "org_id", required = false) String orgId
+    ) {
+        var response = aiGatewayService.transcribeMedia(
+            authorization,
+            requestId,
+            companyId,
+            orgId,
+            file,
+            mimeType,
+            languageHint,
+            channel,
+            source,
+            sessionId,
+            conversationId,
+            phoneNumberId
+        );
+        return new MediaTranscriptionResponse(
+            response.text(),
+            response.language(),
+            response.confidence(),
+            response.duration_ms(),
+            response.provider()
         );
     }
 
