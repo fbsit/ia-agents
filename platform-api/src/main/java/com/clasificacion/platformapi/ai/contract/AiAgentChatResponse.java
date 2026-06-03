@@ -13,6 +13,7 @@ public record AiAgentChatResponse(
     String route_reason,
     String response_mode,
     boolean fallback_applied,
-    Double retrieval_min_score
+    Double retrieval_min_score,
+    String redirect_to
 ) {
 }

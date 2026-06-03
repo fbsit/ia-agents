@@ -170,6 +170,11 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
     return None
 
 
+def _effective_chat_channel(channel: str | None, default: str) -> str:
+    normalized = (channel or "").strip()
+    return normalized or default
+
+
 def _format_canonical_tool_answer(result: dict[str, Any]) -> str | None:
     if not result.get("ok"):
         return None
@@ -221,6 +226,7 @@ def _format_public_widget_tool_payload(
     *,
     user_message: str,
     intent_label: str | None,
+    channel: str | None = None,
 ) -> dict[str, Any] | None:
     if not result.get("ok"):
         return None
@@ -294,6 +300,16 @@ def _format_public_widget_tool_payload(
         options = data.get("options") if isinstance(data.get("options"), list) else []
         names = [str((o or {}).get("name") or "").strip() for o in options if isinstance(o, dict)]
         names = [name for name in names if name]
+        normalized_message = (user_message or "").strip().lower()
+        normalized_channel = (channel or "").strip().lower()
+        if normalized_channel in {"widget_web", "web", "widget_public"} and any(
+            token in normalized_message
+            for token in ["quiero pagar", "ir a pagar", "pagar", "checkout", "finalizar compra", "terminar compra", "comprar ahora"]
+        ):
+            return {
+                "answer": "Te llevo al checkout web para completar despacho y pago.",
+                "redirect_to": "/cart?checkout=1&source=agent",
+            }
         return {
             "answer": f"Medios de pago: {', '.join(names)}." if names else "No hay medios de pago activos ahora.",
         }
@@ -505,6 +521,7 @@ class AgentChatRequestPayload(BaseModel):
     message: str = Field(min_length=1)
     top_k: int = Field(default=4, ge=1, le=10)
     session_id: str | None = Field(default=None, min_length=1)
+    channel: str | None = Field(default=None, min_length=1)
     use_openai_generation: bool | None = None
     generation_provider: str | None = None
     generation_model: str | None = Field(default=None, min_length=3)
@@ -553,6 +570,7 @@ class AgentChatResponsePayload(BaseModel):
     response_mode: str | None = None
     fallback_applied: bool = False
     retrieval_min_score: float | None = None
+    redirect_to: str | None = None
 
 
 class InternalRuntimeExecuteRequestPayload(BaseModel):
@@ -4310,6 +4328,7 @@ def internal_chat_with_agent(
             raise HTTPException(status_code=403, detail="company_id sin acceso al agente")
 
         effective_session_id = payload.session_id or user_id
+        chat_channel = _effective_chat_channel(payload.channel, "api_internal")
         clubhx_tools_client = _get_clubhx_tools_client()
         rag_result = agent_service.chat(
             agent=agent,
@@ -4318,7 +4337,7 @@ def internal_chat_with_agent(
             top_k=payload.top_k,
             session_id=effective_session_id,
             external_user_id=user_id,
-            channel="api_internal",
+            channel=chat_channel,
             use_openai=payload.use_openai_generation,
             generation_provider=payload.generation_provider,
             generation_model=payload.generation_model,
@@ -4340,11 +4359,17 @@ def internal_chat_with_agent(
                 canonical = clubhx_tools_client.execute_canonical(
                     tenant_id=agent.company_id,
                     tool=routed_tool[0],
-                    channel="api",
+                    channel=chat_channel,
                     user_id=user_id,
                     arguments=routed_tool[1],
                 )
-                tool_answer = _format_canonical_tool_answer(canonical)
+                tool_payload = _format_public_widget_tool_payload(
+                    canonical,
+                    user_message=payload.message,
+                    intent_label=rag_result.intent_label,
+                    channel=chat_channel,
+                )
+                tool_answer = str((tool_payload or {}).get("answer") or "").strip()
                 if tool_answer:
                     return AgentChatResponsePayload(
                         agent_id=agent.agent_id,
@@ -4358,6 +4383,7 @@ def internal_chat_with_agent(
                         response_mode="tool_only",
                         fallback_applied=False,
                         retrieval_min_score=None,
+                        redirect_to=str((tool_payload or {}).get("redirect_to") or "").strip() or None,
                     )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
@@ -4482,6 +4508,7 @@ def chat_with_agent(
     try:
         agent = agent_service.get_accessible_agent(agent_id, allowed_org_ids)
         effective_session_id = payload.session_id or principal.user_id
+        chat_channel = _effective_chat_channel(payload.channel, "api")
         clubhx_tools_client = _get_clubhx_tools_client()
         rag_result = agent_service.chat(
             agent=agent,
@@ -4490,7 +4517,7 @@ def chat_with_agent(
             top_k=payload.top_k,
             session_id=effective_session_id,
             external_user_id=principal.user_id,
-            channel="api",
+            channel=chat_channel,
             use_openai=payload.use_openai_generation,
             generation_provider=payload.generation_provider,
             generation_model=payload.generation_model,
@@ -4512,11 +4539,17 @@ def chat_with_agent(
                 canonical = clubhx_tools_client.execute_canonical(
                     tenant_id=agent.company_id,
                     tool=routed_tool[0],
-                    channel="api",
+                    channel=chat_channel,
                     user_id=principal.user_id,
                     arguments=routed_tool[1],
                 )
-                tool_answer = _format_canonical_tool_answer(canonical)
+                tool_payload = _format_public_widget_tool_payload(
+                    canonical,
+                    user_message=payload.message,
+                    intent_label=rag_result.intent_label,
+                    channel=chat_channel,
+                )
+                tool_answer = str((tool_payload or {}).get("answer") or "").strip()
                 if tool_answer:
                     return AgentChatResponsePayload(
                         agent_id=agent.agent_id,
@@ -4530,6 +4563,7 @@ def chat_with_agent(
                         response_mode="tool_only",
                         fallback_applied=False,
                         retrieval_min_score=None,
+                        redirect_to=str((tool_payload or {}).get("redirect_to") or "").strip() or None,
                     )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
@@ -5257,6 +5291,7 @@ def public_widget_chat(
                 canonical,
                 user_message=payload.message,
                 intent_label=rag_result.intent_label,
+                channel="widget_public",
             )
             if tool_payload and tool_payload.get("answer"):
                 final_answer = str(tool_payload.get("answer") or "").strip()

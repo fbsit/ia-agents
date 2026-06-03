@@ -137,7 +137,8 @@ public class AgentsController {
             response.route_reason(),
             response.response_mode(),
             response.fallback_applied(),
-            response.retrieval_min_score()
+            response.retrieval_min_score(),
+            response.redirect_to()
         );
     }
 

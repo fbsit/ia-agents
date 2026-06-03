@@ -6,6 +6,7 @@ public record AgentChatRequest(
     @NotBlank String message,
     Integer top_k,
     String session_id,
+    String channel,
     Boolean use_openai_generation,
     String generation_provider,
     String generation_model,

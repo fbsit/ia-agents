@@ -98,6 +98,7 @@ public class AiGatewayService {
             request.message(),
             topK,
             request.session_id(),
+            request.channel(),
             request.use_openai_generation(),
             request.generation_provider(),
             request.generation_model()
