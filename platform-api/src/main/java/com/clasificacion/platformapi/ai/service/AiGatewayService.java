@@ -33,12 +33,15 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class AiGatewayService {
+    private static final Logger log = LoggerFactory.getLogger(AiGatewayService.class);
     private final AuthService authService;
     private final TenancyService tenancyService;
     private final AiEngineClient aiEngineClient;
@@ -271,6 +274,20 @@ public class AiGatewayService {
             requestId
         );
 
+        log.info(
+            "ai_transcribe_gateway_start company_id={} org_id={} request_id={} channel={} source={} has_file={} has_mime={} has_session={} has_conversation={} has_phone_number_id={}",
+            context.companyId(),
+            context.orgId(),
+            context.requestId(),
+            channel,
+            source,
+            file != null,
+            mimeType != null && !mimeType.isBlank(),
+            sessionId != null && !sessionId.isBlank(),
+            conversationId != null && !conversationId.isBlank(),
+            phoneNumberId != null && !phoneNumberId.isBlank()
+        );
+
         String filename = file.getOriginalFilename();
         if (filename == null || filename.isBlank()) {
             filename = "audio.webm";
@@ -294,7 +311,16 @@ public class AiGatewayService {
             conversationId,
             phoneNumberId
         );
-        return aiEngineClient.transcribeMedia(context, payload);
+        AiMediaTranscriptionResponse response = aiEngineClient.transcribeMedia(context, payload);
+        log.info(
+            "ai_transcribe_gateway_ok company_id={} org_id={} request_id={} text_len={} provider={}",
+            context.companyId(),
+            context.orgId(),
+            context.requestId(),
+            response.text() == null ? 0 : response.text().length(),
+            response.provider()
+        );
+        return response;
     }
 
     public AiDocumentDeleteResponse deleteAgentDocument(

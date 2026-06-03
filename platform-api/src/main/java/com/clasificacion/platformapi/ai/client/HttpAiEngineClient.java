@@ -35,6 +35,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -42,6 +44,7 @@ import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class HttpAiEngineClient implements AiEngineClient {
+    private static final Logger log = LoggerFactory.getLogger(HttpAiEngineClient.class);
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
     private final AiEngineProperties properties;
@@ -163,6 +166,7 @@ public class HttpAiEngineClient implements AiEngineClient {
         AiMediaTranscriptionRequest payload
     ) {
         String uri = buildUri("/internal/ai/media/transcriptions");
+        log.info("ai_transcribe_request tenant_id={} org_id={} uri={}", context.companyId(), context.orgId(), uri);
         try {
             return restClient.post()
                 .uri(uri)
@@ -171,6 +175,14 @@ public class HttpAiEngineClient implements AiEngineClient {
                 .retrieve()
                 .body(AiMediaTranscriptionResponse.class);
         } catch (RestClientResponseException exc) {
+            String responseBody = exc.getResponseBodyAsString();
+            String cleanBody = responseBody == null ? "" : responseBody.replaceAll("\\s+", " ");
+            log.warn(
+                "ai_transcribe_failed status={} uri={} body={}",
+                exc.getRawStatusCode(),
+                uri,
+                cleanBody.substring(0, Math.min(500, cleanBody.length()))
+            );
             throw mapError(exc);
         }
     }

@@ -232,6 +232,7 @@ def _transcribe_audio_bytes(
 ) -> MediaTranscriptionPayload | None:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
+        logger.warning("[transcribe] openai_api_key_missing")
         return None
 
     clean_filename = _normalize_media_filename(filename, mime_type)
@@ -242,6 +243,14 @@ def _transcribe_audio_bytes(
     }
     if language_hint and language_hint.strip():
         fields["language"] = language_hint.strip()
+
+    logger.info(
+        "[transcribe] openai_request filename=%s mime_type=%s bytes=%s language_hint=%s",
+        clean_filename,
+        clean_mime,
+        len(audio_bytes),
+        language_hint or "",
+    )
 
     body, boundary = _build_multipart_body(fields, ("file", clean_filename, audio_bytes, clean_mime))
     request = urllib.request.Request(
@@ -259,8 +268,10 @@ def _transcribe_audio_bytes(
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
+        logger.warning("[transcribe] openai_http_error status=%s detail=%s", exc.code, detail[:1000])
         raise HTTPException(status_code=503, detail=f"No se pudo transcribir audio: {detail}") from exc
     except urllib.error.URLError as exc:
+        logger.warning("[transcribe] openai_url_error reason=%s", exc.reason)
         raise HTTPException(status_code=503, detail=f"No se pudo conectar al servicio de transcripcion: {exc.reason}") from exc
 
     try:
@@ -270,6 +281,7 @@ def _transcribe_audio_bytes(
 
     text = str(payload.get("text") or "").strip()
     if not text:
+        logger.warning("[transcribe] openai_empty_text filename=%s mime_type=%s", clean_filename, clean_mime)
         return None
 
     duration_seconds = payload.get("duration")
@@ -277,6 +289,7 @@ def _transcribe_audio_bytes(
     if isinstance(duration_seconds, (int, float)):
         duration_ms = int(float(duration_seconds) * 1000)
 
+    logger.info("[transcribe] openai_ok text_len=%s language=%s duration_ms=%s", len(text), payload.get("language") or "", duration_ms or 0)
     return MediaTranscriptionPayload(
         text=text,
         language=str(payload.get("language") or "").strip() or None,
@@ -4664,6 +4677,16 @@ def internal_transcribe_media(
     x_platform_signature: str | None = Header(default=None, alias="X-Platform-Signature"),
     x_platform_timestamp: str | None = Header(default=None, alias="X-Platform-Timestamp"),
 ) -> MediaTranscriptionPayload:
+    logger.info(
+        "[transcribe] internal_request company_id=%s org_id=%s user_id=%s request_id=%s has_file=%s mime_type=%s language_hint=%s",
+        x_company_id or "",
+        x_org_id or "",
+        x_user_id or "",
+        x_request_id or "",
+        bool(payload.content_base64),
+        payload.mime_type or "",
+        payload.language_hint or "",
+    )
     _require_internal_context(
         x_company_id=x_company_id,
         x_org_id=x_org_id,
@@ -4685,7 +4708,20 @@ def internal_transcribe_media(
         language_hint=payload.language_hint,
     )
     if result is None:
+        logger.warning(
+            "[transcribe] internal_no_result company_id=%s org_id=%s request_id=%s",
+            x_company_id or "",
+            x_org_id or "",
+            x_request_id or "",
+        )
         raise HTTPException(status_code=503, detail="Servicio de transcripcion no disponible")
+    logger.info(
+        "[transcribe] internal_ok company_id=%s org_id=%s request_id=%s text_len=%s",
+        x_company_id or "",
+        x_org_id or "",
+        x_request_id or "",
+        len(result.text),
+    )
     return result
 
 

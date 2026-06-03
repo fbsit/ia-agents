@@ -25,6 +25,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -42,6 +44,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping
 public class AgentsController {
+    private static final Logger log = LoggerFactory.getLogger(AgentsController.class);
     private final AiGatewayService aiGatewayService;
 
     public AgentsController(AiGatewayService aiGatewayService) {
@@ -325,6 +328,19 @@ public class AgentsController {
         @RequestParam(value = "company_id", required = false) String companyId,
         @RequestParam(value = "org_id", required = false) String orgId
     ) {
+        log.info(
+            "ai_transcribe_controller_start company_id={} org_id={} channel={} source={} has_file={} has_mime={} has_language_hint={} has_session={} has_conversation={} has_phone_number_id={}",
+            companyId,
+            orgId,
+            channel,
+            source,
+            file != null,
+            mimeType != null && !mimeType.isBlank(),
+            languageHint != null && !languageHint.isBlank(),
+            sessionId != null && !sessionId.isBlank(),
+            conversationId != null && !conversationId.isBlank(),
+            phoneNumberId != null && !phoneNumberId.isBlank()
+        );
         var response = aiGatewayService.transcribeMedia(
             authorization,
             requestId,
@@ -338,6 +354,13 @@ public class AgentsController {
             sessionId,
             conversationId,
             phoneNumberId
+        );
+        log.info(
+            "ai_transcribe_controller_ok company_id={} org_id={} text_len={} provider={}",
+            companyId,
+            orgId,
+            response.text() == null ? 0 : response.text().length(),
+            response.provider()
         );
         return new MediaTranscriptionResponse(
             response.text(),
