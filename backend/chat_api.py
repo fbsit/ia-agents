@@ -218,6 +218,44 @@ def _cart_requests_from_recent_products(message: str, session_id: str) -> list[d
     return [{"product_query": product_name, "quantity": quantity}]
 
 
+def _cart_requests_from_recent_product_reference(message: str, session_id: str) -> list[dict[str, Any]]:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return []
+    products = _recent_commerce_products(session_id)
+    if not products:
+        return []
+
+    referenced_index = 0
+    if "segundo" in normalized:
+        referenced_index = 1
+    elif "tercero" in normalized:
+        referenced_index = 2
+    elif any(token in normalized for token in ["primero", "primer", "ese", "esa", "ese producto", "esa opcion", "ese item", "esa leche", "ese milo"]):
+        referenced_index = 0
+    else:
+        return []
+
+    if referenced_index >= len(products):
+        return []
+
+    product = products[referenced_index]
+    product_name = str(product.get("name") or "").strip()
+    if not product_name:
+        return []
+
+    quantity = _parse_widget_quantity(message)
+    logger.info(
+        "commerce_recent_reference_reused session_id=%s message=%s product=%s index=%s quantity=%s",
+        session_id,
+        message,
+        product_name,
+        referenced_index,
+        quantity,
+    )
+    return [{"product_query": product_name, "quantity": quantity}]
+
+
 def _product_lookup_queries_from_message(message: str) -> list[str]:
     normalized = _normalize_widget_text(message)
     if not normalized:
@@ -235,6 +273,26 @@ def _product_lookup_queries_from_message(message: str) -> list[str]:
             seen.add(part)
             unique.append(part)
     return unique
+
+
+def _recent_products_for_llm(session_id: str) -> list[dict[str, Any]]:
+    recent_products = _recent_commerce_products(session_id)
+    serialized: list[dict[str, Any]] = []
+    for index, product in enumerate(recent_products[:6], start=1):
+        if not isinstance(product, dict):
+            continue
+        name = str(product.get("name") or "").strip()
+        if not name:
+            continue
+        serialized.append(
+            {
+                "position": index,
+                "name": name,
+                "price": str(product.get("price") or "").strip(),
+                "stock": str(product.get("stock") or "").strip(),
+            }
+        )
+    return serialized
 
 
 def _parse_widget_quantity(text: str) -> int:
@@ -331,6 +389,10 @@ def _should_try_llm_commerce_parser(intent_label: str | None, message: str) -> b
             "despacho",
             "retiro",
             "checkout",
+            "receta",
+            "cocinar",
+            "queque",
+            "hambre",
         ]
     )
 
@@ -349,6 +411,7 @@ def _parse_commerce_intent_with_openai(
         return None
 
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+    recent_products = _recent_products_for_llm(session_id)
     request_payload = {
         "model": model,
         "temperature": 0,
@@ -363,7 +426,8 @@ def _parse_commerce_intent_with_openai(
                     "Intent permitidos: none, product_lookup, add_to_cart, shipping_options, payment_options, checkout, recipe_recommendation. "
                     "Extrae productos y cantidades. Si no hay cantidad explicita usa 1. "
                     "Si el mensaje pregunta disponibilidad/precio/stock, usa product_lookup. Si habla de cocinar, recetas, queque o hambre, usa recipe_recommendation. "
-                    "Para product_lookup puedes devolver varios items con query si preguntan por mas de un producto."
+                    "Para product_lookup puedes devolver varios items con query si preguntan por mas de un producto. "
+                    "Si el mensaje usa referencias como 'agregamelo', 'ese', 'ese producto', 'el primero', 'el segundo', debes resolverlas usando recent_products si existe contexto."
                 ),
             },
             {
@@ -372,6 +436,7 @@ def _parse_commerce_intent_with_openai(
                     {
                         "message": message,
                         "intent_label_hint": intent_label or "",
+                        "recent_products": recent_products,
                     },
                     ensure_ascii=False,
                 ),
@@ -408,12 +473,13 @@ def _parse_commerce_intent_with_openai(
         return None
 
     logger.info(
-        "commerce_intent_llm_ok session_id=%s intent=%s confidence=%s query=%s items=%s",
+        "commerce_intent_llm_ok session_id=%s intent=%s confidence=%s query=%s items=%s recent_products=%s",
         session_id,
         parsed.get("intent"),
         parsed.get("confidence"),
         parsed.get("query"),
         parsed.get("items"),
+        len(recent_products),
     )
     return parsed
 
@@ -474,8 +540,11 @@ def _is_recipe_request_message(message: str) -> bool:
             "postre",
             "hambre",
             "desayuno",
+            "desayunar",
             "almuerzo",
+            "almorzar",
             "cena",
+            "cenar",
             "once",
         ]
     )
@@ -582,6 +651,8 @@ def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[
     if not cart_requests:
         cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
     if not cart_requests:
+        cart_requests = _cart_requests_from_recent_product_reference(message, session_id)
+    if not cart_requests:
         cart_requests = _cart_requests_from_recent_products(message, session_id)
     cart_request = cart_requests[0] if cart_requests else None
     lookup_query = _extract_widget_product_lookup_query(message) or message
@@ -629,6 +700,8 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
     cart_requests = _extract_widget_cart_requests(message)
     if not cart_requests:
         cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
+    if not cart_requests:
+        cart_requests = _cart_requests_from_recent_product_reference(message, session_id)
     if not cart_requests:
         cart_requests = _cart_requests_from_recent_products(message, session_id)
     cart_request = cart_requests[0] if cart_requests else None
@@ -1166,9 +1239,42 @@ def _resolve_shared_commerce_payload(
         intent_label=intent_label,
     )
 
+    if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "recipe_recommendation" or _is_recipe_request_message(message):
+        recipe_plan = _generate_recipe_plan_with_openai(message, session_id, _recent_commerce_products(session_id))
+        if isinstance(recipe_plan, dict):
+            ingredient_queries: list[str] = []
+            seen_queries: set[str] = set()
+            for recipe in recipe_plan.get("recipes") if isinstance(recipe_plan.get("recipes"), list) else []:
+                if not isinstance(recipe, dict):
+                    continue
+                for ingredient_query in recipe.get("ingredient_queries") if isinstance(recipe.get("ingredient_queries"), list) else []:
+                    clean_query = str(ingredient_query).strip()
+                    if clean_query and clean_query not in seen_queries:
+                        seen_queries.add(clean_query)
+                        ingredient_queries.append(clean_query)
+            ingredient_results_by_query = {
+                query: clubhx_tools_client.execute_canonical(
+                    tenant_id=company_id,
+                    tool="get_product_availability",
+                    channel=channel,
+                    user_id=user_id,
+                    arguments={
+                        "query": query,
+                        "limit": 3,
+                        "session_id": session_id,
+                    },
+                )
+                for query in ingredient_queries[:8]
+            }
+            payload = _build_recipe_recommendation_payload(recipe_plan, ingredient_results_by_query)
+            if payload:
+                return payload
+
     cart_requests = _extract_widget_cart_requests(message)
     if not cart_requests:
         cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
+    if not cart_requests:
+        cart_requests = _cart_requests_from_recent_product_reference(message, session_id)
     if not cart_requests:
         cart_requests = _cart_requests_from_recent_products(message, session_id)
     if cart_requests:
@@ -1211,37 +1317,6 @@ def _resolve_shared_commerce_payload(
         payload = _build_multi_product_lookup_payload(canonical_results, lookup_queries, message)
         if payload:
             return payload
-
-    if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "recipe_recommendation" or _is_recipe_request_message(message):
-        recipe_plan = _generate_recipe_plan_with_openai(message, session_id, _recent_commerce_products(session_id))
-        if isinstance(recipe_plan, dict):
-            ingredient_queries: list[str] = []
-            seen_queries: set[str] = set()
-            for recipe in recipe_plan.get("recipes") if isinstance(recipe_plan.get("recipes"), list) else []:
-                if not isinstance(recipe, dict):
-                    continue
-                for ingredient_query in recipe.get("ingredient_queries") if isinstance(recipe.get("ingredient_queries"), list) else []:
-                    clean_query = str(ingredient_query).strip()
-                    if clean_query and clean_query not in seen_queries:
-                        seen_queries.add(clean_query)
-                        ingredient_queries.append(clean_query)
-            ingredient_results_by_query = {
-                query: clubhx_tools_client.execute_canonical(
-                    tenant_id=company_id,
-                    tool="get_product_availability",
-                    channel=channel,
-                    user_id=user_id,
-                    arguments={
-                        "query": query,
-                        "limit": 3,
-                        "session_id": session_id,
-                    },
-                )
-                for query in ingredient_queries[:8]
-            }
-            payload = _build_recipe_recommendation_payload(recipe_plan, ingredient_results_by_query)
-            if payload:
-                return payload
 
     return None
 
