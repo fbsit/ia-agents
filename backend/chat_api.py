@@ -233,7 +233,7 @@ def _transcribe_audio_bytes(
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         logger.warning("[transcribe] openai_api_key_missing")
-        return None
+        raise HTTPException(status_code=503, detail="openai_api_key_missing")
 
     clean_filename = _normalize_media_filename(filename, mime_type)
     clean_mime = (mime_type or "application/octet-stream").strip() or "application/octet-stream"
@@ -282,7 +282,7 @@ def _transcribe_audio_bytes(
     text = str(payload.get("text") or "").strip()
     if not text:
         logger.warning("[transcribe] openai_empty_text filename=%s mime_type=%s", clean_filename, clean_mime)
-        return None
+        raise HTTPException(status_code=503, detail="openai_empty_text")
 
     duration_seconds = payload.get("duration")
     duration_ms = None
