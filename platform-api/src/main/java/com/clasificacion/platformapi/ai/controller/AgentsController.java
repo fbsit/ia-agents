@@ -142,7 +142,10 @@ public class AgentsController {
             response.response_mode(),
             response.fallback_applied(),
             response.retrieval_min_score(),
-            response.redirect_to()
+            response.redirect_to(),
+            response.cart_action(),
+            response.cart_actions(),
+            response.products()
         );
     }
 

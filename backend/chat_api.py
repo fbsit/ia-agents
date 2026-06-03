@@ -883,6 +883,9 @@ class AgentChatResponsePayload(BaseModel):
     fallback_applied: bool = False
     retrieval_min_score: float | None = None
     redirect_to: str | None = None
+    cart_action: dict[str, Any] | None = None
+    cart_actions: list[dict[str, Any]] | None = None
+    products: list[dict[str, Any]] | None = None
 
 
 class InternalRuntimeExecuteRequestPayload(BaseModel):
@@ -4717,6 +4720,9 @@ def internal_chat_with_agent(
                         fallback_applied=False,
                         retrieval_min_score=None,
                         redirect_to=str((tool_payload or {}).get("redirect_to") or "").strip() or None,
+                        cart_action=(tool_payload or {}).get("cart_action") if isinstance((tool_payload or {}).get("cart_action"), dict) else None,
+                        cart_actions=(tool_payload or {}).get("cart_actions") if isinstance((tool_payload or {}).get("cart_actions"), list) else None,
+                        products=(tool_payload or {}).get("products") if isinstance((tool_payload or {}).get("products"), list) else None,
                     )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
@@ -4955,6 +4961,9 @@ def chat_with_agent(
                         fallback_applied=False,
                         retrieval_min_score=None,
                         redirect_to=str((tool_payload or {}).get("redirect_to") or "").strip() or None,
+                        cart_action=(tool_payload or {}).get("cart_action") if isinstance((tool_payload or {}).get("cart_action"), dict) else None,
+                        cart_actions=(tool_payload or {}).get("cart_actions") if isinstance((tool_payload or {}).get("cart_actions"), list) else None,
+                        products=(tool_payload or {}).get("products") if isinstance((tool_payload or {}).get("products"), list) else None,
                     )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(

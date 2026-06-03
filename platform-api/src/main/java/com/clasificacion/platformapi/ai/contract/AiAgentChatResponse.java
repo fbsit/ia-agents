@@ -1,6 +1,7 @@
 package com.clasificacion.platformapi.ai.contract;
 
 import java.util.List;
+import java.util.Map;
 
 public record AiAgentChatResponse(
     String agent_id,
@@ -14,6 +15,9 @@ public record AiAgentChatResponse(
     String response_mode,
     boolean fallback_applied,
     Double retrieval_min_score,
-    String redirect_to
+    String redirect_to,
+    Map<String, Object> cart_action,
+    List<Map<String, Object>> cart_actions,
+    List<Map<String, Object>> products
 ) {
 }
