@@ -126,12 +126,83 @@ _WIDGET_QUANTITY_WORDS: dict[str, int] = {
     "diez": 10,
 }
 
+_COMMERCE_CONTEXT_LOCK = threading.Lock()
+_COMMERCE_PRODUCT_CONTEXT: dict[str, dict[str, Any]] = {}
+
 
 def _normalize_widget_text(text: str) -> str:
     normalized = unicodedata.normalize("NFD", str(text or ""))
     normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
     normalized = re.sub(r"[^a-zA-Z0-9\s]+", " ", normalized).lower()
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _remember_commerce_products(session_id: str, products: list[dict[str, Any]]) -> None:
+    clean_session_id = str(session_id or "").strip()
+    if not clean_session_id or not products:
+        return
+    safe_products = [item for item in products if isinstance(item, dict)][:6]
+    if not safe_products:
+        return
+    with _COMMERCE_CONTEXT_LOCK:
+        _COMMERCE_PRODUCT_CONTEXT[clean_session_id] = {
+            "products": safe_products,
+            "updated_at": time.time(),
+        }
+
+
+def _recent_commerce_products(session_id: str, max_age_seconds: int = 900) -> list[dict[str, Any]]:
+    clean_session_id = str(session_id or "").strip()
+    if not clean_session_id:
+        return []
+    with _COMMERCE_CONTEXT_LOCK:
+        payload = _COMMERCE_PRODUCT_CONTEXT.get(clean_session_id)
+        if not isinstance(payload, dict):
+            return []
+        updated_at = payload.get("updated_at")
+        if not isinstance(updated_at, (int, float)) or time.time() - float(updated_at) > max_age_seconds:
+            _COMMERCE_PRODUCT_CONTEXT.pop(clean_session_id, None)
+            return []
+        products = payload.get("products") if isinstance(payload.get("products"), list) else []
+        return [item for item in products if isinstance(item, dict)]
+
+
+def _is_implicit_add_to_cart_message(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    return any(
+        phrase in normalized
+        for phrase in [
+            "agregalo",
+            "agregala",
+            "agregale",
+            "agregalos",
+            "agregalas",
+            "dale agregalo",
+            "dale agregale",
+            "si agregalo",
+            "si agregala",
+            "ponelo en el carrito",
+            "ponela en el carrito",
+            "metelo al carrito",
+            "metela al carrito",
+        ]
+    ) or normalized in {"dale", "si", "ok", "oka", "va", "bueno"}
+
+
+def _cart_requests_from_recent_products(message: str, session_id: str) -> list[dict[str, Any]]:
+    if not _is_implicit_add_to_cart_message(message):
+        return []
+    products = _recent_commerce_products(session_id)
+    if not products:
+        return []
+    first = products[0]
+    product_name = str(first.get("name") or "").strip()
+    if not product_name:
+        return []
+    quantity = _parse_widget_quantity(message)
+    return [{"product_query": product_name, "quantity": quantity}]
 
 
 def _parse_widget_quantity(text: str) -> int:
@@ -368,6 +439,8 @@ def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[
     cart_requests = _extract_widget_cart_requests(message)
     if not cart_requests:
         cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
+    if not cart_requests:
+        cart_requests = _cart_requests_from_recent_products(message, session_id)
     cart_request = cart_requests[0] if cart_requests else None
     lookup_query = _extract_widget_product_lookup_query(message) or message
     if lookup_query != message:
@@ -414,6 +487,8 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
     cart_requests = _extract_widget_cart_requests(message)
     if not cart_requests:
         cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
+    if not cart_requests:
+        cart_requests = _cart_requests_from_recent_products(message, session_id)
     cart_request = cart_requests[0] if cart_requests else None
     lookup_query = _extract_widget_product_lookup_query(message) or message
     if cart_request:
@@ -4896,6 +4971,9 @@ def internal_chat_with_agent(
                     intent_label=rag_result.intent_label,
                     channel=chat_channel,
                 )
+                tool_products = (tool_payload or {}).get("products") if isinstance((tool_payload or {}).get("products"), list) else None
+                if tool_products:
+                    _remember_commerce_products(effective_session_id, tool_products)
                 tool_answer = str((tool_payload or {}).get("answer") or "").strip()
                 if tool_answer:
                     return AgentChatResponsePayload(
@@ -5137,6 +5215,9 @@ def chat_with_agent(
                     intent_label=rag_result.intent_label,
                     channel=chat_channel,
                 )
+                tool_products = (tool_payload or {}).get("products") if isinstance((tool_payload or {}).get("products"), list) else None
+                if tool_products:
+                    _remember_commerce_products(effective_session_id, tool_products)
                 tool_answer = str((tool_payload or {}).get("answer") or "").strip()
                 if tool_answer:
                     return AgentChatResponsePayload(
@@ -5871,6 +5952,8 @@ def public_widget_chat(
             ]
             tool_payload = _build_multi_cart_tool_payload(canonical_results, cart_requests)
             if tool_payload and tool_payload.get("answer"):
+                if isinstance(tool_payload.get("products"), list):
+                    _remember_commerce_products(effective_session_id, tool_payload.get("products"))
                 final_answer = str(tool_payload.get("answer") or "").strip()
                 response_latency_ms = int((time.perf_counter() - started) * 1000)
                 _record_chat_audit(
@@ -5976,6 +6059,9 @@ def public_widget_chat(
                 intent_label=rag_result.intent_label,
                 channel="widget_public",
             )
+            tool_products = tool_payload.get("products") if isinstance(tool_payload.get("products"), list) else None
+            if tool_products:
+                _remember_commerce_products(effective_session_id, tool_products)
             if tool_payload and tool_payload.get("answer"):
                 final_answer = str(tool_payload.get("answer") or "").strip()
                 response_latency_ms = int((time.perf_counter() - started) * 1000)
