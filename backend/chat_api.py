@@ -110,11 +110,71 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+_WIDGET_QUANTITY_WORDS: dict[str, int] = {
+    "un": 1,
+    "una": 1,
+    "uno": 1,
+    "dos": 2,
+    "tres": 3,
+    "cuatro": 4,
+    "cinco": 5,
+    "seis": 6,
+    "siete": 7,
+    "ocho": 8,
+    "nueve": 9,
+    "diez": 10,
+}
+
+
+def _normalize_widget_text(text: str) -> str:
+    normalized = unicodedata.normalize("NFD", str(text or ""))
+    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    normalized = re.sub(r"[^a-zA-Z0-9\s]+", " ", normalized).lower()
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _parse_widget_quantity(text: str) -> int:
+    tokens = _normalize_widget_text(text).split()
+    for token in tokens[:4]:
+        if token.isdigit():
+            return max(1, min(99, int(token)))
+        if token in _WIDGET_QUANTITY_WORDS:
+            return _WIDGET_QUANTITY_WORDS[token]
+    return 1
+
+
+def _extract_widget_cart_requests(message: str) -> list[dict[str, Any]]:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return []
+
+    segments = [part.strip() for part in re.split(r"\s+(?:y|e|ademas|tambien)\s+", normalized) if part.strip()]
+    requests: list[dict[str, Any]] = []
+    for segment in segments:
+        cleaned = re.sub(
+            r"\b(?:agrega|agregame|agregar|suma|sumame|sumar|pon|poneme|poner|mete|meteme|anade|llevo|quiero|porfa|por favor|al|carrito|el|la|los|las)\b",
+            " ",
+            segment,
+            flags=re.IGNORECASE,
+        )
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if not cleaned:
+            continue
+
+        quantity = _parse_widget_quantity(segment)
+        product_query = re.sub(r"^\d+\s+", "", cleaned).strip()
+        product_query = re.sub(r"^(un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+", "", product_query).strip()
+        if not product_query:
+            continue
+        requests.append({"quantity": quantity, "product_query": product_query})
+    return requests
+
 
 def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[str, dict[str, Any]] | None:
     label = (intent_label or "").strip().lower()
     message_text = (message or "").strip().lower()
-    cart_request = _extract_widget_add_to_cart(message)
+    cart_requests = _extract_widget_cart_requests(message)
+    cart_request = cart_requests[0] if cart_requests else None
     if label in {"add_to_cart", "cart_add", "cart_update", "checkout_cart"} and cart_request:
         return "get_product_availability", {"query": cart_request["product_query"], "limit": 5, "session_id": session_id}
     if label in {"product_lookup", "catalog_query", "availability_check"}:
@@ -138,7 +198,8 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
     text = (message or "").strip().lower()
     if not text:
         return None
-    cart_request = _extract_widget_add_to_cart(message)
+    cart_requests = _extract_widget_cart_requests(message)
+    cart_request = cart_requests[0] if cart_requests else None
     if cart_request:
         logger.info(
             "forced_commerce_tool_match kind=add_to_cart session_id=%s message=%s product_query=%s quantity=%s",
@@ -373,22 +434,8 @@ def _format_canonical_tool_answer(result: dict[str, Any]) -> str | None:
 
 
 def _extract_widget_add_to_cart(message: str) -> dict[str, Any] | None:
-    text = (message or "").strip().lower()
-    if not text:
-        return None
-    match = re.search(
-        r"(?:quiero|agrega|agregar|sumar|suma|llevo|pon|poner|mete|anade|añade)?\s*(\d{1,3})\s+(.+)",
-        text,
-        re.IGNORECASE,
-    )
-    if not match:
-        return None
-    quantity = max(1, min(99, int(match.group(1) or "1")))
-    product_query = re.sub(r"\bal\s+carrito\b", " ", match.group(2) or "", flags=re.IGNORECASE)
-    product_query = re.sub(r"\?+", " ", product_query).strip()
-    if not product_query:
-        return None
-    return {"quantity": quantity, "product_query": product_query}
+    requests = _extract_widget_cart_requests(message)
+    return requests[0] if requests else None
 
 
 def _format_public_widget_tool_payload(
@@ -399,7 +446,76 @@ def _format_public_widget_tool_payload(
     channel: str | None = None,
 ) -> dict[str, Any] | None:
     if not result.get("ok"):
+    return None
+
+
+def _build_multi_cart_tool_payload(
+    canonical_results: list[dict[str, Any]],
+    cart_requests: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    cart_actions: list[dict[str, Any]] = []
+    products: list[dict[str, Any]] = []
+    seen_products: set[str] = set()
+
+    for cart_request, result in zip(cart_requests, canonical_results):
+        if not isinstance(result, dict) or not result.get("ok"):
+            continue
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        items = data.get("items") if isinstance(data.get("items"), list) else []
+        safe_items = [item for item in items if isinstance(item, dict)]
+        if not safe_items:
+            continue
+
+        first = safe_items[0]
+        product_id = str(first.get("id") or "").strip()
+        checkout_product_id = str(first.get("code") or first.get("id") or "").strip()
+        variant_id = str(first.get("id") or "").strip()
+        name = str(first.get("name") or "Producto").strip() or "Producto"
+        if not product_id:
+            continue
+
+        cart_actions.append(
+            {
+                "type": "add_to_cart",
+                "item": {
+                    "product_id": checkout_product_id or product_id,
+                    "checkout_product_id": checkout_product_id or product_id,
+                    "variant_id": variant_id or product_id,
+                    "quantity": int(cart_request.get("quantity") or 1),
+                    "name": name,
+                },
+            }
+        )
+
+        for item in safe_items[:3]:
+            current_id = str(item.get("id") or "").strip()
+            if not current_id or current_id in seen_products:
+                continue
+            seen_products.add(current_id)
+            products.append(
+                {
+                    "id": current_id,
+                    "checkout_product_id": str(item.get("code") or item.get("id") or "").strip(),
+                    "variant_id": str(item.get("id") or "").strip(),
+                    "name": str(item.get("name") or "Producto").strip(),
+                    "price": str(item.get("price") or "N/D").strip(),
+                    "stock": str(item.get("available_units") or "0").strip(),
+                    "image_url": str(item.get("image_url") or "").strip() or None,
+                }
+            )
+
+    if not cart_actions:
         return None
+
+    summary = " y ".join(
+        f"{action['item']['quantity']} {action['item']['name']}" for action in cart_actions if isinstance(action, dict)
+    )
+    return {
+        "answer": f"Listo, agregue {summary} al carrito. Si queres, seguimos con checkout cuando me digas \"quiero pagar\".",
+        "cart_action": cart_actions[0],
+        "cart_actions": cart_actions,
+        "products": products[:6],
+    }
 
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
     tool = str(result.get("tool") or "").strip().lower()
@@ -838,6 +954,7 @@ class PublicWidgetChatResponsePayload(BaseModel):
     response_mode: str | None = None
     redirect_to: str | None = None
     cart_action: dict[str, Any] | None = None
+    cart_actions: list[dict[str, Any]] | None = None
     products: list[dict[str, Any]] | None = None
 
 
@@ -5494,8 +5611,93 @@ def public_widget_chat(
     )
     started = time.perf_counter()
 
+    clubhx_tools_client = _get_clubhx_tools_client()
+    cart_requests = _extract_widget_cart_requests(payload.message)
+    if clubhx_tools_client and cart_requests:
+        logger.info(
+            "public_widget_chat_cart_requests widget_id=%s session_id=%s count=%s requests=%s",
+            payload.widget_id,
+            effective_session_id,
+            len(cart_requests),
+            cart_requests,
+        )
+        try:
+            canonical_results = [
+                clubhx_tools_client.execute_canonical(
+                    tenant_id=agent.company_id,
+                    tool="get_product_availability",
+                    channel="widget_public",
+                    user_id=payload.external_user_id or payload.visitor_id or client_id,
+                    arguments={
+                        "query": str(cart_request.get("product_query") or "").strip(),
+                        "limit": 5,
+                        "session_id": effective_session_id,
+                    },
+                )
+                for cart_request in cart_requests
+            ]
+            tool_payload = _build_multi_cart_tool_payload(canonical_results, cart_requests)
+            if tool_payload and tool_payload.get("answer"):
+                final_answer = str(tool_payload.get("answer") or "").strip()
+                response_latency_ms = int((time.perf_counter() - started) * 1000)
+                _record_chat_audit(
+                    ChatAuditRecord(
+                        company_id=agent.company_id,
+                        agent_id=agent.agent_id,
+                        session_id=effective_session_id,
+                        channel="widget_public",
+                        user_message=payload.message,
+                        assistant_message=final_answer,
+                        intent_label="add_to_cart",
+                        route="tool",
+                        response_mode="tool_only",
+                        sources_count=0,
+                        used_llm=agent.use_openai_generation,
+                        cached_response=False,
+                        latency_ms=response_latency_ms,
+                        visitor_id=payload.visitor_id,
+                        external_user_id=payload.external_user_id,
+                    )
+                )
+                _record_retrieval_audit(
+                    RetrievalAuditRecord(
+                        company_id=agent.company_id,
+                        agent_id=agent.agent_id,
+                        channel="widget_public",
+                        route="tool",
+                        response_mode="tool_only",
+                        retrieved_chunks=0,
+                        sources_count=0,
+                        avg_retrieval_score=None,
+                        max_retrieval_score=None,
+                        min_score_threshold=None,
+                        fallback_applied=False,
+                        latency_ms=response_latency_ms,
+                        rag_backend=agent.rag_backend,
+                    )
+                )
+                return PublicWidgetChatResponsePayload(
+                    widget_id=payload.widget_id,
+                    session_id=effective_session_id,
+                    answer=final_answer,
+                    sources=[],
+                    route="tool",
+                    intent_label="add_to_cart",
+                    response_mode="tool_only",
+                    redirect_to=None,
+                    cart_action=tool_payload.get("cart_action") if isinstance(tool_payload.get("cart_action"), dict) else None,
+                    cart_actions=tool_payload.get("cart_actions") if isinstance(tool_payload.get("cart_actions"), list) else None,
+                    products=tool_payload.get("products") if isinstance(tool_payload.get("products"), list) else None,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "public_widget_cart_route_failed widget_id=%s session_id=%s detail=%s",
+                payload.widget_id,
+                effective_session_id,
+                exc,
+            )
+
     try:
-        clubhx_tools_client = _get_clubhx_tools_client()
         rag_result = agent_service.chat(
             agent=agent,
             message=payload.message,
@@ -5592,6 +5794,7 @@ def public_widget_chat(
                     response_mode="tool_only",
                     redirect_to=str(tool_payload.get("redirect_to") or "").strip() or None,
                     cart_action=tool_payload.get("cart_action") if isinstance(tool_payload.get("cart_action"), dict) else None,
+                    cart_actions=tool_payload.get("cart_actions") if isinstance(tool_payload.get("cart_actions"), list) else None,
                     products=tool_payload.get("products") if isinstance(tool_payload.get("products"), list) else None,
                 )
         except Exception as exc:  # noqa: BLE001
