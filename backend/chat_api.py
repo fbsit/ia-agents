@@ -446,76 +446,7 @@ def _format_public_widget_tool_payload(
     channel: str | None = None,
 ) -> dict[str, Any] | None:
     if not result.get("ok"):
-    return None
-
-
-def _build_multi_cart_tool_payload(
-    canonical_results: list[dict[str, Any]],
-    cart_requests: list[dict[str, Any]],
-) -> dict[str, Any] | None:
-    cart_actions: list[dict[str, Any]] = []
-    products: list[dict[str, Any]] = []
-    seen_products: set[str] = set()
-
-    for cart_request, result in zip(cart_requests, canonical_results):
-        if not isinstance(result, dict) or not result.get("ok"):
-            continue
-        data = result.get("data") if isinstance(result.get("data"), dict) else {}
-        items = data.get("items") if isinstance(data.get("items"), list) else []
-        safe_items = [item for item in items if isinstance(item, dict)]
-        if not safe_items:
-            continue
-
-        first = safe_items[0]
-        product_id = str(first.get("id") or "").strip()
-        checkout_product_id = str(first.get("code") or first.get("id") or "").strip()
-        variant_id = str(first.get("id") or "").strip()
-        name = str(first.get("name") or "Producto").strip() or "Producto"
-        if not product_id:
-            continue
-
-        cart_actions.append(
-            {
-                "type": "add_to_cart",
-                "item": {
-                    "product_id": checkout_product_id or product_id,
-                    "checkout_product_id": checkout_product_id or product_id,
-                    "variant_id": variant_id or product_id,
-                    "quantity": int(cart_request.get("quantity") or 1),
-                    "name": name,
-                },
-            }
-        )
-
-        for item in safe_items[:3]:
-            current_id = str(item.get("id") or "").strip()
-            if not current_id or current_id in seen_products:
-                continue
-            seen_products.add(current_id)
-            products.append(
-                {
-                    "id": current_id,
-                    "checkout_product_id": str(item.get("code") or item.get("id") or "").strip(),
-                    "variant_id": str(item.get("id") or "").strip(),
-                    "name": str(item.get("name") or "Producto").strip(),
-                    "price": str(item.get("price") or "N/D").strip(),
-                    "stock": str(item.get("available_units") or "0").strip(),
-                    "image_url": str(item.get("image_url") or "").strip() or None,
-                }
-            )
-
-    if not cart_actions:
         return None
-
-    summary = " y ".join(
-        f"{action['item']['quantity']} {action['item']['name']}" for action in cart_actions if isinstance(action, dict)
-    )
-    return {
-        "answer": f"Listo, agregue {summary} al carrito. Si queres, seguimos con checkout cuando me digas \"quiero pagar\".",
-        "cart_action": cart_actions[0],
-        "cart_actions": cart_actions,
-        "products": products[:6],
-    }
 
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
     tool = str(result.get("tool") or "").strip().lower()
@@ -604,6 +535,75 @@ def _build_multi_cart_tool_payload(
     if not tool_answer:
         return None
     return {"answer": tool_answer}
+
+
+def _build_multi_cart_tool_payload(
+    canonical_results: list[dict[str, Any]],
+    cart_requests: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    cart_actions: list[dict[str, Any]] = []
+    products: list[dict[str, Any]] = []
+    seen_products: set[str] = set()
+
+    for cart_request, result in zip(cart_requests, canonical_results):
+        if not isinstance(result, dict) or not result.get("ok"):
+            continue
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        items = data.get("items") if isinstance(data.get("items"), list) else []
+        safe_items = [item for item in items if isinstance(item, dict)]
+        if not safe_items:
+            continue
+
+        first = safe_items[0]
+        product_id = str(first.get("id") or "").strip()
+        checkout_product_id = str(first.get("code") or first.get("id") or "").strip()
+        variant_id = str(first.get("id") or "").strip()
+        name = str(first.get("name") or "Producto").strip() or "Producto"
+        if not product_id:
+            continue
+
+        cart_actions.append(
+            {
+                "type": "add_to_cart",
+                "item": {
+                    "product_id": checkout_product_id or product_id,
+                    "checkout_product_id": checkout_product_id or product_id,
+                    "variant_id": variant_id or product_id,
+                    "quantity": int(cart_request.get("quantity") or 1),
+                    "name": name,
+                },
+            }
+        )
+
+        for item in safe_items[:3]:
+            current_id = str(item.get("id") or "").strip()
+            if not current_id or current_id in seen_products:
+                continue
+            seen_products.add(current_id)
+            products.append(
+                {
+                    "id": current_id,
+                    "checkout_product_id": str(item.get("code") or item.get("id") or "").strip(),
+                    "variant_id": str(item.get("id") or "").strip(),
+                    "name": str(item.get("name") or "Producto").strip(),
+                    "price": str(item.get("price") or "N/D").strip(),
+                    "stock": str(item.get("available_units") or "0").strip(),
+                    "image_url": str(item.get("image_url") or "").strip() or None,
+                }
+            )
+
+    if not cart_actions:
+        return None
+
+    summary = " y ".join(
+        f"{action['item']['quantity']} {action['item']['name']}" for action in cart_actions if isinstance(action, dict)
+    )
+    return {
+        "answer": f"Listo, agregue {summary} al carrito. Si queres, seguimos con checkout cuando me digas \"quiero pagar\".",
+        "cart_action": cart_actions[0],
+        "cart_actions": cart_actions,
+        "products": products[:6],
+    }
 
 
 _PUBLIC_WIDGET_RATE_LOCK = threading.Lock()
