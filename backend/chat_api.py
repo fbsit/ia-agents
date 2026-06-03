@@ -202,7 +202,33 @@ def _cart_requests_from_recent_products(message: str, session_id: str) -> list[d
     if not product_name:
         return []
     quantity = _parse_widget_quantity(message)
+    logger.info(
+        "commerce_recent_product_reused session_id=%s message=%s product=%s quantity=%s",
+        session_id,
+        message,
+        product_name,
+        quantity,
+    )
     return [{"product_query": product_name, "quantity": quantity}]
+
+
+def _product_lookup_queries_from_message(message: str) -> list[str]:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return []
+    cleaned = _extract_widget_product_lookup_query(message)
+    if not cleaned:
+        return []
+    parts = [part.strip() for part in re.split(r"\s+(?:o|u|y|e)\s+", cleaned) if part.strip()]
+    unique: list[str] = []
+    seen: set[str] = set()
+    for part in parts or [cleaned]:
+        if len(part) < 2:
+            continue
+        if part not in seen:
+            seen.add(part)
+            unique.append(part)
+    return unique
 
 
 def _parse_widget_quantity(text: str) -> int:
@@ -328,9 +354,10 @@ def _parse_commerce_intent_with_openai(
                     "Eres un parser de intenciones de e-commerce. "
                     "Devuelve SOLO JSON valido con esta forma exacta: "
                     "{\"intent\":string,\"confidence\":number,\"query\":string,\"items\":[{\"query\":string,\"quantity\":number}],\"needs_clarification\":boolean}. "
-                    "Intent permitidos: none, product_lookup, add_to_cart, shipping_options, payment_options, checkout. "
+                    "Intent permitidos: none, product_lookup, add_to_cart, shipping_options, payment_options, checkout, recipe_recommendation. "
                     "Extrae productos y cantidades. Si no hay cantidad explicita usa 1. "
-                    "No inventes productos. Si el mensaje pregunta disponibilidad/precio/stock, usa product_lookup."
+                    "Si el mensaje pregunta disponibilidad/precio/stock, usa product_lookup. Si habla de cocinar, recetas, queque o hambre, usa recipe_recommendation. "
+                    "Para product_lookup puedes devolver varios items con query si preguntan por mas de un producto."
                 ),
             },
             {
@@ -402,6 +429,115 @@ def _cart_requests_from_llm_intent(parsed: dict[str, Any] | None) -> list[dict[s
         if query:
             requests.append({"product_query": query, "quantity": quantity})
     return requests
+
+
+def _product_lookup_queries_from_llm_intent(parsed: dict[str, Any] | None) -> list[str]:
+    if not isinstance(parsed, dict):
+        return []
+    if str(parsed.get("intent") or "").strip().lower() != "product_lookup":
+        return []
+    queries: list[str] = []
+    seen: set[str] = set()
+    items = parsed.get("items") if isinstance(parsed.get("items"), list) else []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        query = str(item.get("query") or "").strip()
+        if query and query not in seen:
+            seen.add(query)
+            queries.append(query)
+    fallback_query = str(parsed.get("query") or "").strip()
+    if fallback_query and fallback_query not in seen:
+        queries.append(fallback_query)
+    return queries
+
+
+def _is_recipe_request_message(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    return any(
+        token in normalized
+        for token in [
+            "receta",
+            "recetario",
+            "cocinar",
+            "cocino",
+            "queque",
+            "torta",
+            "postre",
+            "hambre",
+            "desayuno",
+            "almuerzo",
+            "cena",
+            "once",
+        ]
+    )
+
+
+def _generate_recipe_plan_with_openai(message: str, session_id: str, recent_products: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not _is_recipe_request_message(message):
+        return None
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return None
+
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+    recent_names = [str(item.get("name") or "").strip() for item in recent_products if isinstance(item, dict)]
+    request_payload = {
+        "model": model,
+        "temperature": 0.2,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Eres un planificador de recetas para e-commerce. "
+                    "Devuelve SOLO JSON con esta forma exacta: "
+                    "{\"recipes\":[{\"name\":string,\"reason\":string,\"ingredient_queries\":[string]}]}. "
+                    "Sugiere maximo 2 recetas. Usa ingredientes buscables en un catalogo de supermercado. "
+                    "Si el usuario pide una receta especifica como queque, priorizala. "
+                    "Si menciona hambre o cocinar, propone recetas simples. "
+                    "Si hay productos recientes del historial, usalos como contexto para priorizar recetas relacionadas."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "message": message,
+                        "recent_products": recent_names[:8],
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ],
+    }
+
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=json.dumps(request_payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            raw = response.read().decode("utf-8")
+        payload = json.loads(raw)
+        content = str((((payload.get("choices") or [None])[0] or {}).get("message") or {}).get("content") or "").strip()
+        parsed = json.loads(content) if content else {}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("recipe_plan_llm_failed session_id=%s detail=%s", session_id, exc)
+        return None
+
+    if not isinstance(parsed, dict):
+        return None
+    logger.info("recipe_plan_llm_ok session_id=%s payload=%s", session_id, parsed)
+    return parsed
 
 
 def _tool_from_llm_commerce_intent(parsed: dict[str, Any] | None, session_id: str) -> tuple[str, dict[str, Any]] | None:
@@ -896,6 +1032,212 @@ def _build_multi_cart_tool_payload(
         "cart_actions": cart_actions,
         "products": products[:6],
     }
+
+
+def _build_multi_product_lookup_payload(
+    canonical_results: list[dict[str, Any]],
+    queries: list[str],
+    user_message: str,
+) -> dict[str, Any] | None:
+    products: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for query, result in zip(queries, canonical_results):
+        if not isinstance(result, dict) or not result.get("ok"):
+            continue
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        items = data.get("items") if isinstance(data.get("items"), list) else []
+        safe_items = [item for item in items if isinstance(item, dict)]
+        for item in safe_items[:3]:
+            product_id = str(item.get("id") or "").strip()
+            if not product_id or product_id in seen:
+                continue
+            seen.add(product_id)
+            products.append(
+                {
+                    "id": product_id,
+                    "checkout_product_id": str(item.get("code") or item.get("id") or "").strip(),
+                    "variant_id": str(item.get("id") or "").strip(),
+                    "name": str(item.get("name") or "Producto").strip(),
+                    "price": str(item.get("price") or "N/D").strip(),
+                    "stock": str(item.get("available_units") or "0").strip(),
+                    "image_url": str(item.get("image_url") or "").strip() or None,
+                    "query": query,
+                }
+            )
+
+    if not products:
+        return None
+
+    normalized_message = _normalize_widget_text(user_message)
+    if any(token in normalized_message for token in ["stock", "disponible", "precio", "cuesta", "tienen", "tenian", "hay"]):
+        answer = "Si, encontre estas opciones disponibles:"
+    else:
+        answer = "Te paso estas opciones disponibles:"
+
+    return {
+        "answer": answer,
+        "products": products[:6],
+    }
+
+
+def _build_recipe_recommendation_payload(
+    recipe_plan: dict[str, Any],
+    ingredient_results_by_query: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    recipes = recipe_plan.get("recipes") if isinstance(recipe_plan.get("recipes"), list) else []
+    if not recipes:
+        return None
+
+    products: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    recipe_lines: list[str] = []
+
+    for recipe in recipes[:2]:
+        if not isinstance(recipe, dict):
+            continue
+        recipe_name = str(recipe.get("name") or "Receta").strip() or "Receta"
+        reason = str(recipe.get("reason") or "").strip()
+        ingredient_queries = [str(item).strip() for item in (recipe.get("ingredient_queries") or []) if str(item).strip()]
+        available_names: list[str] = []
+
+        for ingredient_query in ingredient_queries[:6]:
+            result = ingredient_results_by_query.get(ingredient_query)
+            if not isinstance(result, dict) or not result.get("ok"):
+                continue
+            data = result.get("data") if isinstance(result.get("data"), dict) else {}
+            items = data.get("items") if isinstance(data.get("items"), list) else []
+            safe_items = [item for item in items if isinstance(item, dict)]
+            if not safe_items:
+                continue
+            first = safe_items[0]
+            available_names.append(str(first.get("name") or ingredient_query).strip() or ingredient_query)
+            for item in safe_items[:1]:
+                product_id = str(item.get("id") or "").strip()
+                if not product_id or product_id in seen:
+                    continue
+                seen.add(product_id)
+                products.append(
+                    {
+                        "id": product_id,
+                        "checkout_product_id": str(item.get("code") or item.get("id") or "").strip(),
+                        "variant_id": str(item.get("id") or "").strip(),
+                        "name": str(item.get("name") or "Producto").strip(),
+                        "price": str(item.get("price") or "N/D").strip(),
+                        "stock": str(item.get("available_units") or "0").strip(),
+                        "image_url": str(item.get("image_url") or "").strip() or None,
+                    }
+                )
+
+        if available_names:
+            recipe_lines.append(f"- {recipe_name}: {reason or 'Te puede servir'} Ingredientes sugeridos: {', '.join(available_names[:5])}.")
+
+    if not recipe_lines:
+        return None
+
+    return {
+        "answer": "Te recomiendo estas recetas con productos que podrias llevar:\n" + "\n".join(recipe_lines),
+        "products": products[:6],
+    }
+
+
+def _resolve_shared_commerce_payload(
+    *,
+    company_id: str,
+    user_id: str,
+    session_id: str,
+    message: str,
+    channel: str,
+    clubhx_tools_client: ClubHxToolsClient | None,
+    intent_label: str | None = None,
+) -> dict[str, Any] | None:
+    if clubhx_tools_client is None:
+        return None
+
+    llm_commerce_intent = _parse_commerce_intent_with_openai(
+        message,
+        session_id=session_id,
+        intent_label=intent_label,
+    )
+
+    cart_requests = _extract_widget_cart_requests(message)
+    if not cart_requests:
+        cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
+    if not cart_requests:
+        cart_requests = _cart_requests_from_recent_products(message, session_id)
+    if cart_requests:
+        canonical_results = [
+            clubhx_tools_client.execute_canonical(
+                tenant_id=company_id,
+                tool="get_product_availability",
+                channel=channel,
+                user_id=user_id,
+                arguments={
+                    "query": str(cart_request.get("product_query") or "").strip(),
+                    "limit": 5,
+                    "session_id": session_id,
+                },
+            )
+            for cart_request in cart_requests
+        ]
+        payload = _build_multi_cart_tool_payload(canonical_results, cart_requests)
+        if payload:
+            return payload
+
+    lookup_queries = _product_lookup_queries_from_llm_intent(llm_commerce_intent)
+    if not lookup_queries:
+        lookup_queries = _product_lookup_queries_from_message(message)
+    if len(lookup_queries) > 1:
+        canonical_results = [
+            clubhx_tools_client.execute_canonical(
+                tenant_id=company_id,
+                tool="get_product_availability",
+                channel=channel,
+                user_id=user_id,
+                arguments={
+                    "query": query,
+                    "limit": 3,
+                    "session_id": session_id,
+                },
+            )
+            for query in lookup_queries
+        ]
+        payload = _build_multi_product_lookup_payload(canonical_results, lookup_queries, message)
+        if payload:
+            return payload
+
+    if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "recipe_recommendation" or _is_recipe_request_message(message):
+        recipe_plan = _generate_recipe_plan_with_openai(message, session_id, _recent_commerce_products(session_id))
+        if isinstance(recipe_plan, dict):
+            ingredient_queries: list[str] = []
+            seen_queries: set[str] = set()
+            for recipe in recipe_plan.get("recipes") if isinstance(recipe_plan.get("recipes"), list) else []:
+                if not isinstance(recipe, dict):
+                    continue
+                for ingredient_query in recipe.get("ingredient_queries") if isinstance(recipe.get("ingredient_queries"), list) else []:
+                    clean_query = str(ingredient_query).strip()
+                    if clean_query and clean_query not in seen_queries:
+                        seen_queries.add(clean_query)
+                        ingredient_queries.append(clean_query)
+            ingredient_results_by_query = {
+                query: clubhx_tools_client.execute_canonical(
+                    tenant_id=company_id,
+                    tool="get_product_availability",
+                    channel=channel,
+                    user_id=user_id,
+                    arguments={
+                        "query": query,
+                        "limit": 3,
+                        "session_id": session_id,
+                    },
+                )
+                for query in ingredient_queries[:8]
+            }
+            payload = _build_recipe_recommendation_payload(recipe_plan, ingredient_results_by_query)
+            if payload:
+                return payload
+
+    return None
 
 
 _PUBLIC_WIDGET_RATE_LOCK = threading.Lock()
@@ -4932,6 +5274,38 @@ def internal_chat_with_agent(
         effective_session_id = payload.session_id or user_id
         chat_channel = _effective_chat_channel(payload.channel, "api_internal")
         clubhx_tools_client = _get_clubhx_tools_client()
+        shared_commerce_payload = _resolve_shared_commerce_payload(
+            company_id=agent.company_id,
+            user_id=user_id,
+            session_id=effective_session_id,
+            message=payload.message,
+            channel=chat_channel,
+            clubhx_tools_client=clubhx_tools_client,
+            intent_label=None,
+        )
+        if shared_commerce_payload:
+            shared_products = shared_commerce_payload.get("products") if isinstance(shared_commerce_payload.get("products"), list) else None
+            if shared_products:
+                _remember_commerce_products(effective_session_id, shared_products)
+            shared_answer = str(shared_commerce_payload.get("answer") or "").strip()
+            if shared_answer:
+                return AgentChatResponsePayload(
+                    agent_id=agent.agent_id,
+                    company_id=agent.company_id,
+                    session_id=effective_session_id,
+                    answer=shared_answer,
+                    sources=[],
+                    intent_label=str((shared_commerce_payload.get("intent_label") or "commerce")).strip() or "commerce",
+                    route="tool",
+                    route_reason="shared_commerce",
+                    response_mode="tool_only",
+                    fallback_applied=False,
+                    retrieval_min_score=None,
+                    redirect_to=str(shared_commerce_payload.get("redirect_to") or "").strip() or None,
+                    cart_action=shared_commerce_payload.get("cart_action") if isinstance(shared_commerce_payload.get("cart_action"), dict) else None,
+                    cart_actions=shared_commerce_payload.get("cart_actions") if isinstance(shared_commerce_payload.get("cart_actions"), list) else None,
+                    products=shared_products,
+                )
         rag_result = agent_service.chat(
             agent=agent,
             message=payload.message,
@@ -5919,99 +6293,70 @@ def public_widget_chat(
     started = time.perf_counter()
 
     clubhx_tools_client = _get_clubhx_tools_client()
-    cart_requests = _extract_widget_cart_requests(payload.message)
-    if not cart_requests:
-        llm_commerce_intent = _parse_commerce_intent_with_openai(
-            payload.message,
-            session_id=effective_session_id,
-            intent_label=None,
-        )
-        cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
-    if clubhx_tools_client and cart_requests:
-        logger.info(
-            "public_widget_chat_cart_requests widget_id=%s session_id=%s count=%s requests=%s",
-            payload.widget_id,
-            effective_session_id,
-            len(cart_requests),
-            cart_requests,
-        )
-        try:
-            canonical_results = [
-                clubhx_tools_client.execute_canonical(
-                    tenant_id=agent.company_id,
-                    tool="get_product_availability",
-                    channel="widget_public",
-                    user_id=payload.external_user_id or payload.visitor_id or client_id,
-                    arguments={
-                        "query": str(cart_request.get("product_query") or "").strip(),
-                        "limit": 5,
-                        "session_id": effective_session_id,
-                    },
-                )
-                for cart_request in cart_requests
-            ]
-            tool_payload = _build_multi_cart_tool_payload(canonical_results, cart_requests)
-            if tool_payload and tool_payload.get("answer"):
-                if isinstance(tool_payload.get("products"), list):
-                    _remember_commerce_products(effective_session_id, tool_payload.get("products"))
-                final_answer = str(tool_payload.get("answer") or "").strip()
-                response_latency_ms = int((time.perf_counter() - started) * 1000)
-                _record_chat_audit(
-                    ChatAuditRecord(
-                        company_id=agent.company_id,
-                        agent_id=agent.agent_id,
-                        session_id=effective_session_id,
-                        channel="widget_public",
-                        user_message=payload.message,
-                        assistant_message=final_answer,
-                        intent_label="add_to_cart",
-                        route="tool",
-                        response_mode="tool_only",
-                        sources_count=0,
-                        used_llm=agent.use_openai_generation,
-                        cached_response=False,
-                        latency_ms=response_latency_ms,
-                        visitor_id=payload.visitor_id,
-                        external_user_id=payload.external_user_id,
-                    )
-                )
-                _record_retrieval_audit(
-                    RetrievalAuditRecord(
-                        company_id=agent.company_id,
-                        agent_id=agent.agent_id,
-                        channel="widget_public",
-                        route="tool",
-                        response_mode="tool_only",
-                        retrieved_chunks=0,
-                        sources_count=0,
-                        avg_retrieval_score=None,
-                        max_retrieval_score=None,
-                        min_score_threshold=None,
-                        fallback_applied=False,
-                        latency_ms=response_latency_ms,
-                        rag_backend=agent.rag_backend,
-                    )
-                )
-                return PublicWidgetChatResponsePayload(
-                    widget_id=payload.widget_id,
-                    session_id=effective_session_id,
-                    answer=final_answer,
-                    sources=[],
-                    route="tool",
-                    intent_label="add_to_cart",
-                    response_mode="tool_only",
-                    redirect_to=None,
-                    cart_action=tool_payload.get("cart_action") if isinstance(tool_payload.get("cart_action"), dict) else None,
-                    cart_actions=tool_payload.get("cart_actions") if isinstance(tool_payload.get("cart_actions"), list) else None,
-                    products=tool_payload.get("products") if isinstance(tool_payload.get("products"), list) else None,
-                )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "public_widget_cart_route_failed widget_id=%s session_id=%s detail=%s",
-                payload.widget_id,
-                effective_session_id,
-                exc,
+    shared_commerce_payload = _resolve_shared_commerce_payload(
+        company_id=agent.company_id,
+        user_id=payload.external_user_id or payload.visitor_id or client_id,
+        session_id=effective_session_id,
+        message=payload.message,
+        channel="widget_public",
+        clubhx_tools_client=clubhx_tools_client,
+        intent_label=None,
+    )
+    if shared_commerce_payload and shared_commerce_payload.get("answer"):
+        shared_products = shared_commerce_payload.get("products") if isinstance(shared_commerce_payload.get("products"), list) else None
+        if shared_products:
+            _remember_commerce_products(effective_session_id, shared_products)
+        final_answer = str(shared_commerce_payload.get("answer") or "").strip()
+        response_latency_ms = int((time.perf_counter() - started) * 1000)
+        _record_chat_audit(
+            ChatAuditRecord(
+                company_id=agent.company_id,
+                agent_id=agent.agent_id,
+                session_id=effective_session_id,
+                channel="widget_public",
+                user_message=payload.message,
+                assistant_message=final_answer,
+                intent_label=str(shared_commerce_payload.get("intent_label") or "commerce"),
+                route="tool",
+                response_mode="tool_only",
+                sources_count=0,
+                used_llm=agent.use_openai_generation,
+                cached_response=False,
+                latency_ms=response_latency_ms,
+                visitor_id=payload.visitor_id,
+                external_user_id=payload.external_user_id,
             )
+        )
+        _record_retrieval_audit(
+            RetrievalAuditRecord(
+                company_id=agent.company_id,
+                agent_id=agent.agent_id,
+                channel="widget_public",
+                route="tool",
+                response_mode="tool_only",
+                retrieved_chunks=0,
+                sources_count=0,
+                avg_retrieval_score=None,
+                max_retrieval_score=None,
+                min_score_threshold=None,
+                fallback_applied=False,
+                latency_ms=response_latency_ms,
+                rag_backend=agent.rag_backend,
+            )
+        )
+        return PublicWidgetChatResponsePayload(
+            widget_id=payload.widget_id,
+            session_id=effective_session_id,
+            answer=final_answer,
+            sources=[],
+            route="tool",
+            intent_label=str(shared_commerce_payload.get("intent_label") or "commerce"),
+            response_mode="tool_only",
+            redirect_to=str(shared_commerce_payload.get("redirect_to") or "").strip() or None,
+            cart_action=shared_commerce_payload.get("cart_action") if isinstance(shared_commerce_payload.get("cart_action"), dict) else None,
+            cart_actions=shared_commerce_payload.get("cart_actions") if isinstance(shared_commerce_payload.get("cart_actions"), list) else None,
+            products=shared_products,
+        )
 
     try:
         rag_result = agent_service.chat(
