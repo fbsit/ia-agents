@@ -546,6 +546,26 @@ def _is_set_cart_quantity_message(message: str) -> bool:
     )
 
 
+def _is_clear_cart_message(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    return any(
+        phrase in normalized
+        for phrase in [
+            "reseteame el carrito",
+            "resetea el carrito",
+            "limpia el carrito",
+            "vacia el carrito",
+            "vacia carrito",
+            "vaciame el carrito",
+            "borra el carrito",
+            "deja el carrito vacio",
+            "deja el carrito vacia",
+        ]
+    )
+
+
 def _extract_widget_cart_change_requests(
     message: str,
     *,
@@ -636,6 +656,7 @@ def _should_try_llm_commerce_parser(intent_label: str | None, message: str) -> b
         "add_to_cart",
         "remove_from_cart",
         "set_cart_quantity",
+        "clear_cart",
         "cart_add",
         "cart_update",
         "checkout_cart",
@@ -660,6 +681,10 @@ def _should_try_llm_commerce_parser(intent_label: str | None, message: str) -> b
             "remueve",
             "elimina",
             "deja solo",
+            "limpia el carrito",
+            "vacia el carrito",
+            "borra el carrito",
+            "resetea el carrito",
             "suma",
             "poneme",
             "llevo",
@@ -721,10 +746,10 @@ def _parse_commerce_intent_with_openai(
                     "y definir la forma de responder de manera breve, comercial y accionable. "
                     "Devuelve SOLO JSON valido con esta forma exacta: "
                     "{\"intent\":string,\"confidence\":number,\"query\":string,\"items\":[{\"query\":string,\"quantity\":number}],\"tool\":string,\"tool_arguments\":object,\"needs_clarification\":boolean,\"clarification_question\":string,\"customer_goal\":string,\"response_style\":{\"stage\":string,\"tone\":string,\"next_step\":string,\"format\":string}}. "
-                    "Intent permitidos: none, product_lookup, add_to_cart, remove_from_cart, set_cart_quantity, shipping_options, payment_options, order_status, create_payment_link, create_order_draft, recipe_recommendation. "
+                    "Intent permitidos: none, product_lookup, add_to_cart, remove_from_cart, set_cart_quantity, clear_cart, shipping_options, payment_options, order_status, create_payment_link, create_order_draft, recipe_recommendation. "
                     "Tools permitidos: none, get_product_availability, get_order_status, get_shipping_options, get_payment_options, create_payment_link, create_order_draft. "
                     "Extrae productos y cantidades. Si no hay cantidad explicita usa 1. "
-                    "Si pide quitar unidades del carrito usa remove_from_cart. Si pide dejar una cantidad exacta usa set_cart_quantity. "
+                    "Si pide quitar unidades del carrito usa remove_from_cart. Si pide dejar una cantidad exacta usa set_cart_quantity. Si pide vaciar el carrito usa clear_cart. "
                     "Si el mensaje pregunta disponibilidad, precio, stock o catalogo usa get_product_availability. "
                     "Si pregunta estado de pedido usa get_order_status y extrae order_reference cuando exista. "
                     "Si quiere pagar ahora o generar link usa create_payment_link solo si ya hay productos/orden suficientes, si no pide el dato faltante. "
@@ -794,7 +819,7 @@ def _parse_commerce_intent_with_openai(
 def _cart_requests_from_llm_intent(parsed: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not isinstance(parsed, dict):
         return []
-    if str(parsed.get("intent") or "").strip().lower() not in {"add_to_cart", "remove_from_cart", "set_cart_quantity"}:
+    if str(parsed.get("intent") or "").strip().lower() not in {"add_to_cart", "remove_from_cart", "set_cart_quantity", "clear_cart"}:
         return []
     items = parsed.get("items") if isinstance(parsed.get("items"), list) else []
     requests: list[dict[str, Any]] = []
@@ -1796,6 +1821,15 @@ def _resolve_shared_commerce_payload(
     )
     if followup_payload:
         return followup_payload
+
+    if _is_clear_cart_message(message):
+        return {
+            "answer": "Listo, vacie el carrito.",
+            "intent_label": "clear_cart",
+            "workflow_stage": "browsing",
+            "pending_next_step": "",
+            "cart_action": {"type": "clear_cart"},
+        }
 
     if isinstance(llm_commerce_intent, dict):
         if bool(llm_commerce_intent.get("needs_clarification")):

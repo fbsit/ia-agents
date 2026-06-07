@@ -1554,8 +1554,16 @@ class AgentService:
         explicit_workflow_stage = normalize_stage(workflow_stage) if workflow_stage else ""
         if user_message and user_message.strip():
             summary.user_goal = _normalize_summary_value(user_message, 180)
+        if (intent_label or "").strip().lower() == "clear_cart":
+            summary.selected_products = ""
+            summary.last_product_query = ""
+            summary.pending_next_step = ""
         if tool_name and tool_name.strip():
             summary.last_tool = tool_name.strip()
+            if tool_name.strip() == "clear_cart":
+                summary.selected_products = ""
+                summary.last_product_query = ""
+                summary.pending_next_step = ""
         if product_queries:
             clean_queries = [item.strip() for item in product_queries if item and item.strip()]
             if clean_queries:
