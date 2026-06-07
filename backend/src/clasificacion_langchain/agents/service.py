@@ -27,6 +27,11 @@ from clasificacion_langchain.agents.orchestrator import (
     AgentIntentOrchestrator,
     OrchestrationDecision,
 )
+from clasificacion_langchain.agents.commerce_workflow import (
+    build_state as build_workflow_state,
+    normalize_stage,
+    resolve_transition,
+)
 from clasificacion_langchain.agents.conversation_policy import (
     ConversationKey,
     ConversationPolicyEngine,
@@ -1535,6 +1540,7 @@ class AgentService:
         payment_preference: str | None = None,
         order_reference: str | None = None,
         notes: str | None = None,
+        workflow_stage: str | None = None,
     ) -> None:
         clean_session_id = (session_id or "").strip()
         if not clean_session_id:
@@ -1542,26 +1548,9 @@ class AgentService:
         memory_session_id = self._memory_session_id(agent_id, clean_session_id)
         summary = self.session_store.get_summary(company_id=company_id, session_id=memory_session_id)
 
+        explicit_workflow_stage = normalize_stage(workflow_stage) if workflow_stage else ""
         if user_message and user_message.strip():
             summary.user_goal = _normalize_summary_value(user_message, 180)
-        if intent_label and intent_label.strip():
-            intent = intent_label.strip().lower()
-            stage_map = {
-                "product_lookup": "product_lookup",
-                "catalog_query": "product_lookup",
-                "availability_check": "product_lookup",
-                "add_to_cart": "cart_building",
-                "cart_add": "cart_building",
-                "shipping_options": "shipping_selection",
-                "delivery_quote": "shipping_selection",
-                "payment_options": "payment_selection",
-                "create_payment_link": "checkout_ready",
-                "create_order_draft": "checkout_ready",
-                "order_status": "post_sale_support",
-                "recipe_recommendation": "browsing",
-            }
-            if intent in stage_map:
-                summary.funnel_stage = stage_map[intent]
         if tool_name and tool_name.strip():
             summary.last_tool = tool_name.strip()
         if product_queries:
@@ -1582,6 +1571,27 @@ class AgentService:
             summary.last_action = _normalize_summary_value(assistant_message, 180)
         if notes and notes.strip():
             summary.notes = _normalize_summary_value(notes, 180)
+
+        current_state = build_workflow_state(
+            stage=summary.funnel_stage,
+            selected_products=summary.selected_products,
+            shipping_preference=summary.shipping_preference,
+            payment_preference=summary.payment_preference,
+            order_reference=summary.order_reference,
+        )
+        transition = resolve_transition(
+            current=current_state,
+            intent_label=intent_label,
+            tool_name=tool_name,
+        )
+        if explicit_workflow_stage:
+            summary.funnel_stage = explicit_workflow_stage
+        elif transition.allowed:
+            summary.funnel_stage = transition.next_stage
+        else:
+            summary.funnel_stage = current_state.stage
+            if transition.notes and not summary.notes:
+                summary.notes = transition.notes
 
         self.session_store.save_summary(
             company_id=company_id,

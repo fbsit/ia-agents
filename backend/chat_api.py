@@ -60,6 +60,10 @@ from clasificacion_langchain.agents.service import (
 from clasificacion_langchain.agents.conversation_policy import (
     build_conversation_policy_from_env,
 )
+from clasificacion_langchain.agents.commerce_workflow import (
+    build_state as build_workflow_state,
+    resolve_transition as resolve_workflow_transition,
+)
 from clasificacion_langchain.agents.role_knowledge import build_role_context
 from clasificacion_langchain.persistence.inmemory_identity_store import InMemoryIdentityStore
 from clasificacion_langchain.persistence.postgres_identity_store import PostgresIdentityStore
@@ -350,6 +354,7 @@ def _update_agent_memory_from_payload(
             shipping_preference=shipping_preference,
             payment_preference=payment_preference,
             order_reference=order_reference or None,
+            workflow_stage=str((payload or {}).get("workflow_stage") or "").strip() or None,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -379,6 +384,33 @@ def _agent_summary_context(company_id: str, agent_id: str, session_id: str) -> s
             exc,
         )
         return ""
+
+
+def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> dict[str, str]:
+    if agent_service is None or not session_id:
+        return {}
+    try:
+        summary = agent_service.get_session_summary(
+            company_id=company_id,
+            agent_id=agent_id,
+            session_id=session_id,
+        )
+        return {
+            "stage": summary.funnel_stage,
+            "selected_products": summary.selected_products,
+            "shipping_preference": summary.shipping_preference,
+            "payment_preference": summary.payment_preference,
+            "order_reference": summary.order_reference,
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "agent_workflow_state_failed agent_id=%s company_id=%s session_id=%s detail=%s",
+            agent_id,
+            company_id,
+            session_id,
+            exc,
+        )
+        return {}
 
 
 def _extract_order_reference(message: str) -> str:
@@ -1507,6 +1539,7 @@ def _resolve_shared_commerce_payload(
     clubhx_tools_client: ClubHxToolsClient | None,
     intent_label: str | None = None,
     response_style_context: str | None = None,
+    workflow_state: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
     if clubhx_tools_client is None:
         return None
@@ -1519,6 +1552,19 @@ def _resolve_shared_commerce_payload(
         response_style_context=response_style_context,
     )
 
+    runtime_order_reference = _extract_order_reference(message)
+    runtime_product_signal = bool(
+        _extract_widget_product_lookup_query(message)
+        or _extract_widget_cart_requests(message)
+    )
+    current_workflow = build_workflow_state(
+        stage=(workflow_state or {}).get("stage"),
+        selected_products=(workflow_state or {}).get("selected_products") or (message if runtime_product_signal else ""),
+        shipping_preference=(workflow_state or {}).get("shipping_preference") or (message if any(token in _normalize_widget_text(message) for token in ["envio", "despacho", "retiro", "comuna"]) else ""),
+        payment_preference=(workflow_state or {}).get("payment_preference") or (message if any(token in _normalize_widget_text(message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else ""),
+        order_reference=(workflow_state or {}).get("order_reference") or runtime_order_reference,
+    )
+
     if isinstance(llm_commerce_intent, dict):
         if bool(llm_commerce_intent.get("needs_clarification")):
             clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
@@ -1526,6 +1572,16 @@ def _resolve_shared_commerce_payload(
                 return {"answer": clarification}
 
         planned_tool = _tool_from_llm_commerce_intent(llm_commerce_intent, session_id)
+        transition = resolve_workflow_transition(
+            current=current_workflow,
+            intent_label=str(llm_commerce_intent.get("intent") or intent_label or ""),
+            tool_name=planned_tool[0] if planned_tool else None,
+        )
+        if not transition.allowed and transition.clarification:
+            return {
+                "answer": transition.clarification,
+                "intent_label": str(llm_commerce_intent.get("intent") or intent_label or "commerce").strip() or "commerce",
+            }
         if planned_tool and planned_tool[0] in {"get_order_status", "get_shipping_options", "get_payment_options", "get_product_availability"}:
             canonical = clubhx_tools_client.execute_canonical(
                 tenant_id=company_id,
@@ -1542,6 +1598,7 @@ def _resolve_shared_commerce_payload(
             )
             if payload:
                 payload.setdefault("intent_label", str(llm_commerce_intent.get("intent") or "commerce").strip() or "commerce")
+                payload.setdefault("workflow_stage", transition.next_stage)
                 return payload
 
         if planned_tool and planned_tool[0] in {"create_order_draft", "create_payment_link"}:
@@ -1582,6 +1639,7 @@ def _resolve_shared_commerce_payload(
                 if checkout_products and not payload.get("products"):
                     payload["products"] = checkout_products[:6]
                 payload.setdefault("intent_label", str(llm_commerce_intent.get("intent") or "commerce").strip() or "commerce")
+                payload.setdefault("workflow_stage", transition.next_stage)
                 return payload
 
     if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "recipe_recommendation" or _is_recipe_request_message(message):
@@ -5551,6 +5609,7 @@ def internal_chat_with_agent(
         clubhx_tools_client = _get_clubhx_tools_client()
         role_context = build_role_context(agent=agent, channel=chat_channel)
         summary_context = _agent_summary_context(agent.company_id, agent.agent_id, effective_session_id)
+        workflow_state = _agent_workflow_state(agent.company_id, agent.agent_id, effective_session_id)
         shared_commerce_payload = _resolve_shared_commerce_payload(
             company_id=agent.company_id,
             user_id=user_id,
@@ -5565,6 +5624,7 @@ def internal_chat_with_agent(
                 f"rules={role_context.system_rules}\n"
                 f"summary={summary_context}"
             ),
+            workflow_state=workflow_state,
         )
         if shared_commerce_payload:
             shared_products = shared_commerce_payload.get("products") if isinstance(shared_commerce_payload.get("products"), list) else None
@@ -5865,6 +5925,7 @@ def chat_with_agent(
         clubhx_tools_client = _get_clubhx_tools_client()
         role_context = build_role_context(agent=agent, channel=chat_channel)
         summary_context = _agent_summary_context(agent.company_id, agent.agent_id, effective_session_id)
+        workflow_state = _agent_workflow_state(agent.company_id, agent.agent_id, effective_session_id)
         shared_commerce_payload = _resolve_shared_commerce_payload(
             company_id=agent.company_id,
             user_id=principal.user_id,
@@ -5879,6 +5940,7 @@ def chat_with_agent(
                 f"rules={role_context.system_rules}\n"
                 f"summary={summary_context}"
             ),
+            workflow_state=workflow_state,
         )
         if shared_commerce_payload:
             shared_products = shared_commerce_payload.get("products") if isinstance(shared_commerce_payload.get("products"), list) else None
@@ -6646,6 +6708,7 @@ def public_widget_chat(
     clubhx_tools_client = _get_clubhx_tools_client()
     role_context = build_role_context(agent=agent, channel="widget_public")
     summary_context = _agent_summary_context(agent.company_id, agent.agent_id, effective_session_id)
+    workflow_state = _agent_workflow_state(agent.company_id, agent.agent_id, effective_session_id)
     shared_commerce_payload = _resolve_shared_commerce_payload(
         company_id=agent.company_id,
         user_id=payload.external_user_id or payload.visitor_id or client_id,
@@ -6660,6 +6723,7 @@ def public_widget_chat(
             f"rules={role_context.system_rules}\n"
             f"summary={summary_context}"
         ),
+        workflow_state=workflow_state,
     )
     if shared_commerce_payload and shared_commerce_payload.get("answer"):
         shared_products = shared_commerce_payload.get("products") if isinstance(shared_commerce_payload.get("products"), list) else None
