@@ -1772,7 +1772,7 @@ class AgentCreatePayload(BaseModel):
     rag_backend: str = Field(default="auto")
     generation_provider: str = Field(default="auto")
     use_openai_generation: bool = False
-    openai_model: str = Field(default="gpt-4o-mini", min_length=3)
+    openai_model: str | None = Field(default=None, min_length=3)
 
 
 class AgentUpdatePayload(BaseModel):
@@ -4281,7 +4281,7 @@ def internal_create_agent(
             rag_backend=payload.rag_backend,
             generation_provider=payload.generation_provider,
             use_openai_generation=payload.use_openai_generation,
-            openai_model=payload.openai_model,
+            openai_model=payload.openai_model or "gpt-4o-mini",
         )
     except AgentValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -4746,7 +4746,7 @@ def create_agent(
             rag_backend=payload.rag_backend,
             generation_provider=payload.generation_provider,
             use_openai_generation=payload.use_openai_generation,
-            openai_model=payload.openai_model,
+            openai_model=payload.openai_model or "gpt-4o-mini",
         )
     except AgentValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
