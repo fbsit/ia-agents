@@ -206,6 +206,25 @@ def _is_implicit_add_to_cart_message(message: str) -> bool:
     ) or normalized in {"dale", "si", "ok", "oka", "va", "bueno"}
 
 
+def _is_affirmative_followup_message(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    return normalized in {
+        "si",
+        "si dale",
+        "dale",
+        "ok",
+        "oka",
+        "va",
+        "bueno",
+        "de una",
+        "continuemos",
+        "sigamos",
+        "si por favor",
+    }
+
+
 def _cart_requests_from_recent_products(message: str, session_id: str) -> list[dict[str, Any]]:
     if not _is_implicit_add_to_cart_message(message):
         return []
@@ -355,6 +374,7 @@ def _update_agent_memory_from_payload(
             payment_preference=payment_preference,
             order_reference=order_reference or None,
             workflow_stage=str((payload or {}).get("workflow_stage") or "").strip() or None,
+            pending_next_step=str((payload or {}).get("pending_next_step") or "").strip() or None,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -397,6 +417,7 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
         )
         return {
             "stage": summary.funnel_stage,
+            "pending_next_step": summary.pending_next_step,
             "selected_products": summary.selected_products,
             "shipping_preference": summary.shipping_preference,
             "payment_preference": summary.payment_preference,
@@ -411,6 +432,60 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
             exc,
         )
         return {}
+
+
+def _resolve_affirmative_workflow_followup(
+    *,
+    message: str,
+    workflow_state: dict[str, str] | None,
+) -> dict[str, Any] | None:
+    if not _is_affirmative_followup_message(message):
+        return None
+    next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
+    stage = str((workflow_state or {}).get("stage") or "").strip().lower()
+    effective_next = next_step or ("shipping_selection" if stage == "cart_building" else stage)
+    if effective_next in {"shipping_selection", "shipping"}:
+        return {
+            "answer": "Perfecto. Para seguir con el despacho, dime tu comuna o si prefieres retiro en tienda.",
+            "intent_label": "shipping_options",
+            "workflow_stage": "shipping_selection",
+            "pending_next_step": "shipping_selection",
+        }
+    if effective_next in {"payment_selection", "payment"}:
+        return {
+            "answer": "Perfecto. Para seguir con el pago, te puedo mostrar medios disponibles o generar el siguiente paso si ya tienes el carrito listo.",
+            "intent_label": "payment_options",
+            "workflow_stage": "payment_selection",
+            "pending_next_step": "payment_selection",
+        }
+    return None
+
+
+def _tenant_display_name(company_id: str) -> str:
+    if tenancy_service is None:
+        return ""
+    organization = tenancy_service.organization_repository.get_organization_by_company_id(company_id)
+    if organization is None:
+        return ""
+    return str(organization.name or "").strip()
+
+
+def _personalize_agent_greeting(agent_name: str, company_id: str, default_answer: str) -> str:
+    tenant_name = _tenant_display_name(company_id)
+    clean_agent_name = (agent_name or "").strip()
+    if tenant_name and clean_agent_name:
+        return (
+            f"Hola! Soy {clean_agent_name}, asistente comercial de {tenant_name}. "
+            "Te puedo mostrar catalogo, ayudarte a elegir productos y seguir con despacho o pago. "
+            "Si quieres, dime que producto buscas."
+        )
+    if tenant_name:
+        return (
+            f"Hola! Soy el asistente comercial de {tenant_name}. "
+            "Te puedo mostrar catalogo, ayudarte a elegir productos y seguir con despacho o pago. "
+            "Si quieres, dime que producto buscas."
+        )
+    return default_answer
 
 
 def _extract_order_reference(message: str) -> str:
@@ -1419,6 +1494,8 @@ def _build_multi_cart_tool_payload(
         "cart_action": cart_actions[0],
         "cart_actions": cart_actions,
         "products": products[:6],
+        "workflow_stage": "cart_building",
+        "pending_next_step": "shipping_selection",
     }
 
 
@@ -1466,6 +1543,8 @@ def _build_multi_product_lookup_payload(
     return {
         "answer": answer,
         "products": products[:6],
+        "workflow_stage": "product_lookup",
+        "pending_next_step": "cart_building",
     }
 
 
@@ -1564,6 +1643,13 @@ def _resolve_shared_commerce_payload(
         payment_preference=(workflow_state or {}).get("payment_preference") or (message if any(token in _normalize_widget_text(message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else ""),
         order_reference=(workflow_state or {}).get("order_reference") or runtime_order_reference,
     )
+
+    followup_payload = _resolve_affirmative_workflow_followup(
+        message=message,
+        workflow_state=workflow_state,
+    )
+    if followup_payload:
+        return followup_payload
 
     if isinstance(llm_commerce_intent, dict):
         if bool(llm_commerce_intent.get("needs_clarification")):
@@ -5764,8 +5850,15 @@ def internal_chat_with_agent(
     if rag_result.response_mode in {"repeat_cached", "repeat_generic", "conversation_closed"}:
         tuned_answer = rag_result.answer
     else:
+        final_rag_answer = rag_result.answer
+        if rag_result.route == "greeting":
+            final_rag_answer = _personalize_agent_greeting(
+                agent_name=agent.name,
+                company_id=agent.company_id,
+                default_answer=final_rag_answer,
+            )
         tuned_answer = enforce_channel_response_contract(
-            tune_answer_style(rag_result.answer, query=payload.message),
+            tune_answer_style(final_rag_answer, query=payload.message),
             query=payload.message,
             channel=chat_channel,
         )
@@ -6079,8 +6172,15 @@ def chat_with_agent(
     if rag_result.response_mode in {"repeat_cached", "repeat_generic", "conversation_closed"}:
         tuned_answer = rag_result.answer
     else:
+        final_rag_answer = rag_result.answer
+        if rag_result.route == "greeting":
+            final_rag_answer = _personalize_agent_greeting(
+                agent_name=agent.name,
+                company_id=agent.company_id,
+                default_answer=final_rag_answer,
+            )
         tuned_answer = enforce_channel_response_contract(
-            tune_answer_style(rag_result.answer, query=payload.message),
+            tune_answer_style(final_rag_answer, query=payload.message),
             query=payload.message,
             channel=chat_channel,
         )
@@ -6920,14 +7020,28 @@ def public_widget_chat(
             )
 
     if rag_result.response_mode in {"repeat_cached", "repeat_generic", "conversation_closed"}:
+        base_answer = rag_result.answer
+        if rag_result.route == "greeting":
+            base_answer = _personalize_agent_greeting(
+                agent_name=agent.name,
+                company_id=agent.company_id,
+                default_answer=base_answer,
+            )
         final_answer = enforce_channel_response_contract(
-            rag_result.answer,
+            base_answer,
             query=payload.message,
             channel="widget_public",
         )
     else:
+        base_answer = rag_result.answer
+        if rag_result.route == "greeting":
+            base_answer = _personalize_agent_greeting(
+                agent_name=agent.name,
+                company_id=agent.company_id,
+                default_answer=base_answer,
+            )
         final_answer = enforce_channel_response_contract(
-            tune_answer_style(rag_result.answer, query=payload.message),
+            tune_answer_style(base_answer, query=payload.message),
             query=payload.message,
             channel="widget_public",
         )

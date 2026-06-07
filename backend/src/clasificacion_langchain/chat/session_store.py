@@ -14,6 +14,7 @@ class SessionTurn:
 class SessionSummary:
     user_goal: str = ""
     funnel_stage: str = ""
+    pending_next_step: str = ""
     last_product_query: str = ""
     selected_products: str = ""
     shipping_preference: str = ""

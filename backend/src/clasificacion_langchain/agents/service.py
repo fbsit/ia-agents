@@ -123,6 +123,8 @@ def _format_session_summary(summary: SessionSummary) -> str:
         lines.append(f"- Objetivo actual del usuario: {_truncate_memory_text(summary.user_goal, 180)}")
     if summary.funnel_stage:
         lines.append(f"- Etapa comercial actual: {summary.funnel_stage}")
+    if summary.pending_next_step:
+        lines.append(f"- Siguiente paso sugerido: {summary.pending_next_step}")
     if summary.selected_products:
         lines.append(f"- Productos relevantes: {_truncate_memory_text(summary.selected_products, 180)}")
     elif summary.last_product_query:
@@ -1541,6 +1543,7 @@ class AgentService:
         order_reference: str | None = None,
         notes: str | None = None,
         workflow_stage: str | None = None,
+        pending_next_step: str | None = None,
     ) -> None:
         clean_session_id = (session_id or "").strip()
         if not clean_session_id:
@@ -1571,6 +1574,8 @@ class AgentService:
             summary.last_action = _normalize_summary_value(assistant_message, 180)
         if notes and notes.strip():
             summary.notes = _normalize_summary_value(notes, 180)
+        if pending_next_step is not None:
+            summary.pending_next_step = _normalize_summary_value(pending_next_step, 120) if pending_next_step.strip() else ""
 
         current_state = build_workflow_state(
             stage=summary.funnel_stage,

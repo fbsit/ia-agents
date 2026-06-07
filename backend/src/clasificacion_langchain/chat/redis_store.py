@@ -86,6 +86,7 @@ class RedisSessionStore:
         return SessionSummary(
             user_goal=str(payload.get("user_goal", "")),
             funnel_stage=str(payload.get("funnel_stage", "")),
+            pending_next_step=str(payload.get("pending_next_step", "")),
             last_product_query=str(payload.get("last_product_query", "")),
             selected_products=str(payload.get("selected_products", "")),
             shipping_preference=str(payload.get("shipping_preference", "")),
