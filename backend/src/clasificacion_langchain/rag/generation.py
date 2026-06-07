@@ -49,6 +49,7 @@ EXTRACTIVE_NOTICE_PATTERN = re.compile(
     r"^nota:\s+el proveedor llm no estuvo disponible temporalmente",
     re.IGNORECASE,
 )
+WHITESPACE_PATTERN = re.compile(r"\s+")
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -187,6 +188,44 @@ def tune_answer_style(answer: str, query: str | None = None) -> str:
         return compact
 
     return "\n".join(deduped)
+
+
+def enforce_channel_response_contract(
+    answer: str,
+    *,
+    query: str | None = None,
+    channel: str | None = None,
+) -> str:
+    normalized = tune_answer_style(answer, query=query)
+    clean_channel = (channel or "").strip().lower()
+    if not normalized:
+        return ""
+
+    max_chars = 700
+    max_lines = 4
+    if "whatsapp" in clean_channel:
+        max_chars = 420
+        max_lines = 3
+    elif clean_channel in {"web", "widget_web", "widget_public"}:
+        max_chars = 560
+        max_lines = 4
+
+    lines = [line.strip() for line in normalized.split("\n") if line.strip()]
+    compacted: list[str] = []
+    for line in lines[:max_lines]:
+        sentence = WHITESPACE_PATTERN.sub(" ", line).strip()
+        if sentence:
+            compacted.append(sentence)
+
+    text = "\n".join(compacted) if compacted else WHITESPACE_PATTERN.sub(" ", normalized).strip()
+    if len(text) <= max_chars:
+        return text
+
+    truncated = text[: max_chars - 3].rstrip(" .,;:\n") + "..."
+    if "\n" in truncated:
+        kept = [line.strip() for line in truncated.split("\n") if line.strip()]
+        return "\n".join(kept[:max_lines])
+    return truncated
 
 
 def _truncate(text: str, max_chars: int = 420) -> str:

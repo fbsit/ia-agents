@@ -21,7 +21,6 @@ from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import (
-    BackgroundTasks,
     Form,
     FastAPI,
     File,
@@ -61,12 +60,7 @@ from clasificacion_langchain.agents.service import (
 from clasificacion_langchain.agents.conversation_policy import (
     build_conversation_policy_from_env,
 )
-from clasificacion_langchain.channels.idempotency import (
-    InMemoryIdempotencyStore,
-    RedisIdempotencyStore,
-)
-from clasificacion_langchain.channels.meta_whatsapp_api import MetaWhatsAppClient
-from clasificacion_langchain.channels.whatsapp import parse_whatsapp_messages
+from clasificacion_langchain.agents.role_knowledge import build_role_context
 from clasificacion_langchain.persistence.inmemory_identity_store import InMemoryIdentityStore
 from clasificacion_langchain.persistence.postgres_identity_store import PostgresIdentityStore
 from clasificacion_langchain.persistence.sqlite_identity_store import SQLiteIdentityStore
@@ -82,7 +76,10 @@ from clasificacion_langchain.settings.service import (
 )
 from clasificacion_langchain.settings.postgres_store import PostgresTenantLlmSettingsStore
 from clasificacion_langchain.settings.sqlite_store import SQLiteTenantLlmSettingsStore
-from clasificacion_langchain.rag.generation import tune_answer_style
+from clasificacion_langchain.rag.generation import (
+    enforce_channel_response_contract,
+    tune_answer_style,
+)
 from clasificacion_langchain.analytics.chat_audit import (
     ChatAuditCostRow,
     ChatAuditRecord,
@@ -128,6 +125,14 @@ _WIDGET_QUANTITY_WORDS: dict[str, int] = {
 
 _COMMERCE_CONTEXT_LOCK = threading.Lock()
 _COMMERCE_PRODUCT_CONTEXT: dict[str, dict[str, Any]] = {}
+_SUPPORTED_COMMERCE_TOOLS = {
+    "get_product_availability",
+    "get_order_status",
+    "get_shipping_options",
+    "get_payment_options",
+    "create_payment_link",
+    "create_order_draft",
+}
 
 
 def _normalize_widget_text(text: str) -> str:
@@ -295,6 +300,102 @@ def _recent_products_for_llm(session_id: str) -> list[dict[str, Any]]:
     return serialized
 
 
+def _payload_product_names(payload: dict[str, Any] | None) -> list[str]:
+    if not isinstance(payload, dict):
+        return []
+    products = payload.get("products") if isinstance(payload.get("products"), list) else []
+    names: list[str] = []
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        name = str(product.get("name") or "").strip()
+        if name:
+            names.append(name)
+    return names
+
+
+def _update_agent_memory_from_payload(
+    *,
+    agent_id: str,
+    company_id: str,
+    session_id: str,
+    user_message: str,
+    answer: str,
+    payload: dict[str, Any] | None,
+    fallback_intent: str | None = None,
+    fallback_tool: str | None = None,
+) -> None:
+    if agent_service is None or not session_id:
+        return
+    intent_label = ""
+    if isinstance(payload, dict):
+        intent_label = str(payload.get("intent_label") or fallback_intent or "").strip()
+    tool_name = fallback_tool or ""
+    product_queries = _product_lookup_queries_from_message(user_message)
+    selected_products = _payload_product_names(payload)
+    shipping_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["envio", "despacho", "retiro", "comuna"]) else None
+    payment_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else None
+    order_reference = _extract_order_reference(user_message)
+    try:
+        agent_service.update_session_summary(
+            company_id=company_id,
+            agent_id=agent_id,
+            session_id=session_id,
+            user_message=user_message,
+            assistant_message=answer,
+            intent_label=intent_label or None,
+            tool_name=tool_name or None,
+            product_queries=product_queries,
+            selected_products=selected_products,
+            shipping_preference=shipping_preference,
+            payment_preference=payment_preference,
+            order_reference=order_reference or None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "agent_summary_update_failed agent_id=%s company_id=%s session_id=%s detail=%s",
+            agent_id,
+            company_id,
+            session_id,
+            exc,
+        )
+
+
+def _agent_summary_context(company_id: str, agent_id: str, session_id: str) -> str:
+    if agent_service is None or not session_id:
+        return ""
+    try:
+        return agent_service.get_session_summary_text(
+            company_id=company_id,
+            agent_id=agent_id,
+            session_id=session_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "agent_summary_context_failed agent_id=%s company_id=%s session_id=%s detail=%s",
+            agent_id,
+            company_id,
+            session_id,
+            exc,
+        )
+        return ""
+
+
+def _extract_order_reference(message: str) -> str:
+    text = str(message or "").strip()
+    if not text:
+        return ""
+    patterns = [
+        r"(?:pedido|orden|order)\s*#?\s*([A-Za-z0-9\-]{4,})",
+        r"#([A-Za-z0-9\-]{4,})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return str(match.group(1) or "").strip()
+    return ""
+
+
 def _parse_widget_quantity(text: str) -> int:
     tokens = _normalize_widget_text(text).split()
     for token in tokens[:4]:
@@ -385,9 +486,16 @@ def _should_try_llm_commerce_parser(intent_label: str | None, message: str) -> b
             "cuesta",
             "pago",
             "pagar",
+            "pago ahora",
+            "link de pago",
             "envio",
             "despacho",
             "retiro",
+            "pedido",
+            "orden",
+            "estado",
+            "borrador",
+            "cotizacion",
             "checkout",
             "receta",
             "cocinar",
@@ -402,6 +510,8 @@ def _parse_commerce_intent_with_openai(
     *,
     session_id: str,
     intent_label: str | None = None,
+    channel: str | None = None,
+    response_style_context: str | None = None,
 ) -> dict[str, Any] | None:
     if not _should_try_llm_commerce_parser(intent_label, message):
         return None
@@ -420,14 +530,21 @@ def _parse_commerce_intent_with_openai(
             {
                 "role": "system",
                 "content": (
-                    "Eres un parser de intenciones de e-commerce. "
+                    "Eres un planner de workflow comercial para un agente conversacional de e-commerce. "
+                    "Debes detectar la intencion, decidir si conviene responder con texto, pedir aclaracion o ejecutar un tool, "
+                    "y definir la forma de responder de manera breve, comercial y accionable. "
                     "Devuelve SOLO JSON valido con esta forma exacta: "
-                    "{\"intent\":string,\"confidence\":number,\"query\":string,\"items\":[{\"query\":string,\"quantity\":number}],\"needs_clarification\":boolean}. "
-                    "Intent permitidos: none, product_lookup, add_to_cart, shipping_options, payment_options, checkout, recipe_recommendation. "
+                    "{\"intent\":string,\"confidence\":number,\"query\":string,\"items\":[{\"query\":string,\"quantity\":number}],\"tool\":string,\"tool_arguments\":object,\"needs_clarification\":boolean,\"clarification_question\":string,\"customer_goal\":string,\"response_style\":{\"stage\":string,\"tone\":string,\"next_step\":string,\"format\":string}}. "
+                    "Intent permitidos: none, product_lookup, add_to_cart, shipping_options, payment_options, order_status, create_payment_link, create_order_draft, recipe_recommendation. "
+                    "Tools permitidos: none, get_product_availability, get_order_status, get_shipping_options, get_payment_options, create_payment_link, create_order_draft. "
                     "Extrae productos y cantidades. Si no hay cantidad explicita usa 1. "
-                    "Si el mensaje pregunta disponibilidad/precio/stock, usa product_lookup. Si habla de cocinar, recetas, queque o hambre, usa recipe_recommendation. "
-                    "Para product_lookup puedes devolver varios items con query si preguntan por mas de un producto. "
-                    "Si el mensaje usa referencias como 'agregamelo', 'ese', 'ese producto', 'el primero', 'el segundo', debes resolverlas usando recent_products si existe contexto."
+                    "Si el mensaje pregunta disponibilidad, precio, stock o catalogo usa get_product_availability. "
+                    "Si pregunta estado de pedido usa get_order_status y extrae order_reference cuando exista. "
+                    "Si quiere pagar ahora o generar link usa create_payment_link solo si ya hay productos/orden suficientes, si no pide el dato faltante. "
+                    "Si quiere cerrar pedido, reservar o generar borrador usa create_order_draft solo si hay items claros. "
+                    "Si pregunta medios de pago usa get_payment_options. Si pregunta despacho, envio o retiro usa get_shipping_options. "
+                    "Si el mensaje usa referencias como 'agregamelo', 'ese', 'el primero', 'el segundo', debes resolverlas usando recent_products si existe contexto. "
+                    "No inventes datos faltantes. Si faltan datos criticos marca needs_clarification=true y escribe clarification_question concreta."
                 ),
             },
             {
@@ -436,6 +553,8 @@ def _parse_commerce_intent_with_openai(
                     {
                         "message": message,
                         "intent_label_hint": intent_label or "",
+                        "channel": channel or "",
+                        "response_style_context": response_style_context or "",
                         "recent_products": recent_products,
                     },
                     ensure_ascii=False,
@@ -473,9 +592,10 @@ def _parse_commerce_intent_with_openai(
         return None
 
     logger.info(
-        "commerce_intent_llm_ok session_id=%s intent=%s confidence=%s query=%s items=%s recent_products=%s",
+        "commerce_intent_llm_ok session_id=%s intent=%s tool=%s confidence=%s query=%s items=%s recent_products=%s",
         session_id,
         parsed.get("intent"),
+        parsed.get("tool"),
         parsed.get("confidence"),
         parsed.get("query"),
         parsed.get("items"),
@@ -625,7 +745,25 @@ def _tool_from_llm_commerce_intent(parsed: dict[str, Any] | None, session_id: st
         return None
 
     query = str(parsed.get("query") or "").strip()
+    planned_tool = str(parsed.get("tool") or "").strip().lower()
+    tool_arguments = parsed.get("tool_arguments") if isinstance(parsed.get("tool_arguments"), dict) else {}
     items = _cart_requests_from_llm_intent(parsed)
+
+    if planned_tool in _SUPPORTED_COMMERCE_TOOLS:
+        arguments = dict(tool_arguments)
+        arguments.setdefault("session_id", session_id)
+        if planned_tool == "get_product_availability" and not arguments.get("query") and query:
+            arguments["query"] = query
+        if planned_tool == "get_product_availability":
+            arguments.setdefault("limit", 5)
+        if planned_tool == "get_shipping_options" and "commune" not in arguments:
+            arguments["commune"] = query or ""
+        if planned_tool == "get_order_status":
+            order_reference = str(parsed.get("order_reference") or query or "").strip()
+            if order_reference:
+                arguments.setdefault("order_reference", order_reference)
+                arguments.setdefault("query", order_reference)
+        return planned_tool, arguments
 
     if intent == "add_to_cart" and items:
         first = items[0]
@@ -639,6 +777,88 @@ def _tool_from_llm_commerce_intent(parsed: dict[str, Any] | None, session_id: st
     return None
 
 
+def _checkout_requests_for_workflow(message: str, session_id: str, parsed: dict[str, Any] | None) -> list[dict[str, Any]]:
+    cart_requests = _extract_widget_cart_requests(message)
+    if not cart_requests:
+        cart_requests = _cart_requests_from_llm_intent(parsed)
+    if not cart_requests:
+        cart_requests = _cart_requests_from_recent_product_reference(message, session_id)
+    if not cart_requests:
+        cart_requests = _cart_requests_from_recent_products(message, session_id)
+    return cart_requests
+
+
+def _resolve_checkout_items(
+    *,
+    company_id: str,
+    user_id: str,
+    channel: str,
+    session_id: str,
+    cart_requests: list[dict[str, Any]],
+    clubhx_tools_client: ClubHxToolsClient,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    canonical_results = [
+        clubhx_tools_client.execute_canonical(
+            tenant_id=company_id,
+            tool="get_product_availability",
+            channel=channel,
+            user_id=user_id,
+            arguments={
+                "query": str(cart_request.get("product_query") or "").strip(),
+                "limit": 5,
+                "session_id": session_id,
+            },
+        )
+        for cart_request in cart_requests
+        if str(cart_request.get("product_query") or "").strip()
+    ]
+    items: list[dict[str, Any]] = []
+    products: list[dict[str, Any]] = []
+    seen_products: set[str] = set()
+    for cart_request, result in zip(cart_requests, canonical_results):
+        if not isinstance(result, dict) or not result.get("ok"):
+            continue
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        rows = data.get("items") if isinstance(data.get("items"), list) else []
+        safe_rows = [row for row in rows if isinstance(row, dict)]
+        if not safe_rows:
+            continue
+        first = safe_rows[0]
+        product_id = str(first.get("id") or "").strip()
+        checkout_product_id = str(first.get("code") or first.get("id") or "").strip()
+        variant_id = str(first.get("id") or "").strip()
+        name = str(first.get("name") or "Producto").strip() or "Producto"
+        quantity = int(cart_request.get("quantity") or 1)
+        if not product_id:
+            continue
+        items.append(
+            {
+                "product_id": checkout_product_id or product_id,
+                "checkout_product_id": checkout_product_id or product_id,
+                "variant_id": variant_id or product_id,
+                "quantity": max(1, min(99, quantity)),
+                "name": name,
+            }
+        )
+        for row in safe_rows[:3]:
+            row_id = str(row.get("id") or "").strip()
+            if not row_id or row_id in seen_products:
+                continue
+            seen_products.add(row_id)
+            products.append(
+                {
+                    "id": row_id,
+                    "checkout_product_id": str(row.get("code") or row.get("id") or "").strip(),
+                    "variant_id": str(row.get("id") or "").strip(),
+                    "name": str(row.get("name") or "Producto").strip(),
+                    "price": str(row.get("price") or "N/D").strip(),
+                    "stock": str(row.get("available_units") or "0").strip(),
+                    "image_url": str(row.get("image_url") or "").strip() or None,
+                }
+            )
+    return items, products
+
+
 def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[str, dict[str, Any]] | None:
     label = (intent_label or "").strip().lower()
     message_text = (message or "").strip().lower()
@@ -646,6 +866,7 @@ def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[
         message,
         session_id=session_id,
         intent_label=intent_label,
+        channel="api",
     )
     cart_requests = _extract_widget_cart_requests(message)
     if not cart_requests:
@@ -674,13 +895,16 @@ def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[
         return "get_shipping_options", {"commune": message, "session_id": session_id}
     if label in {"payment_options", "payment_select", "checkout_payment"}:
         return "get_payment_options", {"session_id": session_id}
+    order_reference = _extract_order_reference(message)
+    if order_reference:
+        return "get_order_status", {"order_reference": order_reference, "query": order_reference, "session_id": session_id}
     if any(token in message_text for token in ["tienes ", "tienen ", "tenes ", "tenian ", "hay ", "habia ", "busco ", "stock", "precio", "cuesta", "disponible"]):
         return "get_product_availability", {"query": lookup_query, "limit": 5, "session_id": session_id}
     if cart_request:
         return "get_product_availability", {"query": cart_request["product_query"], "limit": 5, "session_id": session_id}
     if any(token in message_text for token in ["despacho", "envio", "retiro", "chilexpress", "comuna"]):
         return "get_shipping_options", {"commune": message, "session_id": session_id}
-    if any(token in message_text for token in ["pago", "pagar", "transferencia", "mercado pago", "tarjeta"]):
+    if any(token in message_text for token in ["pago", "pagar", "transferencia", "mercado pago", "tarjeta", "link de pago"]):
         return "get_payment_options", {"session_id": session_id}
     return None
 
@@ -693,6 +917,7 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
         message,
         session_id=session_id,
         intent_label=None,
+        channel="api",
     )
     llm_tool = _tool_from_llm_commerce_intent(llm_commerce_intent, session_id)
     if llm_tool:
@@ -715,6 +940,15 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
             cart_request["quantity"],
         )
         return "get_product_availability", {"query": cart_request["product_query"], "limit": 5, "session_id": session_id}
+    order_reference = _extract_order_reference(message)
+    if order_reference:
+        logger.info(
+            "forced_commerce_tool_match kind=order_status session_id=%s message=%s order_reference=%s",
+            session_id,
+            message,
+            order_reference,
+        )
+        return "get_order_status", {"order_reference": order_reference, "query": order_reference, "session_id": session_id}
     if any(token in text for token in ["tienes ", "tienen ", "tiene ", "tenes ", "tenian ", "tenia ", "hay ", "habia ", "stock", "disponible", "precio", "cuesta"]):
         logger.info(
             "forced_commerce_tool_match kind=product_lookup session_id=%s message=%s lookup_query=%s",
@@ -867,50 +1101,22 @@ def _transcribe_audio_bytes(
     )
 
 
-def _download_whatsapp_media_bytes(
-    client: MetaWhatsAppClient | None,
-    phone_number_id: str,
-    media_id: str,
-) -> tuple[bytes, str | None, str | None] | None:
-    access_token = client.access_token if client is not None else os.getenv("WHATSAPP_ACCESS_TOKEN", "").strip()
-    if not access_token:
-        return None
-
-    api_version = client.api_version if client is not None else os.getenv("WHATSAPP_API_VERSION", "v21.0")
-    timeout_seconds = client.timeout_seconds if client is not None else int(os.getenv("WHATSAPP_API_TIMEOUT", "30"))
-
-    media_meta_url = f"https://graph.facebook.com/{api_version}/{media_id}"
-    meta_req = urllib.request.Request(
-        media_meta_url,
-        method="GET",
-        headers={"Authorization": f"Bearer {access_token}"},
-    )
-
-    try:
-        with urllib.request.urlopen(meta_req, timeout=timeout_seconds) as response:
-            meta = json.loads(response.read().decode("utf-8"))
-    except Exception:
-        return None
-
-    media_url = str(meta.get("url") or "").strip()
-    if not media_url:
-        return None
-
-    media_req = urllib.request.Request(
-        media_url,
-        method="GET",
-        headers={"Authorization": f"Bearer {access_token}"},
-    )
-
-    try:
-        with urllib.request.urlopen(media_req, timeout=timeout_seconds) as response:
-            content = response.read()
-            mime_type = str(meta.get("mime_type") or response.headers.get("content-type") or "").strip() or None
-    except Exception:
-        return None
-
-    filename = _normalize_media_filename(media_id, mime_type)
-    return content, mime_type, filename
+def _first_present_string(payload: Any, keys: list[str]) -> str:
+    if isinstance(payload, dict):
+        for key in keys:
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        for value in payload.values():
+            nested = _first_present_string(value, keys)
+            if nested:
+                return nested
+    if isinstance(payload, list):
+        for item in payload:
+            nested = _first_present_string(item, keys)
+            if nested:
+                return nested
+    return ""
 
 
 def _format_canonical_tool_answer(result: dict[str, Any]) -> str | None:
@@ -937,6 +1143,33 @@ def _format_canonical_tool_answer(result: dict[str, Any]) -> str | None:
         names = [str((o or {}).get("name") or "").strip() for o in options if isinstance(o, dict)]
         names = [n for n in names if n]
         return f"Medios de pago: {', '.join(names)}." if names else "No hay medios de pago activos ahora."
+    if tool == "get_order_status":
+        status = _first_present_string(data, ["status", "order_status", "state"])
+        order_reference = _first_present_string(data, ["order_reference", "order_id", "id", "number"])
+        tracking = _first_present_string(data, ["tracking_url", "tracking_link"])
+        parts = []
+        if order_reference:
+            parts.append(f"Pedido {order_reference}")
+        if status:
+            parts.append(f"estado {status}")
+        answer = ", ".join(parts) if parts else "Encontre informacion del pedido."
+        if tracking:
+            answer += f" Seguimiento: {tracking}."
+        return answer
+    if tool == "create_payment_link":
+        url = _first_present_string(data, ["payment_url", "payment_link", "checkout_url", "url", "link"])
+        if url:
+            return f"Listo, ya tengo tu link de pago: {url}"
+        return "Pude generar la accion de pago, pero el proveedor no devolvio un link utilizable."
+    if tool == "create_order_draft":
+        draft_reference = _first_present_string(data, ["draft_id", "order_id", "order_reference", "id", "number"])
+        payment_url = _first_present_string(data, ["payment_url", "payment_link", "checkout_url", "url", "link"])
+        answer = (
+            f"Listo, deje creada la orden borrador {draft_reference}." if draft_reference else "Listo, deje creada la orden borrador."
+        )
+        if payment_url:
+            answer += f" Si quieres, puedes pagar desde aqui: {payment_url}"
+        return answer
     return None
 
 
@@ -1037,6 +1270,50 @@ def _format_public_widget_tool_payload(
         return {
             "answer": f"Medios de pago: {', '.join(names)}." if names else "No hay medios de pago activos ahora.",
         }
+
+    if tool == "get_order_status":
+        order_reference = _first_present_string(data, ["order_reference", "order_id", "id", "number"])
+        status = _first_present_string(data, ["status", "order_status", "state"])
+        tracking_url = _first_present_string(data, ["tracking_url", "tracking_link"])
+        answer_parts: list[str] = []
+        if order_reference:
+            answer_parts.append(f"Pedido {order_reference}")
+        if status:
+            answer_parts.append(f"estado {status}")
+        answer = ", ".join(answer_parts) if answer_parts else "Encontre informacion del pedido."
+        if tracking_url:
+            answer += f" Puedes seguirlo aqui: {tracking_url}."
+        payload = {"answer": answer}
+        if tracking_url and (channel or "").strip().lower() in {"widget_web", "web", "widget_public", "api", "api_internal"}:
+            payload["redirect_to"] = tracking_url
+        return payload
+
+    if tool == "create_payment_link":
+        payment_url = _first_present_string(data, ["payment_url", "payment_link", "checkout_url", "url", "link"])
+        expires_at = _first_present_string(data, ["expires_at", "expiration", "expires_on"])
+        if payment_url:
+            answer = "Listo, te dejo el link de pago para cerrar la compra."
+            if expires_at:
+                answer += f" Vigencia: {expires_at}."
+            payload = {"answer": answer, "redirect_to": payment_url}
+            return payload
+        return {"answer": "Pude preparar la accion de pago, pero el proveedor no devolvio un link utilizable."}
+
+    if tool == "create_order_draft":
+        draft_reference = _first_present_string(data, ["draft_id", "order_id", "order_reference", "id", "number"])
+        payment_url = _first_present_string(data, ["payment_url", "payment_link", "checkout_url", "url", "link"])
+        total = _first_present_string(data, ["total", "amount", "grand_total"])
+        answer = (
+            f"Listo, deje creada la orden borrador {draft_reference}." if draft_reference else "Listo, deje creada la orden borrador."
+        )
+        if total:
+            answer += f" Total referencial: {total}."
+        if payment_url:
+            answer += " Si quieres, ya puedes pasar al pago."
+        payload = {"answer": answer}
+        if payment_url:
+            payload["redirect_to"] = payment_url
+        return payload
 
     tool_answer = _format_canonical_tool_answer(result)
     if not tool_answer:
@@ -1229,6 +1506,7 @@ def _resolve_shared_commerce_payload(
     channel: str,
     clubhx_tools_client: ClubHxToolsClient | None,
     intent_label: str | None = None,
+    response_style_context: str | None = None,
 ) -> dict[str, Any] | None:
     if clubhx_tools_client is None:
         return None
@@ -1237,7 +1515,74 @@ def _resolve_shared_commerce_payload(
         message,
         session_id=session_id,
         intent_label=intent_label,
+        channel=channel,
+        response_style_context=response_style_context,
     )
+
+    if isinstance(llm_commerce_intent, dict):
+        if bool(llm_commerce_intent.get("needs_clarification")):
+            clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
+            if clarification:
+                return {"answer": clarification}
+
+        planned_tool = _tool_from_llm_commerce_intent(llm_commerce_intent, session_id)
+        if planned_tool and planned_tool[0] in {"get_order_status", "get_shipping_options", "get_payment_options", "get_product_availability"}:
+            canonical = clubhx_tools_client.execute_canonical(
+                tenant_id=company_id,
+                tool=planned_tool[0],
+                channel=channel,
+                user_id=user_id,
+                arguments=planned_tool[1],
+            )
+            payload = _format_public_widget_tool_payload(
+                canonical,
+                user_message=message,
+                intent_label=str(llm_commerce_intent.get("intent") or intent_label or ""),
+                channel=channel,
+            )
+            if payload:
+                payload.setdefault("intent_label", str(llm_commerce_intent.get("intent") or "commerce").strip() or "commerce")
+                return payload
+
+        if planned_tool and planned_tool[0] in {"create_order_draft", "create_payment_link"}:
+            cart_requests = _checkout_requests_for_workflow(message, session_id, llm_commerce_intent)
+            if not cart_requests:
+                clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
+                if clarification:
+                    return {"answer": clarification}
+                return {"answer": "Para avanzar necesito que me confirmes que producto quieres llevar y en que cantidad."}
+            checkout_items, checkout_products = _resolve_checkout_items(
+                company_id=company_id,
+                user_id=user_id,
+                channel=channel,
+                session_id=session_id,
+                cart_requests=cart_requests,
+                clubhx_tools_client=clubhx_tools_client,
+            )
+            if not checkout_items:
+                return {"answer": "No pude validar los productos del pedido. Si quieres, dime el nombre exacto del producto y la cantidad."}
+            canonical = clubhx_tools_client.execute_canonical(
+                tenant_id=company_id,
+                tool=planned_tool[0],
+                channel=channel,
+                user_id=user_id,
+                arguments={
+                    **planned_tool[1],
+                    "items": checkout_items,
+                    "session_id": session_id,
+                },
+            )
+            payload = _format_public_widget_tool_payload(
+                canonical,
+                user_message=message,
+                intent_label=str(llm_commerce_intent.get("intent") or intent_label or ""),
+                channel=channel,
+            )
+            if payload:
+                if checkout_products and not payload.get("products"):
+                    payload["products"] = checkout_products[:6]
+                payload.setdefault("intent_label", str(llm_commerce_intent.get("intent") or "commerce").strip() or "commerce")
+                return payload
 
     if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "recipe_recommendation" or _is_recipe_request_message(message):
         recipe_plan = _generate_recipe_plan_with_openai(message, session_id, _recent_commerce_products(session_id))
@@ -1630,6 +1975,12 @@ class AgentWhatsAppValidationPayload(BaseModel):
     messages: list[str]
 
 
+def _is_agent_whatsapp_config_ready(config: dict[str, str | None]) -> bool:
+    return bool((config.get("phone_number_id") or "").strip()) and bool(
+        (config.get("verify_token") or "").strip()
+    )
+
+
 class AgentSetupStepPayload(BaseModel):
     id: str
     label: str
@@ -1869,12 +2220,6 @@ class ChatResponsePayload(BaseModel):
     delivery_error: str | None = None
 
 
-class WhatsAppWebhookResponse(BaseModel):
-    processed_messages: int
-    skipped_duplicates: int
-    responses: list[ChatResponsePayload]
-
-
 def _parse_rag_intents(raw: str) -> set[str]:
     values = [item.strip() for item in raw.split(",")]
     return {value for value in values if value}
@@ -1889,24 +2234,6 @@ def _cors_allowed_origins() -> list[str]:
         "http://127.0.0.1:5500",
     )
     return [item.strip() for item in raw.split(",") if item.strip()]
-
-
-def _parse_company_map(raw: str) -> dict[str, str]:
-    if not raw.strip():
-        return {}
-
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError("WHATSAPP_COMPANY_MAP debe ser un JSON valido") from exc
-
-    if not isinstance(payload, dict):
-        raise ValueError("WHATSAPP_COMPANY_MAP debe ser un objeto JSON")
-
-    mapping: dict[str, str] = {}
-    for key, value in payload.items():
-        mapping[str(key)] = str(value)
-    return mapping
 
 
 def _public_widget_allowed_origins() -> list[str]:
@@ -2833,19 +3160,11 @@ def _document_content_payload(document, content: str) -> AgentDocumentContentPay
 
 
 def _whatsapp_webhook_url(request: Request) -> str:
-    explicit = os.getenv("WHATSAPP_WEBHOOK_URL", "").strip()
-    if explicit:
-        return explicit.rstrip("/")
-    api_base_url = _public_widget_api_base_url(request)
-    return f"{api_base_url}/webhooks/whatsapp"
+    return ""
 
 
 def _whatsapp_webhook_url_internal(x_public_base_url: str | None) -> str:
-    explicit = os.getenv("WHATSAPP_WEBHOOK_URL", "").strip()
-    if explicit:
-        return explicit.rstrip("/")
-    api_base_url = _public_widget_api_base_url_internal(x_public_base_url)
-    return f"{api_base_url}/webhooks/whatsapp"
+    return ""
 
 
 def _whatsapp_config_payload(
@@ -2864,95 +3183,6 @@ def _whatsapp_config_payload(
         verify_token=config.get("verify_token"),
         updated_at=config.get("updated_at"),
     )
-
-
-def _build_whatsapp_client() -> MetaWhatsAppClient | None:
-    send_replies = os.getenv("WHATSAPP_SEND_REPLIES", "false").lower() == "true"
-    if not send_replies:
-        return None
-
-    token = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
-    if not token:
-        raise ValueError("WHATSAPP_SEND_REPLIES=true requiere WHATSAPP_ACCESS_TOKEN")
-
-    return MetaWhatsAppClient(
-        access_token=token,
-        api_version=os.getenv("WHATSAPP_API_VERSION", "v21.0"),
-        timeout_seconds=int(os.getenv("WHATSAPP_API_TIMEOUT", "30")),
-        max_retries=int(os.getenv("WHATSAPP_API_MAX_RETRIES", "2")),
-        backoff_seconds=float(os.getenv("WHATSAPP_API_BACKOFF_SECONDS", "0.75")),
-    )
-
-
-def _build_idempotency_store() -> InMemoryIdempotencyStore | RedisIdempotencyStore:
-    backend = os.getenv("WHATSAPP_IDEMPOTENCY_BACKEND", "redis").strip().lower()
-    ttl_seconds = int(os.getenv("WHATSAPP_IDEMPOTENCY_TTL", "300"))
-
-    if backend == "memory":
-        return InMemoryIdempotencyStore(ttl_seconds=ttl_seconds)
-
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    return RedisIdempotencyStore(
-        redis_url=redis_url,
-        key_prefix=os.getenv("WHATSAPP_IDEMPOTENCY_PREFIX", "wa_dedup"),
-        ttl_seconds=ttl_seconds,
-    )
-
-
-def _delivery_mode() -> str:
-    mode = os.getenv("WHATSAPP_DELIVERY_MODE", "sync").strip().lower()
-    if mode not in {"sync", "async"}:
-        return "sync"
-    return mode
-
-
-def _truncate_for_whatsapp(text: str) -> str:
-    max_chars = int(os.getenv("WHATSAPP_REPLY_MAX_CHARS", "1400"))
-    if len(text) <= max_chars:
-        return text
-    return text[: max_chars - 3].rstrip() + "..."
-
-
-def _idempotency_key(
-    company_id: str,
-    session_id: str,
-    message_id: str,
-    fallback_text: str,
-) -> str:
-    if message_id:
-        return f"{company_id}:{session_id}:{message_id}"
-    return f"{company_id}:{session_id}:{fallback_text[:120]}"
-
-
-def _deliver_whatsapp_sync(
-    client: MetaWhatsAppClient,
-    phone_number_id: str,
-    to_number: str,
-    text: str,
-) -> str:
-    outbound_text = _truncate_for_whatsapp(text)
-    return client.send_text_message(
-        phone_number_id=phone_number_id,
-        to_number=to_number,
-        text=outbound_text,
-    )
-
-
-def _deliver_whatsapp_background(
-    client: MetaWhatsAppClient,
-    phone_number_id: str,
-    to_number: str,
-    text: str,
-) -> None:
-    try:
-        _deliver_whatsapp_sync(
-            client=client,
-            phone_number_id=phone_number_id,
-            to_number=to_number,
-            text=text,
-        )
-    except Exception as exc:
-        logger.exception("Fallo envio async a Meta WhatsApp: %s", exc)
 
 
 app = FastAPI(title="Clasificacion + Hybrid RAG API", version="0.1.0")
@@ -3008,26 +3238,6 @@ try:
 except Exception as exc:
     agent_feedback_service = None
     startup_error = f"{startup_error}; feedback: {exc}".strip("; ")
-
-try:
-    whatsapp_client = _build_whatsapp_client()
-except Exception as exc:
-    whatsapp_client = None
-    startup_error = f"{startup_error}; {exc}".strip("; ")
-
-try:
-    whatsapp_company_map = _parse_company_map(os.getenv("WHATSAPP_COMPANY_MAP", ""))
-except Exception as exc:
-    whatsapp_company_map = {}
-    startup_error = f"{startup_error}; {exc}".strip("; ")
-
-try:
-    whatsapp_idempotency_store = _build_idempotency_store()
-except Exception as exc:
-    whatsapp_idempotency_store = InMemoryIdempotencyStore(
-        ttl_seconds=int(os.getenv("WHATSAPP_IDEMPOTENCY_TTL", "300"))
-    )
-    startup_error = f"{startup_error}; idempotencia en memoria: {exc}".strip("; ")
 
 try:
     evaluation_job_store = _build_evaluation_job_store()
@@ -4946,15 +5156,7 @@ def get_agent_setup_status(
     whatsapp_ready = False
     try:
         whatsapp_config = agent_service.get_whatsapp_channel_config(agent)
-        expected_verify_token = os.getenv("WHATSAPP_VERIFY_TOKEN", "").strip()
-        configured_verify_token = (whatsapp_config.get("verify_token") or "").strip()
-        has_phone_number = bool((whatsapp_config.get("phone_number_id") or "").strip())
-        has_verify_token = bool(
-            expected_verify_token
-            and configured_verify_token
-            and hmac.compare_digest(configured_verify_token, expected_verify_token)
-        )
-        whatsapp_ready = has_phone_number and has_verify_token
+        whatsapp_ready = _is_agent_whatsapp_config_ready(whatsapp_config)
     except AgentValidationError:
         whatsapp_ready = False
 
@@ -5071,15 +5273,7 @@ def internal_get_agent_setup_status(
     whatsapp_ready = False
     try:
         whatsapp_config = agent_service.get_whatsapp_channel_config(agent)
-        expected_verify_token = os.getenv("WHATSAPP_VERIFY_TOKEN", "").strip()
-        configured_verify_token = (whatsapp_config.get("verify_token") or "").strip()
-        has_phone_number = bool((whatsapp_config.get("phone_number_id") or "").strip())
-        has_verify_token = bool(
-            expected_verify_token
-            and configured_verify_token
-            and hmac.compare_digest(configured_verify_token, expected_verify_token)
-        )
-        whatsapp_ready = has_phone_number and has_verify_token
+        whatsapp_ready = _is_agent_whatsapp_config_ready(whatsapp_config)
     except AgentValidationError:
         whatsapp_ready = False
 
@@ -5355,6 +5549,8 @@ def internal_chat_with_agent(
         effective_session_id = payload.session_id or user_id
         chat_channel = _effective_chat_channel(payload.channel, "api_internal")
         clubhx_tools_client = _get_clubhx_tools_client()
+        role_context = build_role_context(agent=agent, channel=chat_channel)
+        summary_context = _agent_summary_context(agent.company_id, agent.agent_id, effective_session_id)
         shared_commerce_payload = _resolve_shared_commerce_payload(
             company_id=agent.company_id,
             user_id=user_id,
@@ -5363,13 +5559,31 @@ def internal_chat_with_agent(
             channel=chat_channel,
             clubhx_tools_client=clubhx_tools_client,
             intent_label=None,
+            response_style_context=(
+                f"objective={role_context.objective}\n"
+                f"tone={role_context.tone}\n"
+                f"rules={role_context.system_rules}\n"
+                f"summary={summary_context}"
+            ),
         )
         if shared_commerce_payload:
             shared_products = shared_commerce_payload.get("products") if isinstance(shared_commerce_payload.get("products"), list) else None
             if shared_products:
                 _remember_commerce_products(effective_session_id, shared_products)
-            shared_answer = str(shared_commerce_payload.get("answer") or "").strip()
+            shared_answer = enforce_channel_response_contract(
+                str(shared_commerce_payload.get("answer") or "").strip(),
+                query=payload.message,
+                channel=chat_channel,
+            )
             if shared_answer:
+                _update_agent_memory_from_payload(
+                    agent_id=agent.agent_id,
+                    company_id=agent.company_id,
+                    session_id=effective_session_id,
+                    user_message=payload.message,
+                    answer=shared_answer,
+                    payload=shared_commerce_payload,
+                )
                 return AgentChatResponsePayload(
                     agent_id=agent.agent_id,
                     company_id=agent.company_id,
@@ -5429,8 +5643,22 @@ def internal_chat_with_agent(
                 tool_products = (tool_payload or {}).get("products") if isinstance((tool_payload or {}).get("products"), list) else None
                 if tool_products:
                     _remember_commerce_products(effective_session_id, tool_products)
-                tool_answer = str((tool_payload or {}).get("answer") or "").strip()
+                tool_answer = enforce_channel_response_contract(
+                    str((tool_payload or {}).get("answer") or "").strip(),
+                    query=payload.message,
+                    channel=chat_channel,
+                )
                 if tool_answer:
+                    _update_agent_memory_from_payload(
+                        agent_id=agent.agent_id,
+                        company_id=agent.company_id,
+                        session_id=effective_session_id,
+                        user_message=payload.message,
+                        answer=tool_answer,
+                        payload=tool_payload,
+                        fallback_intent=rag_result.intent_label,
+                        fallback_tool=routed_tool[0],
+                    )
                     return AgentChatResponsePayload(
                         agent_id=agent.agent_id,
                         company_id=agent.company_id,
@@ -5476,7 +5704,11 @@ def internal_chat_with_agent(
     if rag_result.response_mode in {"repeat_cached", "repeat_generic", "conversation_closed"}:
         tuned_answer = rag_result.answer
     else:
-        tuned_answer = tune_answer_style(rag_result.answer, query=payload.message)
+        tuned_answer = enforce_channel_response_contract(
+            tune_answer_style(rag_result.answer, query=payload.message),
+            query=payload.message,
+            channel=chat_channel,
+        )
 
     response_latency_ms = int((time.perf_counter() - started) * 1000)
     _record_chat_audit(
@@ -5631,6 +5863,58 @@ def chat_with_agent(
         effective_session_id = payload.session_id or principal.user_id
         chat_channel = _effective_chat_channel(payload.channel, "api")
         clubhx_tools_client = _get_clubhx_tools_client()
+        role_context = build_role_context(agent=agent, channel=chat_channel)
+        summary_context = _agent_summary_context(agent.company_id, agent.agent_id, effective_session_id)
+        shared_commerce_payload = _resolve_shared_commerce_payload(
+            company_id=agent.company_id,
+            user_id=principal.user_id,
+            session_id=effective_session_id,
+            message=payload.message,
+            channel=chat_channel,
+            clubhx_tools_client=clubhx_tools_client,
+            intent_label=None,
+            response_style_context=(
+                f"objective={role_context.objective}\n"
+                f"tone={role_context.tone}\n"
+                f"rules={role_context.system_rules}\n"
+                f"summary={summary_context}"
+            ),
+        )
+        if shared_commerce_payload:
+            shared_products = shared_commerce_payload.get("products") if isinstance(shared_commerce_payload.get("products"), list) else None
+            if shared_products:
+                _remember_commerce_products(effective_session_id, shared_products)
+            shared_answer = enforce_channel_response_contract(
+                str(shared_commerce_payload.get("answer") or "").strip(),
+                query=payload.message,
+                channel=chat_channel,
+            )
+            if shared_answer:
+                _update_agent_memory_from_payload(
+                    agent_id=agent.agent_id,
+                    company_id=agent.company_id,
+                    session_id=effective_session_id,
+                    user_message=payload.message,
+                    answer=shared_answer,
+                    payload=shared_commerce_payload,
+                )
+                return AgentChatResponsePayload(
+                    agent_id=agent.agent_id,
+                    company_id=agent.company_id,
+                    session_id=effective_session_id,
+                    answer=shared_answer,
+                    sources=[],
+                    intent_label=str((shared_commerce_payload.get("intent_label") or "commerce")).strip() or "commerce",
+                    route="tool",
+                    route_reason="shared_commerce",
+                    response_mode="tool_only",
+                    fallback_applied=False,
+                    retrieval_min_score=None,
+                    redirect_to=str(shared_commerce_payload.get("redirect_to") or "").strip() or None,
+                    cart_action=shared_commerce_payload.get("cart_action") if isinstance(shared_commerce_payload.get("cart_action"), dict) else None,
+                    cart_actions=shared_commerce_payload.get("cart_actions") if isinstance(shared_commerce_payload.get("cart_actions"), list) else None,
+                    products=shared_products,
+                )
         rag_result = agent_service.chat(
             agent=agent,
             message=payload.message,
@@ -5673,8 +5957,22 @@ def chat_with_agent(
                 tool_products = (tool_payload or {}).get("products") if isinstance((tool_payload or {}).get("products"), list) else None
                 if tool_products:
                     _remember_commerce_products(effective_session_id, tool_products)
-                tool_answer = str((tool_payload or {}).get("answer") or "").strip()
+                tool_answer = enforce_channel_response_contract(
+                    str((tool_payload or {}).get("answer") or "").strip(),
+                    query=payload.message,
+                    channel=chat_channel,
+                )
                 if tool_answer:
+                    _update_agent_memory_from_payload(
+                        agent_id=agent.agent_id,
+                        company_id=agent.company_id,
+                        session_id=effective_session_id,
+                        user_message=payload.message,
+                        answer=tool_answer,
+                        payload=tool_payload,
+                        fallback_intent=rag_result.intent_label,
+                        fallback_tool=routed_tool[0],
+                    )
                     return AgentChatResponsePayload(
                         agent_id=agent.agent_id,
                         company_id=agent.company_id,
@@ -5719,7 +6017,11 @@ def chat_with_agent(
     if rag_result.response_mode in {"repeat_cached", "repeat_generic", "conversation_closed"}:
         tuned_answer = rag_result.answer
     else:
-        tuned_answer = tune_answer_style(rag_result.answer, query=payload.message)
+        tuned_answer = enforce_channel_response_contract(
+            tune_answer_style(rag_result.answer, query=payload.message),
+            query=payload.message,
+            channel=chat_channel,
+        )
     logger.info(
         "api_agent_chat_ok user_id=%s agent_id=%s company_id=%s sources=%s answer_chars=%s",
         principal.user_id,
@@ -6051,10 +6353,6 @@ def internal_update_agent_whatsapp_config(
     except AgentValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    phone_number_id = config.get("phone_number_id")
-    if phone_number_id:
-        whatsapp_company_map[phone_number_id] = company_id
-
     return _whatsapp_config_payload(
         agent_id=agent.agent_id,
         company_id=agent.company_id,
@@ -6109,33 +6407,18 @@ def internal_validate_agent_whatsapp_config(
 
     phone_number_id = (config.get("phone_number_id") or "").strip()
     verify_token = (config.get("verify_token") or "").strip()
-    expected_verify_token = os.getenv("WHATSAPP_VERIFY_TOKEN", "").strip()
-    server_access_token = os.getenv("WHATSAPP_ACCESS_TOKEN", "").strip()
-
     has_phone_number_id = bool(phone_number_id)
-    has_verify_token = bool(
-        verify_token
-        and expected_verify_token
-        and hmac.compare_digest(verify_token, expected_verify_token)
-    )
-    server_has_access_token = bool(server_access_token)
-    company_map_ready = bool(
-        phone_number_id and whatsapp_company_map.get(phone_number_id) == agent.company_id
-    )
+    has_verify_token = bool(verify_token)
+    server_has_access_token = True
+    company_map_ready = True
 
     messages: list[str] = []
     if not has_phone_number_id:
         messages.append("Falta phone_number_id de Meta.")
-    if not expected_verify_token:
-        messages.append("El servidor no tiene WHATSAPP_VERIFY_TOKEN configurado.")
-    elif not has_verify_token:
-        messages.append("El verify token guardado no coincide con WHATSAPP_VERIFY_TOKEN del servidor.")
-    if not server_has_access_token:
-        messages.append("El servidor no tiene WHATSAPP_ACCESS_TOKEN configurado.")
-    if has_phone_number_id and not company_map_ready:
-        messages.append("El phone_number_id aun no esta mapeado al company_id del agente.")
+    if not verify_token:
+        messages.append("Falta verify token del canal.")
     if not messages:
-        messages.append("Configuracion lista para probar webhook y envios.")
+        messages.append("Configuracion persistida en el AI Engine.")
 
     ready = has_phone_number_id and has_verify_token and server_has_access_token and company_map_ready
 
@@ -6147,7 +6430,7 @@ def internal_validate_agent_whatsapp_config(
         has_verify_token=has_verify_token,
         server_has_access_token=server_has_access_token,
         company_map_ready=company_map_ready,
-        webhook_url=_whatsapp_webhook_url_internal(x_public_base_url),
+        webhook_url="",
         messages=messages,
     )
 
@@ -6259,10 +6542,6 @@ def update_agent_whatsapp_config(
     except AgentValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    phone_number_id = config.get("phone_number_id")
-    if phone_number_id:
-        whatsapp_company_map[phone_number_id] = agent.company_id
-
     return _whatsapp_config_payload(
         agent_id=agent.agent_id,
         company_id=agent.company_id,
@@ -6298,27 +6577,18 @@ def validate_agent_whatsapp_config(
 
     phone_number_id = (config.get("phone_number_id") or "").strip()
     verify_token = (config.get("verify_token") or "").strip()
-    expected_verify_token = os.getenv("WHATSAPP_VERIFY_TOKEN", "").strip()
-    server_access_token = os.getenv("WHATSAPP_ACCESS_TOKEN", "").strip()
-
     has_phone_number_id = bool(phone_number_id)
-    has_verify_token = bool(verify_token and expected_verify_token and hmac.compare_digest(verify_token, expected_verify_token))
-    server_has_access_token = bool(server_access_token)
-    company_map_ready = bool(phone_number_id and whatsapp_company_map.get(phone_number_id) == agent.company_id)
+    has_verify_token = bool(verify_token)
+    server_has_access_token = True
+    company_map_ready = True
 
     messages: list[str] = []
     if not has_phone_number_id:
         messages.append("Falta phone_number_id de Meta.")
-    if not expected_verify_token:
-        messages.append("El servidor no tiene WHATSAPP_VERIFY_TOKEN configurado.")
-    elif not has_verify_token:
-        messages.append("El verify token guardado no coincide con WHATSAPP_VERIFY_TOKEN del servidor.")
-    if not server_has_access_token:
-        messages.append("El servidor no tiene WHATSAPP_ACCESS_TOKEN configurado.")
-    if has_phone_number_id and not company_map_ready:
-        messages.append("El phone_number_id aun no esta mapeado al company_id del agente.")
+    if not verify_token:
+        messages.append("Falta verify token del canal.")
     if not messages:
-        messages.append("Configuracion lista para probar webhook y envios.")
+        messages.append("Configuracion persistida en el AI Engine.")
 
     ready = has_phone_number_id and has_verify_token and server_has_access_token and company_map_ready
 
@@ -6330,7 +6600,7 @@ def validate_agent_whatsapp_config(
         has_verify_token=has_verify_token,
         server_has_access_token=server_has_access_token,
         company_map_ready=company_map_ready,
-        webhook_url=_whatsapp_webhook_url(request),
+        webhook_url="",
         messages=messages,
     )
 
@@ -6374,6 +6644,8 @@ def public_widget_chat(
     started = time.perf_counter()
 
     clubhx_tools_client = _get_clubhx_tools_client()
+    role_context = build_role_context(agent=agent, channel="widget_public")
+    summary_context = _agent_summary_context(agent.company_id, agent.agent_id, effective_session_id)
     shared_commerce_payload = _resolve_shared_commerce_payload(
         company_id=agent.company_id,
         user_id=payload.external_user_id or payload.visitor_id or client_id,
@@ -6382,12 +6654,30 @@ def public_widget_chat(
         channel="widget_public",
         clubhx_tools_client=clubhx_tools_client,
         intent_label=None,
+        response_style_context=(
+            f"objective={role_context.objective}\n"
+            f"tone={role_context.tone}\n"
+            f"rules={role_context.system_rules}\n"
+            f"summary={summary_context}"
+        ),
     )
     if shared_commerce_payload and shared_commerce_payload.get("answer"):
         shared_products = shared_commerce_payload.get("products") if isinstance(shared_commerce_payload.get("products"), list) else None
         if shared_products:
             _remember_commerce_products(effective_session_id, shared_products)
-        final_answer = str(shared_commerce_payload.get("answer") or "").strip()
+        final_answer = enforce_channel_response_contract(
+            str(shared_commerce_payload.get("answer") or "").strip(),
+            query=payload.message,
+            channel="widget_public",
+        )
+        _update_agent_memory_from_payload(
+            agent_id=agent.agent_id,
+            company_id=agent.company_id,
+            session_id=effective_session_id,
+            user_message=payload.message,
+            answer=final_answer,
+            payload=shared_commerce_payload,
+        )
         response_latency_ms = int((time.perf_counter() - started) * 1000)
         _record_chat_audit(
             ChatAuditRecord(
@@ -6489,7 +6779,21 @@ def public_widget_chat(
             if tool_products:
                 _remember_commerce_products(effective_session_id, tool_products)
             if tool_payload and tool_payload.get("answer"):
-                final_answer = str(tool_payload.get("answer") or "").strip()
+                final_answer = enforce_channel_response_contract(
+                    str(tool_payload.get("answer") or "").strip(),
+                    query=payload.message,
+                    channel="widget_public",
+                )
+                _update_agent_memory_from_payload(
+                    agent_id=agent.agent_id,
+                    company_id=agent.company_id,
+                    session_id=effective_session_id,
+                    user_message=payload.message,
+                    answer=final_answer,
+                    payload=tool_payload,
+                    fallback_intent=rag_result.intent_label,
+                    fallback_tool=routed_tool[0],
+                )
                 response_latency_ms = int((time.perf_counter() - started) * 1000)
 
                 _record_chat_audit(
@@ -6552,9 +6856,17 @@ def public_widget_chat(
             )
 
     if rag_result.response_mode in {"repeat_cached", "repeat_generic", "conversation_closed"}:
-        final_answer = rag_result.answer
+        final_answer = enforce_channel_response_contract(
+            rag_result.answer,
+            query=payload.message,
+            channel="widget_public",
+        )
     else:
-        final_answer = tune_answer_style(rag_result.answer, query=payload.message)
+        final_answer = enforce_channel_response_contract(
+            tune_answer_style(rag_result.answer, query=payload.message),
+            query=payload.message,
+            channel="widget_public",
+        )
     response_latency_ms = int((time.perf_counter() - started) * 1000)
 
     _record_chat_audit(
@@ -6668,7 +6980,11 @@ def chat(
         trace_id=result.trace_id,
         company_id=result.company_id,
         session_id=result.session_id,
-        answer=tune_answer_style(result.answer, query=payload.message),
+        answer=enforce_channel_response_contract(
+            tune_answer_style(result.answer, query=payload.message),
+            query=payload.message,
+            channel=payload.channel or "api",
+        ),
         route=result.route,
         route_reason=result.route_reason,
         intent_label=result.intent_label,
@@ -6678,137 +6994,4 @@ def chat(
         delivery_status=None,
         delivery_message_id=None,
         delivery_error=None,
-    )
-
-
-@app.get("/webhooks/whatsapp")
-def whatsapp_verify(
-    hub_mode: str = Query(default="", alias="hub.mode"),
-    hub_verify_token: str = Query(default="", alias="hub.verify_token"),
-    hub_challenge: str = Query(default="", alias="hub.challenge"),
-) -> str:
-    expected = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
-    if hub_mode == "subscribe" and expected and hub_verify_token == expected:
-        return hub_challenge
-    raise HTTPException(status_code=403, detail="Verificacion invalida")
-
-
-@app.post("/webhooks/whatsapp", response_model=WhatsAppWebhookResponse)
-def whatsapp_webhook(
-    payload: dict[str, object],
-    background_tasks: BackgroundTasks,
-) -> WhatsAppWebhookResponse:
-    if chat_service is None:
-        raise HTTPException(status_code=503, detail=f"Servicio no disponible: {startup_error}")
-
-    incoming_messages = parse_whatsapp_messages(payload, company_map=whatsapp_company_map)
-    responses: list[ChatResponsePayload] = []
-    skipped_duplicates = 0
-    delivery_mode = _delivery_mode()
-
-    for incoming in incoming_messages:
-        dedup_key = _idempotency_key(
-            company_id=incoming.company_id,
-            session_id=incoming.session_id,
-            message_id=incoming.message_id,
-            fallback_text=incoming.text,
-        )
-        if not whatsapp_idempotency_store.mark_if_new(dedup_key):
-            skipped_duplicates += 1
-            continue
-
-        message_text = incoming.text.strip()
-        if not message_text and incoming.media_id:
-            media_payload = _download_whatsapp_media_bytes(
-                whatsapp_client,
-                incoming.phone_number_id,
-                incoming.media_id,
-            )
-            if media_payload is not None:
-                audio_bytes, mime_type, filename = media_payload
-                transcription = _transcribe_audio_bytes(
-                    audio_bytes=audio_bytes,
-                    filename=filename or incoming.media_id,
-                    mime_type=mime_type or incoming.mime_type,
-                    language_hint="es",
-                )
-                message_text = (transcription.text if transcription else "").strip()
-
-            if not message_text and whatsapp_client is not None:
-                try:
-                    _deliver_whatsapp_sync(
-                        client=whatsapp_client,
-                        phone_number_id=incoming.phone_number_id,
-                        to_number=incoming.from_number,
-                        text="Recibi tu audio, pero no pude transcribirlo. Si quieres, reenvialo o escribemelo por texto.",
-                    )
-                except Exception:
-                    logger.exception(
-                        "whatsapp_audio_transcription_failed company_id=%s message_id=%s",
-                        incoming.company_id,
-                        incoming.message_id,
-                    )
-                continue
-
-        if not message_text:
-            continue
-
-        request = ChatRequest(
-            company_id=incoming.company_id,
-            session_id=incoming.session_id,
-            message=message_text,
-            top_k=4,
-        )
-        result = chat_service.chat(request)
-        tuned_answer = tune_answer_style(result.answer, query=message_text)
-        responses.append(
-            ChatResponsePayload(
-                trace_id=result.trace_id,
-                company_id=result.company_id,
-                session_id=result.session_id,
-                answer=tuned_answer,
-                route=result.route,
-                route_reason=result.route_reason,
-                intent_label=result.intent_label,
-                intent_confidence=result.intent_confidence,
-                sources=result.sources,
-                escalation_required=result.escalation_required,
-                delivery_status=None,
-                delivery_message_id=None,
-                delivery_error=None,
-            )
-        )
-
-        if whatsapp_client is None:
-            responses[-1].delivery_status = "skipped"
-            responses[-1].delivery_error = "WHATSAPP_SEND_REPLIES=false"
-            continue
-
-        try:
-            if delivery_mode == "async":
-                background_tasks.add_task(
-                    _deliver_whatsapp_background,
-                    whatsapp_client,
-                    incoming.phone_number_id,
-                    incoming.from_number,
-                    tuned_answer,
-                )
-                responses[-1].delivery_status = "queued"
-            else:
-                message_id = _deliver_whatsapp_sync(
-                    client=whatsapp_client,
-                    phone_number_id=incoming.phone_number_id,
-                    to_number=incoming.from_number,
-                    text=tuned_answer,
-                )
-                responses[-1].delivery_status = "sent"
-                responses[-1].delivery_message_id = message_id
-        except Exception as exc:
-            responses[-1].delivery_status = "failed"
-            responses[-1].delivery_error = str(exc)
-
-    return WhatsAppWebhookResponse(
-        processed_messages=len(incoming_messages),
-        skipped_duplicates=skipped_duplicates,
-        responses=responses,
     )

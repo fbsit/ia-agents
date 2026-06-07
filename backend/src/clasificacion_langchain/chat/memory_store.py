@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from clasificacion_langchain.chat.session_store import SessionTurn
+from clasificacion_langchain.chat.session_store import SessionSummary, SessionTurn
 
 
 @dataclass
@@ -10,6 +10,7 @@ class SessionContext:
     company_id: str
     session_id: str
     turns: list[SessionTurn] = field(default_factory=list)
+    summary: SessionSummary = field(default_factory=SessionSummary)
 
 
 class InMemorySessionStore:
@@ -46,6 +47,14 @@ class InMemorySessionStore:
         if limit <= 0:
             return []
         return context.turns[-limit:]
+
+    def get_summary(self, company_id: str, session_id: str) -> SessionSummary:
+        context = self.get_context(company_id, session_id)
+        return context.summary
+
+    def save_summary(self, company_id: str, session_id: str, summary: SessionSummary) -> None:
+        context = self.get_context(company_id, session_id)
+        context.summary = summary
 
     def _truncate(self, context: SessionContext) -> None:
         if len(context.turns) > self.max_turns:

@@ -404,39 +404,13 @@ curl -X POST http://localhost:8080/chat \
 - `escalation_required`: `true` cuando conviene derivar a humano.
 - `sources`: documentos usados para responder.
 
-## Webhook WhatsApp (base)
+## WhatsApp Channel Boundary
 
-Tambien se agrego base para integrar Meta WhatsApp Cloud API:
+El AI Engine ya no expone ni opera el webhook de WhatsApp. Esa responsabilidad vive en un Channel Gateway externo.
 
-- `GET /webhooks/whatsapp`: verificacion (`hub.mode`, `hub.verify_token`, `hub.challenge`).
-- `POST /webhooks/whatsapp`: parsea mensajes entrantes tipo texto, ejecuta `/chat` y puede enviar respuesta a Meta.
+Este servicio conserva solo capacidades de IA reutilizables para ese gateway:
 
-Variable requerida para verificacion:
+- `POST /internal/ai/media/transcriptions`: transcripcion de audio.
+- `POST /internal/ai/agents/{agent_id}/chat`: resolucion conversacional del agente.
 
-- `WHATSAPP_VERIFY_TOKEN`
-
-Variables para envio de respuestas a Meta API:
-
-- `WHATSAPP_SEND_REPLIES` (`true` o `false`, default `false`)
-- `WHATSAPP_ACCESS_TOKEN` (token de Meta Graph API)
-- `WHATSAPP_API_VERSION` (default `v21.0`)
-- `WHATSAPP_API_TIMEOUT` (default `30` segundos)
-- `WHATSAPP_API_MAX_RETRIES` (default `2`)
-- `WHATSAPP_API_BACKOFF_SECONDS` (default `0.75`)
-- `WHATSAPP_REPLY_MAX_CHARS` (default `1400`)
-- `WHATSAPP_DELIVERY_MODE` (`sync` o `async`, default `sync`)
-- `WHATSAPP_COMPANY_MAP` (JSON `{ "<phone_number_id>": "<company_id>" }`)
-- `WHATSAPP_IDEMPOTENCY_BACKEND` (`redis` o `memory`, default `redis`)
-- `WHATSAPP_IDEMPOTENCY_PREFIX` (default `wa_dedup`)
-- `WHATSAPP_IDEMPOTENCY_TTL` (default `300`)
-
-Si `WHATSAPP_SEND_REPLIES=true`, el webhook envia el texto generado al endpoint oficial de Meta:
-
-`POST https://graph.facebook.com/{version}/{phone_number_id}/messages`
-
-Adicionalmente, el webhook incluye idempotencia anti-duplicados por `message_id` y sesion.
-En la respuesta del webhook ahora tenes:
-
-- `processed_messages`: cantidad total recibida del payload.
-- `skipped_duplicates`: cuantos fueron ignorados por idempotencia.
-- `responses`: solo mensajes efectivamente procesados por el agente.
+La configuracion y validacion de WhatsApp en esta API queda como metadata opcional del agente. No participa del runtime de IA ni requiere variables de entorno del canal.

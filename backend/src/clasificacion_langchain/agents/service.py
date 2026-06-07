@@ -37,13 +37,14 @@ from clasificacion_langchain.agents.role_knowledge import (
     sync_shared_knowledge,
 )
 from clasificacion_langchain.chat.memory_store import InMemorySessionStore
-from clasificacion_langchain.chat.session_store import SessionStore
+from clasificacion_langchain.chat.session_store import SessionStore, SessionSummary
 from clasificacion_langchain.rag.chunking import chunk_documents
 from clasificacion_langchain.rag.dense_index import DenseVectorIndex
 from clasificacion_langchain.rag.hybrid_index import HybridVectorIndex
 from clasificacion_langchain.rag.generation import (
     ExtractiveAnswerGenerator,
     build_remote_generator,
+    enforce_channel_response_contract,
     tune_answer_style,
 )
 from clasificacion_langchain.rag.loaders import load_text_content
@@ -77,8 +78,67 @@ def _format_history_for_query(history: list[tuple[str, str]]) -> str:
     lines = ["Contexto breve de conversacion previa:"]
     for role, text in history:
         role_name = "Usuario" if role == "user" else "Asistente"
-        lines.append(f"- {role_name}: {text}")
+        lines.append(f"- {role_name}: {_truncate_memory_text(text, limit=140)}")
     return "\n".join(lines)
+
+
+def _truncate_memory_text(text: str, limit: int = 180) -> str:
+    normalized = " ".join(str(text or "").split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3].rstrip() + "..."
+
+
+def _summarize_history_for_query(history: list[tuple[str, str]], max_items: int = 4) -> str:
+    if not history:
+        return ""
+
+    lines = ["Resumen operativo de la conversacion:"]
+    recent_user_messages = [text for role, text in history if role == "user"][-2:]
+    recent_assistant_messages = [text for role, text in history if role != "user"][-2:]
+
+    for text in recent_user_messages[:max_items]:
+        clean = _truncate_memory_text(text)
+        if clean:
+            lines.append(f"- Ultima necesidad del usuario: {clean}")
+
+    for text in recent_assistant_messages[:max_items]:
+        clean = _truncate_memory_text(text)
+        if clean:
+            lines.append(f"- Ultima respuesta/compromiso del agente: {clean}")
+
+    if len(lines) == 1:
+        return ""
+    return "\n".join(lines)
+
+
+def _format_session_summary(summary: SessionSummary) -> str:
+    lines: list[str] = []
+    if summary.user_goal:
+        lines.append(f"- Objetivo actual del usuario: {_truncate_memory_text(summary.user_goal, 180)}")
+    if summary.funnel_stage:
+        lines.append(f"- Etapa comercial actual: {summary.funnel_stage}")
+    if summary.selected_products:
+        lines.append(f"- Productos relevantes: {_truncate_memory_text(summary.selected_products, 180)}")
+    elif summary.last_product_query:
+        lines.append(f"- Ultima busqueda de producto: {_truncate_memory_text(summary.last_product_query, 140)}")
+    if summary.shipping_preference:
+        lines.append(f"- Preferencia de despacho: {_truncate_memory_text(summary.shipping_preference, 120)}")
+    if summary.payment_preference:
+        lines.append(f"- Preferencia de pago: {_truncate_memory_text(summary.payment_preference, 120)}")
+    if summary.order_reference:
+        lines.append(f"- Pedido/orden referenciada: {summary.order_reference}")
+    if summary.last_action:
+        lines.append(f"- Ultima accion relevante: {_truncate_memory_text(summary.last_action, 160)}")
+    if summary.notes:
+        lines.append(f"- Nota operativa: {_truncate_memory_text(summary.notes, 180)}")
+    if not lines:
+        return ""
+    return "Resumen persistente de la sesion:\n" + "\n".join(lines)
+
+
+def _normalize_summary_value(text: str, limit: int = 160) -> str:
+    return _truncate_memory_text(text, limit)
 
 
 def _normalize_rag_backend(value: str) -> str:
@@ -1216,9 +1276,15 @@ class AgentService:
             agent_id=agent.agent_id,
             session_id=clean_session_id,
         )
+        session_summary = self._session_summary(
+            company_id=company_id,
+            agent_id=agent.agent_id,
+            session_id=clean_session_id,
+        )
         contextual_query = self._build_query(
             message=message,
             history=history,
+            summary=session_summary,
             runtime_context=role_context.runtime_context,
         )
         policy_key = None
@@ -1378,6 +1444,11 @@ class AgentService:
         fallback_applied = mode.endswith("_general_fallback")
         result = replace(
             result,
+            answer=enforce_channel_response_contract(
+                result.answer,
+                query=message,
+                channel=role_context.channel,
+            ),
             intent_label=decision.intent,
             route=decision.route,
             route_reason=decision.reason,
@@ -1403,6 +1474,14 @@ class AgentService:
             )
 
         if clean_session_id:
+            self.update_session_summary(
+                company_id=company_id,
+                agent_id=agent.agent_id,
+                session_id=clean_session_id,
+                user_message=message,
+                assistant_message=result.answer,
+                intent_label=decision.intent,
+            )
             memory_session_id = self._memory_session_id(agent.agent_id, clean_session_id)
             self.session_store.append_user_message(
                 company_id=company_id,
@@ -1420,6 +1499,95 @@ class AgentService:
     @staticmethod
     def _memory_session_id(agent_id: str, session_id: str) -> str:
         return f"{agent_id.strip()}:{session_id.strip()}"
+
+    def _session_summary(
+        self,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+    ) -> SessionSummary:
+        if not session_id:
+            return SessionSummary()
+        memory_session_id = self._memory_session_id(agent_id, session_id)
+        return self.session_store.get_summary(company_id=company_id, session_id=memory_session_id)
+
+    def get_session_summary(self, company_id: str, agent_id: str, session_id: str) -> SessionSummary:
+        return self._session_summary(company_id=company_id, agent_id=agent_id, session_id=session_id)
+
+    def get_session_summary_text(self, company_id: str, agent_id: str, session_id: str) -> str:
+        return _format_session_summary(
+            self._session_summary(company_id=company_id, agent_id=agent_id, session_id=session_id)
+        )
+
+    def update_session_summary(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+        user_message: str | None = None,
+        assistant_message: str | None = None,
+        intent_label: str | None = None,
+        tool_name: str | None = None,
+        product_queries: list[str] | None = None,
+        selected_products: list[str] | None = None,
+        shipping_preference: str | None = None,
+        payment_preference: str | None = None,
+        order_reference: str | None = None,
+        notes: str | None = None,
+    ) -> None:
+        clean_session_id = (session_id or "").strip()
+        if not clean_session_id:
+            return
+        memory_session_id = self._memory_session_id(agent_id, clean_session_id)
+        summary = self.session_store.get_summary(company_id=company_id, session_id=memory_session_id)
+
+        if user_message and user_message.strip():
+            summary.user_goal = _normalize_summary_value(user_message, 180)
+        if intent_label and intent_label.strip():
+            intent = intent_label.strip().lower()
+            stage_map = {
+                "product_lookup": "product_lookup",
+                "catalog_query": "product_lookup",
+                "availability_check": "product_lookup",
+                "add_to_cart": "cart_building",
+                "cart_add": "cart_building",
+                "shipping_options": "shipping_selection",
+                "delivery_quote": "shipping_selection",
+                "payment_options": "payment_selection",
+                "create_payment_link": "checkout_ready",
+                "create_order_draft": "checkout_ready",
+                "order_status": "post_sale_support",
+                "recipe_recommendation": "browsing",
+            }
+            if intent in stage_map:
+                summary.funnel_stage = stage_map[intent]
+        if tool_name and tool_name.strip():
+            summary.last_tool = tool_name.strip()
+        if product_queries:
+            clean_queries = [item.strip() for item in product_queries if item and item.strip()]
+            if clean_queries:
+                summary.last_product_query = _normalize_summary_value(", ".join(clean_queries), 180)
+        if selected_products:
+            clean_products = [item.strip() for item in selected_products if item and item.strip()]
+            if clean_products:
+                summary.selected_products = _normalize_summary_value(", ".join(clean_products), 220)
+        if shipping_preference and shipping_preference.strip():
+            summary.shipping_preference = _normalize_summary_value(shipping_preference, 120)
+        if payment_preference and payment_preference.strip():
+            summary.payment_preference = _normalize_summary_value(payment_preference, 120)
+        if order_reference and order_reference.strip():
+            summary.order_reference = order_reference.strip()
+        if assistant_message and assistant_message.strip():
+            summary.last_action = _normalize_summary_value(assistant_message, 180)
+        if notes and notes.strip():
+            summary.notes = _normalize_summary_value(notes, 180)
+
+        self.session_store.save_summary(
+            company_id=company_id,
+            session_id=memory_session_id,
+            summary=summary,
+        )
 
     def _session_history(
         self,
@@ -1441,13 +1609,20 @@ class AgentService:
     def _build_query(
         message: str,
         history: list[tuple[str, str]],
+        summary: SessionSummary | None = None,
         runtime_context: str | None = None,
     ) -> str:
         history_block = _format_history_for_query(history)
+        summary_block = _summarize_history_for_query(history)
+        persistent_summary_block = _format_session_summary(summary or SessionSummary())
         context_block = (runtime_context or "").strip()
         parts: list[str] = []
         if context_block:
             parts.append(context_block)
+        if persistent_summary_block:
+            parts.append(persistent_summary_block)
+        if summary_block:
+            parts.append(summary_block)
         if history_block:
             parts.append(history_block)
         parts.append(f"Consulta actual: {message}")
