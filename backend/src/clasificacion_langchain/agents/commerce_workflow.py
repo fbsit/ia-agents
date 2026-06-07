@@ -79,6 +79,16 @@ def resolve_transition(
             )
         return CommerceTransitionDecision(True, "cart_building")
 
+    if key in {"remove_from_cart", "set_cart_quantity"}:
+        if not current.has_selected_products:
+            return CommerceTransitionDecision(
+                False,
+                current.stage,
+                "Antes de cambiar el carrito necesito confirmar el producto exacto.",
+                "cart_change_without_product",
+            )
+        return CommerceTransitionDecision(True, "cart_building")
+
     if key in {"shipping_options", "delivery_quote", "shipping_select", "get_shipping_options"}:
         if not current.has_selected_products and current.stage == "browsing":
             return CommerceTransitionDecision(

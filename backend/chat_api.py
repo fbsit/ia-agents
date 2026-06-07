@@ -513,6 +513,78 @@ def _parse_widget_quantity(text: str) -> int:
     return 1
 
 
+def _is_remove_from_cart_message(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    return any(
+        phrase in normalized
+        for phrase in [
+            "quita ",
+            "quitame ",
+            "saca ",
+            "sacame ",
+            "remueve ",
+            "elimina ",
+            "borra ",
+        ]
+    )
+
+
+def _is_set_cart_quantity_message(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    return any(
+        phrase in normalized
+        for phrase in [
+            "deja solo ",
+            "deja en ",
+            "deja solo",
+            "dejame solo ",
+        ]
+    )
+
+
+def _extract_widget_cart_change_requests(
+    message: str,
+    *,
+    mode: str,
+) -> list[dict[str, Any]]:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return []
+
+    segments = [part.strip() for part in re.split(r"\s+(?:y|e|ademas|tambien)\s+", normalized) if part.strip()]
+    requests: list[dict[str, Any]] = []
+    for segment in segments:
+        if mode == "remove":
+            cleaned = re.sub(
+                r"\b(?:quita|quitame|quitar|saca|sacame|sacar|remueve|remover|elimina|eliminar|borra|borrar|del|de|la|el|los|las|carrito)\b",
+                " ",
+                segment,
+                flags=re.IGNORECASE,
+            )
+        else:
+            cleaned = re.sub(
+                r"\b(?:deja|dejame|dejar|solo|solamente|en|con|la|el|los|las|carrito)\b",
+                " ",
+                segment,
+                flags=re.IGNORECASE,
+            )
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if not cleaned:
+            continue
+
+        quantity = _parse_widget_quantity(segment)
+        product_query = re.sub(r"^\d+\s+", "", cleaned).strip()
+        product_query = re.sub(r"^(un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+", "", product_query).strip()
+        if not product_query:
+            continue
+        requests.append({"quantity": quantity, "product_query": product_query})
+    return requests
+
+
 def _extract_widget_cart_requests(message: str) -> list[dict[str, Any]]:
     normalized = _normalize_widget_text(message)
     if not normalized:
@@ -562,6 +634,8 @@ def _should_try_llm_commerce_parser(intent_label: str | None, message: str) -> b
         return False
     if label in {
         "add_to_cart",
+        "remove_from_cart",
+        "set_cart_quantity",
         "cart_add",
         "cart_update",
         "checkout_cart",
@@ -581,6 +655,11 @@ def _should_try_llm_commerce_parser(intent_label: str | None, message: str) -> b
         for token in [
             "carrito",
             "agreg",
+            "quita",
+            "saca",
+            "remueve",
+            "elimina",
+            "deja solo",
             "suma",
             "poneme",
             "llevo",
@@ -642,9 +721,10 @@ def _parse_commerce_intent_with_openai(
                     "y definir la forma de responder de manera breve, comercial y accionable. "
                     "Devuelve SOLO JSON valido con esta forma exacta: "
                     "{\"intent\":string,\"confidence\":number,\"query\":string,\"items\":[{\"query\":string,\"quantity\":number}],\"tool\":string,\"tool_arguments\":object,\"needs_clarification\":boolean,\"clarification_question\":string,\"customer_goal\":string,\"response_style\":{\"stage\":string,\"tone\":string,\"next_step\":string,\"format\":string}}. "
-                    "Intent permitidos: none, product_lookup, add_to_cart, shipping_options, payment_options, order_status, create_payment_link, create_order_draft, recipe_recommendation. "
+                    "Intent permitidos: none, product_lookup, add_to_cart, remove_from_cart, set_cart_quantity, shipping_options, payment_options, order_status, create_payment_link, create_order_draft, recipe_recommendation. "
                     "Tools permitidos: none, get_product_availability, get_order_status, get_shipping_options, get_payment_options, create_payment_link, create_order_draft. "
                     "Extrae productos y cantidades. Si no hay cantidad explicita usa 1. "
+                    "Si pide quitar unidades del carrito usa remove_from_cart. Si pide dejar una cantidad exacta usa set_cart_quantity. "
                     "Si el mensaje pregunta disponibilidad, precio, stock o catalogo usa get_product_availability. "
                     "Si pregunta estado de pedido usa get_order_status y extrae order_reference cuando exista. "
                     "Si quiere pagar ahora o generar link usa create_payment_link solo si ya hay productos/orden suficientes, si no pide el dato faltante. "
@@ -714,7 +794,7 @@ def _parse_commerce_intent_with_openai(
 def _cart_requests_from_llm_intent(parsed: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not isinstance(parsed, dict):
         return []
-    if str(parsed.get("intent") or "").strip().lower() != "add_to_cart":
+    if str(parsed.get("intent") or "").strip().lower() not in {"add_to_cart", "remove_from_cart", "set_cart_quantity"}:
         return []
     items = parsed.get("items") if isinstance(parsed.get("items"), list) else []
     requests: list[dict[str, Any]] = []
@@ -976,6 +1056,8 @@ def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[
         channel="api",
     )
     cart_requests = _extract_widget_cart_requests(message)
+    remove_request = _extract_widget_remove_from_cart(message)
+    set_quantity_request = _extract_widget_set_cart_quantity(message)
     if not cart_requests:
         cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
     if not cart_requests:
@@ -994,6 +1076,10 @@ def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[
     llm_tool = _tool_from_llm_commerce_intent(llm_commerce_intent, session_id)
     if llm_tool:
         return llm_tool
+    if remove_request:
+        return "get_product_availability", {"query": remove_request["product_query"], "limit": 5, "session_id": session_id}
+    if set_quantity_request:
+        return "get_product_availability", {"query": set_quantity_request["product_query"], "limit": 5, "session_id": session_id}
     if label in {"add_to_cart", "cart_add", "cart_update", "checkout_cart"} and cart_request:
         return "get_product_availability", {"query": cart_request["product_query"], "limit": 5, "session_id": session_id}
     if label in {"product_lookup", "catalog_query", "availability_check"}:
@@ -1029,6 +1115,12 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
     llm_tool = _tool_from_llm_commerce_intent(llm_commerce_intent, session_id)
     if llm_tool:
         return llm_tool
+    remove_request = _extract_widget_remove_from_cart(message)
+    if remove_request:
+        return "get_product_availability", {"query": remove_request["product_query"], "limit": 5, "session_id": session_id}
+    set_quantity_request = _extract_widget_set_cart_quantity(message)
+    if set_quantity_request:
+        return "get_product_availability", {"query": set_quantity_request["product_query"], "limit": 5, "session_id": session_id}
     cart_requests = _extract_widget_cart_requests(message)
     if not cart_requests:
         cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
@@ -1285,6 +1377,16 @@ def _extract_widget_add_to_cart(message: str) -> dict[str, Any] | None:
     return requests[0] if requests else None
 
 
+def _extract_widget_remove_from_cart(message: str) -> dict[str, Any] | None:
+    requests = _extract_widget_cart_change_requests(message, mode="remove")
+    return requests[0] if requests else None
+
+
+def _extract_widget_set_cart_quantity(message: str) -> dict[str, Any] | None:
+    requests = _extract_widget_cart_change_requests(message, mode="set")
+    return requests[0] if requests else None
+
+
 def _format_public_widget_tool_payload(
     result: dict[str, Any],
     *,
@@ -1339,6 +1441,50 @@ def _format_public_widget_tool_payload(
                             "name": first["name"],
                         },
                     },
+                }
+
+        remove_request = _extract_widget_remove_from_cart(user_message)
+        if remove_request:
+            first = products[0] if products else None
+            if first and first.get("id"):
+                quantity = max(1, int(remove_request["quantity"]))
+                return {
+                    "answer": f"Listo, quite {quantity} {first['name']} del carrito.",
+                    "products": products,
+                    "cart_action": {
+                        "type": "remove_from_cart",
+                        "item": {
+                            "product_id": first["checkout_product_id"] or first["id"],
+                            "checkout_product_id": first["checkout_product_id"] or first["id"],
+                            "variant_id": first["variant_id"] or first["id"],
+                            "quantity": quantity,
+                            "name": first["name"],
+                        },
+                    },
+                    "workflow_stage": "cart_building",
+                    "pending_next_step": "cart_building",
+                }
+
+        set_quantity_request = _extract_widget_set_cart_quantity(user_message)
+        if set_quantity_request:
+            first = products[0] if products else None
+            if first and first.get("id"):
+                quantity = max(1, int(set_quantity_request["quantity"]))
+                return {
+                    "answer": f"Listo, deje {first['name']} en {quantity} unidades en el carrito.",
+                    "products": products,
+                    "cart_action": {
+                        "type": "set_cart_quantity",
+                        "item": {
+                            "product_id": first["checkout_product_id"] or first["id"],
+                            "checkout_product_id": first["checkout_product_id"] or first["id"],
+                            "variant_id": first["variant_id"] or first["id"],
+                            "quantity": quantity,
+                            "name": first["name"],
+                        },
+                    },
+                    "workflow_stage": "cart_building",
+                    "pending_next_step": "cart_building",
                 }
 
         availability_tokens = ["tienen ", "tenes ", "hay ", "stock", "disponible", "precio", "cuesta"]
