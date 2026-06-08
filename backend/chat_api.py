@@ -827,72 +827,10 @@ def _extract_widget_product_lookup_query(message: str) -> str:
 
 
 def _should_try_llm_commerce_parser(intent_label: str | None, message: str) -> bool:
-    label = (intent_label or "").strip().lower()
     normalized = _normalize_widget_text(message)
     if not normalized:
         return False
-    if label in {
-        "add_to_cart",
-        "remove_from_cart",
-        "set_cart_quantity",
-        "clear_cart",
-        "cart_add",
-        "cart_update",
-        "checkout_cart",
-        "product_lookup",
-        "catalog_query",
-        "availability_check",
-        "delivery_quote",
-        "shipping_options",
-        "shipping_select",
-        "payment_options",
-        "payment_select",
-        "checkout_payment",
-    }:
-        return True
-    return any(
-        token in normalized
-        for token in [
-            "carrito",
-            "agreg",
-            "quita",
-            "saca",
-            "remueve",
-            "elimina",
-            "deja solo",
-            "limpia el carrito",
-            "vacia el carrito",
-            "borra el carrito",
-            "resetea el carrito",
-            "suma",
-            "poneme",
-            "llevo",
-            "tienen",
-            "tenian",
-            "hay",
-            "stock",
-            "disponible",
-            "precio",
-            "cuesta",
-            "pago",
-            "pagar",
-            "pago ahora",
-            "link de pago",
-            "envio",
-            "despacho",
-            "retiro",
-            "pedido",
-            "orden",
-            "estado",
-            "borrador",
-            "cotizacion",
-            "checkout",
-            "receta",
-            "cocinar",
-            "queque",
-            "hambre",
-        ]
-    )
+    return True
 
 
 def _parse_commerce_intent_with_openai(
@@ -1169,14 +1107,7 @@ def _tool_from_llm_commerce_intent(parsed: dict[str, Any] | None, session_id: st
 
 
 def _checkout_requests_for_workflow(message: str, session_id: str, parsed: dict[str, Any] | None) -> list[dict[str, Any]]:
-    cart_requests = _extract_widget_cart_requests(message)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_llm_intent(parsed)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_recent_product_reference(message, session_id)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_recent_products(message, session_id)
-    return cart_requests
+    return _cart_requests_from_llm_intent(parsed)
 
 
 def _resolve_checkout_items(
@@ -1251,64 +1182,20 @@ def _resolve_checkout_items(
 
 
 def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[str, dict[str, Any]] | None:
-    label = (intent_label or "").strip().lower()
-    message_text = (message or "").strip().lower()
     llm_commerce_intent = _parse_commerce_intent_with_openai(
         message,
         session_id=session_id,
         intent_label=intent_label,
         channel="api",
     )
-    cart_requests = _extract_widget_cart_requests(message)
-    remove_request = _extract_widget_remove_from_cart(message)
-    set_quantity_request = _extract_widget_set_cart_quantity(message)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_recent_product_reference(message, session_id)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_recent_products(message, session_id)
-    cart_request = cart_requests[0] if cart_requests else None
-    lookup_query = _extract_widget_product_lookup_query(message) or message
-    if lookup_query != message:
-        logger.info(
-            "commerce_lookup_query_normalized session_id=%s raw=%s normalized=%s",
-            session_id,
-            message,
-            lookup_query,
-        )
     llm_tool = _tool_from_llm_commerce_intent(llm_commerce_intent, session_id)
     if llm_tool:
         return llm_tool
-    if remove_request:
-        return "get_product_availability", {"query": remove_request["product_query"], "limit": 5, "session_id": session_id}
-    if set_quantity_request:
-        return "get_product_availability", {"query": set_quantity_request["product_query"], "limit": 5, "session_id": session_id}
-    if label in {"add_to_cart", "cart_add", "cart_update", "checkout_cart"} and cart_request:
-        return "get_product_availability", {"query": cart_request["product_query"], "limit": 5, "session_id": session_id}
-    if label in {"product_lookup", "catalog_query", "availability_check"}:
-        return "get_product_availability", {"query": lookup_query, "limit": 5, "session_id": session_id}
-    if label in {"delivery_quote", "shipping_options", "shipping_select"}:
-        return "get_shipping_options", {"commune": message, "session_id": session_id}
-    if label in {"payment_options", "payment_select", "checkout_payment"}:
-        return "get_payment_options", {"session_id": session_id}
-    order_reference = _extract_order_reference(message)
-    if order_reference:
-        return "get_order_status", {"order_reference": order_reference, "query": order_reference, "session_id": session_id}
-    if any(token in message_text for token in ["tienes ", "tienen ", "tenes ", "tenian ", "hay ", "habia ", "busco ", "stock", "precio", "cuesta", "disponible"]):
-        return "get_product_availability", {"query": lookup_query, "limit": 5, "session_id": session_id}
-    if cart_request:
-        return "get_product_availability", {"query": cart_request["product_query"], "limit": 5, "session_id": session_id}
-    if any(token in message_text for token in ["despacho", "envio", "retiro", "chilexpress", "comuna"]):
-        return "get_shipping_options", {"commune": message, "session_id": session_id}
-    if any(token in message_text for token in ["pago", "pagar", "transferencia", "mercado pago", "tarjeta", "link de pago"]):
-        return "get_payment_options", {"session_id": session_id}
     return None
 
 
 def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str, Any]] | None:
-    text = (message or "").strip().lower()
-    if not text:
+    if not (message or "").strip():
         return None
     llm_commerce_intent = _parse_commerce_intent_with_openai(
         message,
@@ -1319,61 +1206,6 @@ def _forced_commerce_tool(message: str, session_id: str) -> tuple[str, dict[str,
     llm_tool = _tool_from_llm_commerce_intent(llm_commerce_intent, session_id)
     if llm_tool:
         return llm_tool
-    remove_request = _extract_widget_remove_from_cart(message)
-    if remove_request:
-        return "get_product_availability", {"query": remove_request["product_query"], "limit": 5, "session_id": session_id}
-    set_quantity_request = _extract_widget_set_cart_quantity(message)
-    if set_quantity_request:
-        return "get_product_availability", {"query": set_quantity_request["product_query"], "limit": 5, "session_id": session_id}
-    cart_requests = _extract_widget_cart_requests(message)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_recent_product_reference(message, session_id)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_recent_products(message, session_id)
-    cart_request = cart_requests[0] if cart_requests else None
-    lookup_query = _extract_widget_product_lookup_query(message) or message
-    if cart_request:
-        logger.info(
-            "forced_commerce_tool_match kind=add_to_cart session_id=%s message=%s product_query=%s quantity=%s",
-            session_id,
-            message,
-            cart_request["product_query"],
-            cart_request["quantity"],
-        )
-        return "get_product_availability", {"query": cart_request["product_query"], "limit": 5, "session_id": session_id}
-    order_reference = _extract_order_reference(message)
-    if order_reference:
-        logger.info(
-            "forced_commerce_tool_match kind=order_status session_id=%s message=%s order_reference=%s",
-            session_id,
-            message,
-            order_reference,
-        )
-        return "get_order_status", {"order_reference": order_reference, "query": order_reference, "session_id": session_id}
-    if any(token in text for token in ["tienes ", "tienen ", "tiene ", "tenes ", "tenian ", "tenia ", "hay ", "habia ", "stock", "disponible", "precio", "cuesta"]):
-        logger.info(
-            "forced_commerce_tool_match kind=product_lookup session_id=%s message=%s lookup_query=%s",
-            session_id,
-            message,
-            lookup_query,
-        )
-        return "get_product_availability", {"query": lookup_query, "limit": 5, "session_id": session_id}
-    if any(token in text for token in ["despacho", "envio", "envío", "retiro", "chilexpress", "comuna"]):
-        logger.info(
-            "forced_commerce_tool_match kind=shipping_options session_id=%s message=%s",
-            session_id,
-            message,
-        )
-        return "get_shipping_options", {"commune": message, "session_id": session_id}
-    if any(token in text for token in ["pago", "pagar", "transferencia", "mercado pago", "tarjeta"]):
-        logger.info(
-            "forced_commerce_tool_match kind=payment_options session_id=%s message=%s",
-            session_id,
-            message,
-        )
-        return "get_payment_options", {"session_id": session_id}
     return None
 
 
@@ -2040,14 +1872,10 @@ def _resolve_shared_commerce_payload(
     )
 
     runtime_order_reference = _extract_order_reference(message)
-    runtime_product_signal = bool(
-        _extract_widget_product_lookup_query(message)
-        or _extract_widget_cart_requests(message)
-    )
     current_workflow = build_workflow_state(
         stage=(workflow_state or {}).get("stage"),
         checkout_stage=(workflow_state or {}).get("checkout_stage"),
-        selected_products=(workflow_state or {}).get("selected_products") or (message if runtime_product_signal else ""),
+        selected_products=(workflow_state or {}).get("selected_products"),
         shipping_preference=(workflow_state or {}).get("shipping_preference") or (message if any(token in _normalize_widget_text(message) for token in ["envio", "despacho", "retiro", "comuna"]) else ""),
         pickup_location_label=(workflow_state or {}).get("pickup_location_label") or _extract_pickup_location(message),
         payment_preference=(workflow_state or {}).get("payment_preference") or (message if any(token in _normalize_widget_text(message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else ""),
@@ -2279,7 +2107,7 @@ def _resolve_shared_commerce_payload(
                 payload.setdefault("workflow_stage", transition.next_stage)
                 return payload
 
-    if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "recipe_recommendation" or _is_recipe_request_message(message):
+    if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "recipe_recommendation":
         recipe_plan = _generate_recipe_plan_with_openai(message, session_id, _recent_commerce_products(session_id))
         if isinstance(recipe_plan, dict):
             ingredient_queries: list[str] = []
@@ -2310,13 +2138,7 @@ def _resolve_shared_commerce_payload(
             if payload:
                 return payload
 
-    cart_requests = _extract_widget_cart_requests(message)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_recent_product_reference(message, session_id)
-    if not cart_requests:
-        cart_requests = _cart_requests_from_recent_products(message, session_id)
+    cart_requests = _cart_requests_from_llm_intent(llm_commerce_intent)
     if cart_requests:
         _trace_route("commerce.cart_requests", session_id=session_id, requests=cart_requests)
         logger.warning(
@@ -2353,8 +2175,6 @@ def _resolve_shared_commerce_payload(
             return payload
 
     lookup_queries = _product_lookup_queries_from_llm_intent(llm_commerce_intent)
-    if not lookup_queries:
-        lookup_queries = _product_lookup_queries_from_message(message)
     if len(lookup_queries) > 1:
         _trace_route("commerce.lookup_queries", session_id=session_id, queries=lookup_queries)
         logger.warning(
