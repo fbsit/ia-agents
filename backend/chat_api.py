@@ -1524,12 +1524,54 @@ def _extract_widget_set_cart_quantity(message: str) -> dict[str, Any] | None:
     return requests[0] if requests else None
 
 
+def _resolve_cart_request_for_intent(
+    *,
+    user_message: str,
+    intent: str,
+    session_id: str | None,
+) -> dict[str, Any] | None:
+    normalized_intent = (intent or "").strip().lower()
+    if normalized_intent == "add_to_cart":
+        explicit = _extract_widget_add_to_cart(user_message)
+        if explicit:
+            return explicit
+        if session_id:
+            recent_reference = _cart_requests_from_recent_product_reference(user_message, session_id)
+            if recent_reference:
+                return recent_reference[0]
+            recent_products = _cart_requests_from_recent_products(user_message, session_id)
+            if recent_products:
+                return recent_products[0]
+    if normalized_intent == "remove_from_cart":
+        explicit = _extract_widget_remove_from_cart(user_message)
+        if explicit:
+            return explicit
+        if session_id:
+            recent_reference = _cart_requests_from_recent_product_reference(user_message, session_id)
+            if recent_reference:
+                return recent_reference[0]
+    if normalized_intent == "set_cart_quantity":
+        explicit = _extract_widget_set_cart_quantity(user_message)
+        if explicit:
+            return explicit
+        if session_id:
+            recent_reference = _cart_requests_from_recent_product_reference(user_message, session_id)
+            if recent_reference:
+                quantity = _parse_widget_quantity(user_message)
+                return {
+                    "product_query": recent_reference[0]["product_query"],
+                    "quantity": quantity,
+                }
+    return None
+
+
 def _format_public_widget_tool_payload(
     result: dict[str, Any],
     *,
     user_message: str,
     intent_label: str | None,
     channel: str | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any] | None:
     if not result.get("ok"):
         return None
@@ -1561,8 +1603,12 @@ def _format_public_widget_tool_payload(
                 }
             )
 
-        cart_request = _extract_widget_add_to_cart(user_message)
-        if cart_request and intent in {"product_lookup", "catalog_query", "availability_check", ""}:
+        cart_request = _resolve_cart_request_for_intent(
+            user_message=user_message,
+            intent=intent,
+            session_id=session_id,
+        )
+        if cart_request and intent == "add_to_cart":
             first = products[0] if products else None
             if first and first.get("id"):
                 return {
@@ -1580,7 +1626,11 @@ def _format_public_widget_tool_payload(
                     },
                 }
 
-        remove_request = _extract_widget_remove_from_cart(user_message)
+        remove_request = _resolve_cart_request_for_intent(
+            user_message=user_message,
+            intent="remove_from_cart",
+            session_id=session_id,
+        )
         if remove_request:
             first = products[0] if products else None
             if first and first.get("id"):
@@ -1602,7 +1652,11 @@ def _format_public_widget_tool_payload(
                     "pending_next_step": "cart_building",
                 }
 
-        set_quantity_request = _extract_widget_set_cart_quantity(user_message)
+        set_quantity_request = _resolve_cart_request_for_intent(
+            user_message=user_message,
+            intent="set_cart_quantity",
+            session_id=session_id,
+        )
         if set_quantity_request:
             first = products[0] if products else None
             if first and first.get("id"):
@@ -2123,6 +2177,7 @@ def _resolve_shared_commerce_payload(
                 user_message=message,
                 intent_label=str(llm_commerce_intent.get("intent") or intent_label or ""),
                 channel=channel,
+                session_id=session_id,
             )
             if payload:
                 _trace_route(
@@ -2186,6 +2241,7 @@ def _resolve_shared_commerce_payload(
                 user_message=message,
                 intent_label=str(llm_commerce_intent.get("intent") or intent_label or ""),
                 channel=channel,
+                session_id=session_id,
             )
             if payload:
                 _trace_route(
@@ -6308,6 +6364,7 @@ def internal_chat_with_agent(
                     user_message=payload.message,
                     intent_label=rag_result.intent_label,
                     channel=chat_channel,
+                    session_id=effective_session_id,
                 )
                 tool_products = (tool_payload or {}).get("products") if isinstance((tool_payload or {}).get("products"), list) else None
                 if tool_products:
@@ -6633,6 +6690,7 @@ def chat_with_agent(
                     user_message=payload.message,
                     intent_label=rag_result.intent_label,
                     channel=chat_channel,
+                    session_id=effective_session_id,
                 )
                 tool_products = (tool_payload or {}).get("products") if isinstance((tool_payload or {}).get("products"), list) else None
                 if tool_products:
@@ -7490,6 +7548,7 @@ def public_widget_chat(
                 user_message=payload.message,
                 intent_label=rag_result.intent_label,
                 channel="widget_public",
+                session_id=effective_session_id,
             )
             tool_products = tool_payload.get("products") if isinstance(tool_payload.get("products"), list) else None
             if tool_products:
