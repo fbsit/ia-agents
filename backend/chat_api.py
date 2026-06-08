@@ -582,13 +582,13 @@ def _resolve_checkout_workflow_followup(
             try:
                 clubhx_tools_client.execute_canonical(
                     tenant_id=company_id or "",
-                    tool="send_login_otp",
+                    tool="send_verification_code",
                     channel=channel or "",
                     user_id=user_id,
                     arguments={"email": message.strip(), "session_id": session_id or ""},
                 )
             except Exception as exc:
-                logger.warning("send_login_otp_failed session_id=%s detail=%s", session_id, exc)
+                logger.warning("send_verification_code_failed session_id=%s detail=%s", session_id, exc)
         return {
             "answer": f"Te enviamos un codigo de verificacion a {message.strip()}. Ingresalo aca para continuar.",
             "intent_label": "checkout_otp_sent",
