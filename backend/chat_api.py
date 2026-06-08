@@ -775,6 +775,25 @@ def _is_checkout_redirect_channel(channel: str | None) -> bool:
     return normalized in {"widget_web", "web", "widget_public"}
 
 
+def _is_checkout_request_message(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    return any(
+        token in normalized
+        for token in [
+            "quiero pagar",
+            "ir a pagar",
+            "pagar",
+            "checkout",
+            "finalizar compra",
+            "terminar compra",
+            "comprar ahora",
+            "link de pago",
+        ]
+    )
+
+
 def _extract_widget_cart_change_requests(
     message: str,
     *,
@@ -2099,6 +2118,33 @@ def _resolve_shared_commerce_payload(
             bool(llm_commerce_intent.get("needs_clarification")),
             str(llm_commerce_intent.get("query") or ""),
         )
+
+        llm_intent_name = str(llm_commerce_intent.get("intent") or "").strip().lower()
+        llm_tool_name = str(llm_commerce_intent.get("tool") or "").strip().lower()
+        if _is_checkout_redirect_channel(channel) and (
+            llm_intent_name in {"create_payment_link", "payment_options"}
+            or llm_tool_name in {"create_payment_link", "get_payment_options"}
+            or _is_checkout_request_message(message)
+        ):
+            _trace_route(
+                "commerce.resolve_web_checkout_redirect",
+                session_id=session_id,
+                intent=llm_intent_name,
+                tool=llm_tool_name,
+            )
+            return {
+                "answer": "Te llevo al checkout para revisar tu carrito, despacho y pago.",
+                "intent_label": llm_intent_name or "checkout_web",
+                "workflow_stage": "checkout_ready",
+                "checkout_stage": "web_checkout_redirect",
+                "pending_next_step": "payment_selection",
+                "redirect_to": "/checkout",
+                "workflow_action": _workflow_action(
+                    "open_checkout",
+                    redirect_to="/checkout",
+                ),
+            }
+
         if bool(llm_commerce_intent.get("needs_clarification")):
             clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
             if clarification:
