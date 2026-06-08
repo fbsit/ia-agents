@@ -1020,7 +1020,7 @@ def _is_login_confirmed_message(message: str) -> bool:
     }
 
 
-EMAIL_RE = re.compile(r"^[\w.+\-]+@[\w.\-]+\.\w{2,}$", re.IGNORECASE)
+EMAIL_RE = re.compile(r"^[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+$", re.IGNORECASE)
 
 
 def _is_email_message(message: str) -> bool:
@@ -2880,7 +2880,7 @@ def _resolve_shared_commerce_payload(
             if not _is_checkout_redirect_channel(channel):
                 if not current_workflow.customer_authenticated:
                     return {
-                        "answer": "Para seguir con el pago necesito que inicies sesion primero.",
+                        "answer": "Para seguir con el pago necesito que inicies sesion primero. Escribe tu correo electronico para enviarte un codigo de verificacion.",
                         "intent_label": "checkout_auth_needed",
                         "workflow_stage": "checkout_ready",
                         "checkout_stage": "auth_pending",
