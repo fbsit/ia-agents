@@ -162,6 +162,11 @@ def _is_likely_greeting_message(message: str) -> bool:
     return normalized in _GREETING_TERMS
 
 
+def _trace_route(event: str, **payload: Any) -> None:
+    safe_payload = {key: value for key, value in payload.items()}
+    print(f"[TRACE_ROUTE] {event} {json.dumps(safe_payload, ensure_ascii=False, default=str)}", flush=True)
+
+
 def _remember_commerce_products(session_id: str, products: list[dict[str, Any]]) -> None:
     clean_session_id = str(session_id or "").strip()
     if not clean_session_id or not products:
@@ -1929,6 +1934,12 @@ def _resolve_shared_commerce_payload(
     workflow_state: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
     if clubhx_tools_client is None:
+        _trace_route(
+            "commerce.skip_no_tools_client",
+            session_id=session_id,
+            channel=channel,
+            message=message,
+        )
         logger.warning(
             "commerce_router_skip reason=no_tools_client session_id=%s channel=%s message=%s",
             session_id,
@@ -1938,6 +1949,16 @@ def _resolve_shared_commerce_payload(
         return None
 
     normalized_message = _normalize_widget_text(message)
+    _trace_route(
+        "commerce.start",
+        session_id=session_id,
+        channel=channel,
+        message=normalized_message,
+        greeting_like=_is_likely_greeting_message(message),
+        workflow_stage=str((workflow_state or {}).get("stage") or ""),
+        checkout_stage=str((workflow_state or {}).get("checkout_stage") or ""),
+        pending_next_step=str((workflow_state or {}).get("pending_next_step") or ""),
+    )
     logger.warning(
         "commerce_router_start session_id=%s channel=%s greeting_like=%s message=%s workflow_stage=%s checkout_stage=%s pending_next_step=%s",
         session_id,
@@ -1978,6 +1999,12 @@ def _resolve_shared_commerce_payload(
         workflow_state=workflow_state,
     )
     if followup_payload:
+        _trace_route(
+            "commerce.resolve_affirmative_followup",
+            session_id=session_id,
+            intent=str(followup_payload.get("intent_label") or ""),
+            workflow_stage=str(followup_payload.get("workflow_stage") or ""),
+        )
         logger.warning(
             "commerce_router_resolved kind=affirmative_followup session_id=%s payload_intent=%s workflow_stage=%s pending_next_step=%s",
             session_id,
@@ -1992,6 +2019,13 @@ def _resolve_shared_commerce_payload(
         workflow_state=workflow_state,
     )
     if checkout_followup_payload:
+        _trace_route(
+            "commerce.resolve_checkout_followup",
+            session_id=session_id,
+            intent=str(checkout_followup_payload.get("intent_label") or ""),
+            workflow_stage=str(checkout_followup_payload.get("workflow_stage") or ""),
+            checkout_stage=str(checkout_followup_payload.get("checkout_stage") or ""),
+        )
         logger.warning(
             "commerce_router_resolved kind=checkout_followup session_id=%s payload_intent=%s workflow_stage=%s checkout_stage=%s",
             session_id,
@@ -2002,6 +2036,7 @@ def _resolve_shared_commerce_payload(
         return checkout_followup_payload
 
     if _is_clear_cart_message(message):
+        _trace_route("commerce.resolve_clear_cart", session_id=session_id)
         logger.warning(
             "commerce_router_resolved kind=clear_cart session_id=%s",
             session_id,
@@ -2015,6 +2050,14 @@ def _resolve_shared_commerce_payload(
         }
 
     if isinstance(llm_commerce_intent, dict):
+        _trace_route(
+            "commerce.llm_intent",
+            session_id=session_id,
+            intent=str(llm_commerce_intent.get("intent") or ""),
+            tool=str(llm_commerce_intent.get("tool") or ""),
+            query=str(llm_commerce_intent.get("query") or ""),
+            needs_clarification=bool(llm_commerce_intent.get("needs_clarification")),
+        )
         logger.warning(
             "commerce_router_llm_intent session_id=%s intent=%s tool=%s needs_clarification=%s query=%s",
             session_id,
@@ -2026,6 +2069,12 @@ def _resolve_shared_commerce_payload(
         if bool(llm_commerce_intent.get("needs_clarification")):
             clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
             if clarification:
+                _trace_route(
+                    "commerce.resolve_clarification",
+                    session_id=session_id,
+                    intent=str(llm_commerce_intent.get("intent") or ""),
+                    clarification=clarification,
+                )
                 logger.warning(
                     "commerce_router_resolved kind=clarification session_id=%s intent=%s question=%s",
                     session_id,
@@ -2041,6 +2090,13 @@ def _resolve_shared_commerce_payload(
             tool_name=planned_tool[0] if planned_tool else None,
         )
         if not transition.allowed and transition.clarification:
+            _trace_route(
+                "commerce.blocked",
+                session_id=session_id,
+                intent=str(llm_commerce_intent.get("intent") or ""),
+                tool=planned_tool[0] if planned_tool else "",
+                clarification=transition.clarification,
+            )
             logger.warning(
                 "commerce_router_blocked session_id=%s intent=%s tool=%s clarification=%s",
                 session_id,
@@ -2053,6 +2109,12 @@ def _resolve_shared_commerce_payload(
                 "intent_label": str(llm_commerce_intent.get("intent") or intent_label or "commerce").strip() or "commerce",
             }
         if planned_tool and planned_tool[0] in {"get_order_status", "get_shipping_options", "get_payment_options", "get_product_availability"}:
+            _trace_route(
+                "commerce.tool_call",
+                session_id=session_id,
+                tool=planned_tool[0],
+                arguments=planned_tool[1],
+            )
             logger.warning(
                 "commerce_router_tool_call session_id=%s tool=%s arguments=%s",
                 session_id,
@@ -2073,6 +2135,13 @@ def _resolve_shared_commerce_payload(
                 channel=channel,
             )
             if payload:
+                _trace_route(
+                    "commerce.resolve_tool_payload",
+                    session_id=session_id,
+                    tool=planned_tool[0],
+                    intent=str(payload.get("intent_label") or llm_commerce_intent.get("intent") or ""),
+                    workflow_stage=str(payload.get("workflow_stage") or transition.next_stage),
+                )
                 logger.warning(
                     "commerce_router_resolved kind=tool_payload session_id=%s tool=%s payload_intent=%s workflow_stage=%s",
                     session_id,
@@ -2085,6 +2154,11 @@ def _resolve_shared_commerce_payload(
                 return payload
 
         if planned_tool and planned_tool[0] in {"create_order_draft", "create_payment_link"}:
+            _trace_route(
+                "commerce.checkout_tool",
+                session_id=session_id,
+                tool=planned_tool[0],
+            )
             logger.warning(
                 "commerce_router_checkout_tool session_id=%s tool=%s",
                 session_id,
@@ -2124,6 +2198,13 @@ def _resolve_shared_commerce_payload(
                 channel=channel,
             )
             if payload:
+                _trace_route(
+                    "commerce.resolve_checkout_payload",
+                    session_id=session_id,
+                    tool=planned_tool[0],
+                    checkout_stage=str(payload.get("checkout_stage") or ""),
+                    reset=bool(payload.get("reset_workflow")),
+                )
                 logger.warning(
                     "commerce_router_resolved kind=checkout_payload session_id=%s tool=%s checkout_stage=%s reset=%s",
                     session_id,
@@ -2176,6 +2257,7 @@ def _resolve_shared_commerce_payload(
     if not cart_requests:
         cart_requests = _cart_requests_from_recent_products(message, session_id)
     if cart_requests:
+        _trace_route("commerce.cart_requests", session_id=session_id, requests=cart_requests)
         logger.warning(
             "commerce_router_cart_requests session_id=%s requests=%s",
             session_id,
@@ -2197,6 +2279,11 @@ def _resolve_shared_commerce_payload(
         ]
         payload = _build_multi_cart_tool_payload(canonical_results, cart_requests)
         if payload:
+            _trace_route(
+                "commerce.resolve_multi_cart_payload",
+                session_id=session_id,
+                workflow_stage=str(payload.get("workflow_stage") or ""),
+            )
             logger.warning(
                 "commerce_router_resolved kind=multi_cart_payload session_id=%s workflow_stage=%s",
                 session_id,
@@ -2208,6 +2295,7 @@ def _resolve_shared_commerce_payload(
     if not lookup_queries:
         lookup_queries = _product_lookup_queries_from_message(message)
     if len(lookup_queries) > 1:
+        _trace_route("commerce.lookup_queries", session_id=session_id, queries=lookup_queries)
         logger.warning(
             "commerce_router_lookup_queries session_id=%s queries=%s",
             session_id,
@@ -2229,6 +2317,11 @@ def _resolve_shared_commerce_payload(
         ]
         payload = _build_multi_product_lookup_payload(canonical_results, lookup_queries, message)
         if payload:
+            _trace_route(
+                "commerce.resolve_multi_lookup_payload",
+                session_id=session_id,
+                products=len(payload.get("products") or []),
+            )
             logger.warning(
                 "commerce_router_resolved kind=multi_lookup_payload session_id=%s products=%s",
                 session_id,
@@ -2236,6 +2329,14 @@ def _resolve_shared_commerce_payload(
             )
             return payload
 
+    _trace_route(
+        "commerce.no_payload",
+        session_id=session_id,
+        greeting_like=_is_likely_greeting_message(message),
+        normalized_message=normalized_message,
+        llm_intent=str((llm_commerce_intent or {}).get("intent") or ""),
+        lookup_queries=lookup_queries if 'lookup_queries' in locals() else [],
+    )
     logger.warning(
         "commerce_router_no_payload session_id=%s greeting_like=%s normalized_message=%s llm_intent=%s lookup_queries=%s",
         session_id,
@@ -7246,6 +7347,14 @@ def public_widget_chat(
         widget_id=payload.widget_id,
         session_id=payload.session_id,
     )
+    _trace_route(
+        "widget.entry",
+        widget_id=payload.widget_id,
+        session_id=effective_session_id,
+        visitor_id=payload.visitor_id or "",
+        external_user_id=payload.external_user_id or "",
+        message=_normalize_widget_text(payload.message),
+    )
     started = time.perf_counter()
 
     clubhx_tools_client = _get_clubhx_tools_client()
@@ -7269,6 +7378,14 @@ def public_widget_chat(
         workflow_state=workflow_state,
     )
     if shared_commerce_payload and shared_commerce_payload.get("answer"):
+        _trace_route(
+            "widget.reply_from_commerce",
+            widget_id=payload.widget_id,
+            session_id=effective_session_id,
+            intent=str(shared_commerce_payload.get("intent_label") or ""),
+            workflow_stage=str(shared_commerce_payload.get("workflow_stage") or ""),
+            checkout_stage=str(shared_commerce_payload.get("checkout_stage") or ""),
+        )
         shared_products = shared_commerce_payload.get("products") if isinstance(shared_commerce_payload.get("products"), list) else None
         if shared_products:
             _remember_commerce_products(effective_session_id, shared_products)
@@ -7360,6 +7477,15 @@ def public_widget_chat(
     )
     if not routed_tool and rag_result.route == "no_knowledge":
         routed_tool = _forced_commerce_tool(payload.message, effective_session_id)
+    _trace_route(
+        "widget.agent_result",
+        widget_id=payload.widget_id,
+        session_id=effective_session_id,
+        route=str(rag_result.route or ""),
+        intent=str(rag_result.intent_label or ""),
+        response_mode=str(rag_result.response_mode or ""),
+        routed_tool=routed_tool[0] if routed_tool else "",
+    )
     logger.info(
         "public_widget_chat_tool_routing widget_id=%s intent=%s route=%s routed_tool=%s client_ready=%s",
         payload.widget_id,
@@ -7387,6 +7513,13 @@ def public_widget_chat(
             if tool_products:
                 _remember_commerce_products(effective_session_id, tool_products)
             if tool_payload and tool_payload.get("answer"):
+                _trace_route(
+                    "widget.reply_from_agent_tool",
+                    widget_id=payload.widget_id,
+                    session_id=effective_session_id,
+                    tool=routed_tool[0],
+                    intent=str(rag_result.intent_label or ""),
+                )
                 final_answer = enforce_channel_response_contract(
                     str(tool_payload.get("answer") or "").strip(),
                     query=payload.message,
@@ -7490,6 +7623,14 @@ def public_widget_chat(
             query=payload.message,
             channel="widget_public",
         )
+    _trace_route(
+        "widget.reply_from_agent",
+        widget_id=payload.widget_id,
+        session_id=effective_session_id,
+        route=str(rag_result.route or ""),
+        intent=str(rag_result.intent_label or ""),
+        response_mode=str(rag_result.response_mode or ""),
+    )
     response_latency_ms = int((time.perf_counter() - started) * 1000)
 
     _record_chat_audit(
