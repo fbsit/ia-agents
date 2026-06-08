@@ -14,11 +14,14 @@ class SessionTurn:
 class SessionSummary:
     user_goal: str = ""
     funnel_stage: str = ""
+    checkout_stage: str = ""
     pending_next_step: str = ""
     last_product_query: str = ""
     selected_products: str = ""
     shipping_preference: str = ""
+    pickup_location_label: str = ""
     payment_preference: str = ""
+    customer_authenticated: bool = False
     order_reference: str = ""
     last_tool: str = ""
     last_action: str = ""

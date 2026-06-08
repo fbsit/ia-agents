@@ -123,6 +123,8 @@ def _format_session_summary(summary: SessionSummary) -> str:
         lines.append(f"- Objetivo actual del usuario: {_truncate_memory_text(summary.user_goal, 180)}")
     if summary.funnel_stage:
         lines.append(f"- Etapa comercial actual: {summary.funnel_stage}")
+    if summary.checkout_stage:
+        lines.append(f"- Subetapa checkout: {summary.checkout_stage}")
     if summary.pending_next_step:
         lines.append(f"- Siguiente paso sugerido: {summary.pending_next_step}")
     if summary.selected_products:
@@ -131,8 +133,12 @@ def _format_session_summary(summary: SessionSummary) -> str:
         lines.append(f"- Ultima busqueda de producto: {_truncate_memory_text(summary.last_product_query, 140)}")
     if summary.shipping_preference:
         lines.append(f"- Preferencia de despacho: {_truncate_memory_text(summary.shipping_preference, 120)}")
+    if summary.pickup_location_label:
+        lines.append(f"- Punto de retiro elegido: {_truncate_memory_text(summary.pickup_location_label, 120)}")
     if summary.payment_preference:
         lines.append(f"- Preferencia de pago: {_truncate_memory_text(summary.payment_preference, 120)}")
+    if summary.customer_authenticated:
+        lines.append("- El cliente confirmo que inicio sesion")
     if summary.order_reference:
         lines.append(f"- Pedido/orden referenciada: {summary.order_reference}")
     if summary.last_action:
@@ -1540,16 +1546,32 @@ class AgentService:
         selected_products: list[str] | None = None,
         shipping_preference: str | None = None,
         payment_preference: str | None = None,
+        pickup_location_label: str | None = None,
+        customer_authenticated: bool | None = None,
         order_reference: str | None = None,
         notes: str | None = None,
         workflow_stage: str | None = None,
         pending_next_step: str | None = None,
+        checkout_stage: str | None = None,
+        reset_workflow: bool = False,
     ) -> None:
         clean_session_id = (session_id or "").strip()
         if not clean_session_id:
             return
         memory_session_id = self._memory_session_id(agent_id, clean_session_id)
         summary = self.session_store.get_summary(company_id=company_id, session_id=memory_session_id)
+
+        if reset_workflow:
+            summary.funnel_stage = "browsing"
+            summary.checkout_stage = ""
+            summary.pending_next_step = ""
+            summary.last_product_query = ""
+            summary.selected_products = ""
+            summary.shipping_preference = ""
+            summary.pickup_location_label = ""
+            summary.payment_preference = ""
+            summary.customer_authenticated = False
+            summary.order_reference = ""
 
         explicit_workflow_stage = normalize_stage(workflow_stage) if workflow_stage else ""
         if user_message and user_message.strip():
@@ -1574,8 +1596,12 @@ class AgentService:
                 summary.selected_products = _normalize_summary_value(", ".join(clean_products), 220)
         if shipping_preference and shipping_preference.strip():
             summary.shipping_preference = _normalize_summary_value(shipping_preference, 120)
+        if pickup_location_label and pickup_location_label.strip():
+            summary.pickup_location_label = _normalize_summary_value(pickup_location_label, 120)
         if payment_preference and payment_preference.strip():
             summary.payment_preference = _normalize_summary_value(payment_preference, 120)
+        if customer_authenticated is not None:
+            summary.customer_authenticated = bool(customer_authenticated)
         if order_reference and order_reference.strip():
             summary.order_reference = order_reference.strip()
         if assistant_message and assistant_message.strip():
@@ -1584,12 +1610,17 @@ class AgentService:
             summary.notes = _normalize_summary_value(notes, 180)
         if pending_next_step is not None:
             summary.pending_next_step = _normalize_summary_value(pending_next_step, 120) if pending_next_step.strip() else ""
+        if checkout_stage is not None:
+            summary.checkout_stage = _normalize_summary_value(checkout_stage, 80) if checkout_stage.strip() else ""
 
         current_state = build_workflow_state(
             stage=summary.funnel_stage,
+            checkout_stage=summary.checkout_stage,
             selected_products=summary.selected_products,
             shipping_preference=summary.shipping_preference,
+            pickup_location_label=summary.pickup_location_label,
             payment_preference=summary.payment_preference,
+            customer_authenticated=summary.customer_authenticated,
             order_reference=summary.order_reference,
         )
         transition = resolve_transition(

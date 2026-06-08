@@ -16,6 +16,7 @@ public record AiAgentChatResponse(
     boolean fallback_applied,
     Double retrieval_min_score,
     String redirect_to,
+    Map<String, Object> workflow_action,
     Map<String, Object> cart_action,
     List<Map<String, Object>> cart_actions,
     List<Map<String, Object>> products

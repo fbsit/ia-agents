@@ -143,6 +143,7 @@ public class AgentsController {
             response.fallback_applied(),
             response.retrieval_min_score(),
             response.redirect_to(),
+            response.workflow_action(),
             response.cart_action(),
             response.cart_actions(),
             response.products()

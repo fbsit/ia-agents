@@ -358,6 +358,8 @@ def _update_agent_memory_from_payload(
     selected_products = _payload_product_names(payload)
     shipping_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["envio", "despacho", "retiro", "comuna"]) else None
     payment_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else None
+    pickup_location_label = _extract_pickup_location(user_message) or None
+    customer_authenticated = True if _is_login_confirmed_message(user_message) else None
     order_reference = _extract_order_reference(user_message)
     try:
         agent_service.update_session_summary(
@@ -371,10 +373,14 @@ def _update_agent_memory_from_payload(
             product_queries=product_queries,
             selected_products=selected_products,
             shipping_preference=shipping_preference,
+            pickup_location_label=pickup_location_label,
             payment_preference=payment_preference,
+            customer_authenticated=customer_authenticated,
             order_reference=order_reference or None,
             workflow_stage=str((payload or {}).get("workflow_stage") or "").strip() or None,
             pending_next_step=str((payload or {}).get("pending_next_step") or "").strip() or None,
+            checkout_stage=str((payload or {}).get("checkout_stage") or "").strip() or None,
+            reset_workflow=bool((payload or {}).get("reset_workflow")),
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -409,6 +415,11 @@ def _agent_summary_context(company_id: str, agent_id: str, session_id: str) -> s
 def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> dict[str, str]:
     if agent_service is None or not session_id:
         return {}
+
+
+def _workflow_state_customer_authenticated(workflow_state: dict[str, str] | None) -> bool:
+    raw = str((workflow_state or {}).get("customer_authenticated") or "").strip().lower()
+    return raw in {"1", "true", "yes", "si"}
     try:
         summary = agent_service.get_session_summary(
             company_id=company_id,
@@ -417,10 +428,13 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
         )
         return {
             "stage": summary.funnel_stage,
+            "checkout_stage": summary.checkout_stage,
             "pending_next_step": summary.pending_next_step,
             "selected_products": summary.selected_products,
             "shipping_preference": summary.shipping_preference,
+            "pickup_location_label": summary.pickup_location_label,
             "payment_preference": summary.payment_preference,
+            "customer_authenticated": "true" if summary.customer_authenticated else "",
             "order_reference": summary.order_reference,
         }
     except Exception as exc:  # noqa: BLE001
@@ -450,6 +464,8 @@ def _resolve_affirmative_workflow_followup(
             "intent_label": "shipping_options",
             "workflow_stage": "shipping_selection",
             "pending_next_step": "shipping_selection",
+            "checkout_stage": "shipping_method_pending",
+            "workflow_action": _workflow_action("choose_shipping_method"),
         }
     if effective_next in {"payment_selection", "payment"}:
         return {
@@ -457,7 +473,51 @@ def _resolve_affirmative_workflow_followup(
             "intent_label": "payment_options",
             "workflow_stage": "payment_selection",
             "pending_next_step": "payment_selection",
+            "checkout_stage": "payment_method_pending",
+            "workflow_action": _workflow_action("choose_payment_method"),
         }
+    return None
+
+
+def _resolve_checkout_workflow_followup(
+    *,
+    message: str,
+    workflow_state: dict[str, str] | None,
+) -> dict[str, Any] | None:
+    if _is_login_confirmed_message(message):
+        return {
+            "answer": "Perfecto, tomo que ya iniciaste sesion. Ahora dime si prefieres retiro en tienda o despacho.",
+            "intent_label": "checkout_auth_confirmed",
+            "workflow_stage": "shipping_selection",
+            "checkout_stage": "shipping_method_pending",
+            "pending_next_step": "shipping_selection",
+            "workflow_action": _workflow_action("auth_confirmed", authenticated=True),
+        }
+
+    pickup_location = _extract_pickup_location(message)
+    if pickup_location:
+        return {
+            "answer": f"Perfecto, dejo retiro en {pickup_location}. Si quieres, el siguiente paso es revisar pago.",
+            "intent_label": "pickup_location_selected",
+            "workflow_stage": "payment_selection",
+            "checkout_stage": "pickup_location_selected",
+            "pending_next_step": "payment_selection",
+            "workflow_action": _workflow_action(
+                "pickup_location_selected",
+                pickup_location_label=pickup_location,
+            ),
+        }
+
+    if _wants_pickup(message):
+        return {
+            "answer": "Perfecto, podemos seguir con retiro. Dime en que tienda o punto de retiro quieres retirar.",
+            "intent_label": "pickup_selected",
+            "workflow_stage": "shipping_selection",
+            "checkout_stage": "pickup_location_pending",
+            "pending_next_step": "shipping_selection",
+            "workflow_action": _workflow_action("choose_pickup_location"),
+        }
+
     return None
 
 
@@ -564,6 +624,43 @@ def _is_clear_cart_message(message: str) -> bool:
             "deja el carrito vacia",
         ]
     )
+
+
+def _is_login_confirmed_message(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    return normalized in {
+        "ya inicie sesion",
+        "ya inicié sesion",
+        "ya inicie login",
+        "ya hice login",
+        "ya me loguee",
+        "ya me autentique",
+        "ya estoy logueado",
+    }
+
+
+def _extract_pickup_location(message: str) -> str:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return ""
+    patterns = [
+        r"(?:retiro en|pickup en|recoger en)\s+(.+)$",
+        r"(?:sucursal|tienda|local)\s+(.+)$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, normalized, flags=re.IGNORECASE)
+        if match:
+            return str(match.group(1) or "").strip()
+    return ""
+
+
+def _wants_pickup(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    return any(token in normalized for token in ["retiro", "pickup", "recoger en tienda", "retiro en tienda"])
+
+
+def _workflow_action(action_type: str, **payload: Any) -> dict[str, Any]:
+    return {"type": action_type, "payload": payload}
 
 
 def _extract_widget_cart_change_requests(
@@ -1573,7 +1670,20 @@ def _format_public_widget_tool_payload(
             answer = "Listo, te dejo el link de pago para cerrar la compra."
             if expires_at:
                 answer += f" Vigencia: {expires_at}."
-            payload = {"answer": answer, "redirect_to": payment_url}
+            payload = {
+                "answer": answer,
+                "redirect_to": payment_url,
+                "workflow_stage": "browsing",
+                "checkout_stage": "completed",
+                "pending_next_step": "",
+                "reset_workflow": True,
+                "workflow_action": _workflow_action(
+                    "payment_link_ready",
+                    payment_url=payment_url,
+                    expires_at=expires_at,
+                    close_conversation=True,
+                ),
+            }
             return payload
         return {"answer": "Pude preparar la accion de pago, pero el proveedor no devolvio un link utilizable."}
 
@@ -1591,6 +1701,17 @@ def _format_public_widget_tool_payload(
         payload = {"answer": answer}
         if payment_url:
             payload["redirect_to"] = payment_url
+        payload["workflow_stage"] = "browsing"
+        payload["checkout_stage"] = "completed"
+        payload["pending_next_step"] = ""
+        payload["reset_workflow"] = True
+        payload["workflow_action"] = _workflow_action(
+            "order_created",
+            order_reference=draft_reference,
+            payment_url=payment_url,
+            total=total,
+            close_conversation=True,
+        )
         return payload
 
     tool_answer = _format_canonical_tool_answer(result)
@@ -1809,9 +1930,12 @@ def _resolve_shared_commerce_payload(
     )
     current_workflow = build_workflow_state(
         stage=(workflow_state or {}).get("stage"),
+        checkout_stage=(workflow_state or {}).get("checkout_stage"),
         selected_products=(workflow_state or {}).get("selected_products") or (message if runtime_product_signal else ""),
         shipping_preference=(workflow_state or {}).get("shipping_preference") or (message if any(token in _normalize_widget_text(message) for token in ["envio", "despacho", "retiro", "comuna"]) else ""),
+        pickup_location_label=(workflow_state or {}).get("pickup_location_label") or _extract_pickup_location(message),
         payment_preference=(workflow_state or {}).get("payment_preference") or (message if any(token in _normalize_widget_text(message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else ""),
+        customer_authenticated=_workflow_state_customer_authenticated(workflow_state) or _is_login_confirmed_message(message),
         order_reference=(workflow_state or {}).get("order_reference") or runtime_order_reference,
     )
 
@@ -1821,6 +1945,13 @@ def _resolve_shared_commerce_payload(
     )
     if followup_payload:
         return followup_payload
+
+    checkout_followup_payload = _resolve_checkout_workflow_followup(
+        message=message,
+        workflow_state=workflow_state,
+    )
+    if checkout_followup_payload:
+        return checkout_followup_payload
 
     if _is_clear_cart_message(message):
         return {
@@ -2241,6 +2372,7 @@ class AgentChatResponsePayload(BaseModel):
     fallback_applied: bool = False
     retrieval_min_score: float | None = None
     redirect_to: str | None = None
+    workflow_action: dict[str, Any] | None = None
     cart_action: dict[str, Any] | None = None
     cart_actions: list[dict[str, Any]] | None = None
     products: list[dict[str, Any]] | None = None
@@ -2346,6 +2478,7 @@ class PublicWidgetChatResponsePayload(BaseModel):
     intent_label: str | None = None
     response_mode: str | None = None
     redirect_to: str | None = None
+    workflow_action: dict[str, Any] | None = None
     cart_action: dict[str, Any] | None = None
     cart_actions: list[dict[str, Any]] | None = None
     products: list[dict[str, Any]] | None = None
@@ -5923,6 +6056,7 @@ def internal_chat_with_agent(
                     fallback_applied=False,
                     retrieval_min_score=None,
                     redirect_to=str(shared_commerce_payload.get("redirect_to") or "").strip() or None,
+                    workflow_action=shared_commerce_payload.get("workflow_action") if isinstance(shared_commerce_payload.get("workflow_action"), dict) else None,
                     cart_action=shared_commerce_payload.get("cart_action") if isinstance(shared_commerce_payload.get("cart_action"), dict) else None,
                     cart_actions=shared_commerce_payload.get("cart_actions") if isinstance(shared_commerce_payload.get("cart_actions"), list) else None,
                     products=shared_products,
@@ -5998,6 +6132,7 @@ def internal_chat_with_agent(
                         fallback_applied=False,
                         retrieval_min_score=None,
                         redirect_to=str((tool_payload or {}).get("redirect_to") or "").strip() or None,
+                        workflow_action=(tool_payload or {}).get("workflow_action") if isinstance((tool_payload or {}).get("workflow_action"), dict) else None,
                         cart_action=(tool_payload or {}).get("cart_action") if isinstance((tool_payload or {}).get("cart_action"), dict) else None,
                         cart_actions=(tool_payload or {}).get("cart_actions") if isinstance((tool_payload or {}).get("cart_actions"), list) else None,
                         products=(tool_payload or {}).get("products") if isinstance((tool_payload or {}).get("products"), list) else None,
@@ -6246,6 +6381,7 @@ def chat_with_agent(
                     fallback_applied=False,
                     retrieval_min_score=None,
                     redirect_to=str(shared_commerce_payload.get("redirect_to") or "").strip() or None,
+                    workflow_action=shared_commerce_payload.get("workflow_action") if isinstance(shared_commerce_payload.get("workflow_action"), dict) else None,
                     cart_action=shared_commerce_payload.get("cart_action") if isinstance(shared_commerce_payload.get("cart_action"), dict) else None,
                     cart_actions=shared_commerce_payload.get("cart_actions") if isinstance(shared_commerce_payload.get("cart_actions"), list) else None,
                     products=shared_products,
@@ -6321,6 +6457,7 @@ def chat_with_agent(
                         fallback_applied=False,
                         retrieval_min_score=None,
                         redirect_to=str((tool_payload or {}).get("redirect_to") or "").strip() or None,
+                        workflow_action=(tool_payload or {}).get("workflow_action") if isinstance((tool_payload or {}).get("workflow_action"), dict) else None,
                         cart_action=(tool_payload or {}).get("cart_action") if isinstance((tool_payload or {}).get("cart_action"), dict) else None,
                         cart_actions=(tool_payload or {}).get("cart_actions") if isinstance((tool_payload or {}).get("cart_actions"), list) else None,
                         products=(tool_payload or {}).get("products") if isinstance((tool_payload or {}).get("products"), list) else None,
@@ -7068,6 +7205,7 @@ def public_widget_chat(
             intent_label=str(shared_commerce_payload.get("intent_label") or "commerce"),
             response_mode="tool_only",
             redirect_to=str(shared_commerce_payload.get("redirect_to") or "").strip() or None,
+            workflow_action=shared_commerce_payload.get("workflow_action") if isinstance(shared_commerce_payload.get("workflow_action"), dict) else None,
             cart_action=shared_commerce_payload.get("cart_action") if isinstance(shared_commerce_payload.get("cart_action"), dict) else None,
             cart_actions=shared_commerce_payload.get("cart_actions") if isinstance(shared_commerce_payload.get("cart_actions"), list) else None,
             products=shared_products,
@@ -7186,6 +7324,7 @@ def public_widget_chat(
                     intent_label=rag_result.intent_label,
                     response_mode="tool_only",
                     redirect_to=str(tool_payload.get("redirect_to") or "").strip() or None,
+                    workflow_action=tool_payload.get("workflow_action") if isinstance(tool_payload.get("workflow_action"), dict) else None,
                     cart_action=tool_payload.get("cart_action") if isinstance(tool_payload.get("cart_action"), dict) else None,
                     cart_actions=tool_payload.get("cart_actions") if isinstance(tool_payload.get("cart_actions"), list) else None,
                     products=tool_payload.get("products") if isinstance(tool_payload.get("products"), list) else None,

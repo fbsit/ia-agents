@@ -796,3 +796,6 @@
 2026-06-07 19:49:03,037 INFO chat_api agent_repository_backend=sqlite
 2026-06-07 19:49:03,038 INFO chat_api evaluation_worker_started
 2026-06-07 19:49:03,046 INFO chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs
+2026-06-07 20:20:11,955 INFO chat_api agent_repository_backend=sqlite
+2026-06-07 20:20:11,957 INFO chat_api evaluation_worker_started
+2026-06-07 20:20:11,967 INFO chat_api Identity endpoints moved to platform-api: /auth, /me, /orgs

@@ -18,9 +18,12 @@ WORKFLOW_STAGES = {
 @dataclass
 class CommerceWorkflowState:
     stage: str = "browsing"
+    checkout_stage: str = ""
     has_selected_products: bool = False
     has_shipping_preference: bool = False
+    has_pickup_location: bool = False
     has_payment_preference: bool = False
+    customer_authenticated: bool = False
     has_order_reference: bool = False
 
 
@@ -42,16 +45,22 @@ def normalize_stage(stage: str | None) -> str:
 def build_state(
     *,
     stage: str | None,
+    checkout_stage: str | None,
     selected_products: str | None,
     shipping_preference: str | None,
+    pickup_location_label: str | None,
     payment_preference: str | None,
+    customer_authenticated: bool | None,
     order_reference: str | None,
 ) -> CommerceWorkflowState:
     return CommerceWorkflowState(
         stage=normalize_stage(stage),
+        checkout_stage=(checkout_stage or "").strip().lower(),
         has_selected_products=bool((selected_products or "").strip()),
         has_shipping_preference=bool((shipping_preference or "").strip()),
+        has_pickup_location=bool((pickup_location_label or "").strip()),
         has_payment_preference=bool((payment_preference or "").strip()),
+        customer_authenticated=bool(customer_authenticated),
         has_order_reference=bool((order_reference or "").strip()),
     )
 
