@@ -690,12 +690,23 @@ def _extract_widget_cart_change_requests(
     mode: str,
 ) -> list[dict[str, Any]]:
     normalized = _normalize_widget_text(message)
+    _trace_route(
+        "cart_change.extract.start",
+        mode=mode,
+        message=message,
+        normalized=normalized,
+    )
     if not normalized:
         return []
 
     segments = [part.strip() for part in re.split(r"\s+(?:y|e|ademas|tambien)\s+", normalized) if part.strip()]
     requests: list[dict[str, Any]] = []
     for segment in segments:
+        _trace_route(
+            "cart_change.extract.segment",
+            mode=mode,
+            segment=segment,
+        )
         if mode == "remove":
             cleaned = re.sub(
                 r"\b(?:quita|quitame|quitar|saca|sacame|sacar|remueve|remover|elimina|eliminar|borra|borrar|del|de|la|el|los|las|carrito)\b",
@@ -711,6 +722,12 @@ def _extract_widget_cart_change_requests(
                 flags=re.IGNORECASE,
             )
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        _trace_route(
+            "cart_change.extract.cleaned",
+            mode=mode,
+            segment=segment,
+            cleaned=cleaned,
+        )
         if not cleaned:
             continue
 
@@ -720,17 +737,40 @@ def _extract_widget_cart_change_requests(
         if not product_query:
             continue
         requests.append({"quantity": quantity, "product_query": product_query})
+    _trace_route(
+        "cart_change.extract.result",
+        mode=mode,
+        requests=requests,
+    )
     return requests
 
 
 def _extract_widget_cart_requests(message: str) -> list[dict[str, Any]]:
     normalized = _normalize_widget_text(message)
+    _trace_route(
+        "cart.extract.start",
+        message=message,
+        normalized=normalized,
+        implicit_add=_is_implicit_add_to_cart_message(message),
+    )
     if not normalized:
         return []
 
     segments = [part.strip() for part in re.split(r"\s+(?:y|e|ademas|tambien)\s+", normalized) if part.strip()]
     requests: list[dict[str, Any]] = []
     for segment in segments:
+        has_add_verb = bool(
+            re.search(
+                r"\b(?:agrega|agregame|agregar|suma|sumame|sumar|pon|poneme|poner|mete|meteme|anade|llevo|quiero)\b",
+                segment,
+                flags=re.IGNORECASE,
+            )
+        )
+        _trace_route(
+            "cart.extract.segment",
+            segment=segment,
+            has_add_verb=has_add_verb,
+        )
         cleaned = re.sub(
             r"\b(?:agrega|agregame|agregar|suma|sumame|sumar|pon|poneme|poner|mete|meteme|anade|llevo|quiero|porfa|por favor|al|carrito|el|la|los|las)\b",
             " ",
@@ -738,6 +778,12 @@ def _extract_widget_cart_requests(message: str) -> list[dict[str, Any]]:
             flags=re.IGNORECASE,
         )
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        _trace_route(
+            "cart.extract.cleaned",
+            segment=segment,
+            cleaned=cleaned,
+            has_add_verb=has_add_verb,
+        )
         if not cleaned:
             continue
 
@@ -747,11 +793,21 @@ def _extract_widget_cart_requests(message: str) -> list[dict[str, Any]]:
         if not product_query:
             continue
         requests.append({"quantity": quantity, "product_query": product_query})
+    _trace_route(
+        "cart.extract.result",
+        message=message,
+        requests=requests,
+    )
     return requests
 
 
 def _extract_widget_product_lookup_query(message: str) -> str:
     normalized = _normalize_widget_text(message)
+    _trace_route(
+        "lookup.extract.start",
+        message=message,
+        normalized=normalized,
+    )
     if not normalized:
         return ""
 
@@ -762,6 +818,11 @@ def _extract_widget_product_lookup_query(message: str) -> str:
         flags=re.IGNORECASE,
     )
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    _trace_route(
+        "lookup.extract.result",
+        message=message,
+        cleaned=cleaned,
+    )
     return cleaned
 
 
