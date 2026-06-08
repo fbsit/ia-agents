@@ -770,6 +770,11 @@ def _workflow_action(action_type: str, **payload: Any) -> dict[str, Any]:
     return {"type": action_type, "payload": payload}
 
 
+def _is_checkout_redirect_channel(channel: str | None) -> bool:
+    normalized = (channel or "").strip().lower()
+    return normalized in {"widget_web", "web", "widget_public"}
+
+
 def _extract_widget_cart_change_requests(
     message: str,
     *,
@@ -964,10 +969,10 @@ def _parse_commerce_intent_with_openai(
                     "y definir la forma de responder de manera breve, comercial y accionable. "
                     "Devuelve SOLO JSON valido con esta forma exacta: "
                     "{\"intent\":string,\"confidence\":number,\"query\":string,\"items\":[{\"query\":string,\"quantity\":number}],\"tool\":string,\"tool_arguments\":object,\"needs_clarification\":boolean,\"clarification_question\":string,\"customer_goal\":string,\"response_style\":{\"stage\":string,\"tone\":string,\"next_step\":string,\"format\":string}}. "
-                    "Intent permitidos: none, product_lookup, add_to_cart, remove_from_cart, set_cart_quantity, clear_cart, shipping_options, payment_options, order_status, create_payment_link, create_order_draft, recipe_recommendation. "
+                    "Intent permitidos: none, product_lookup, add_to_cart, remove_from_cart, set_cart_quantity, clear_cart, cart_status, shipping_options, payment_options, order_status, create_payment_link, create_order_draft, recipe_recommendation. "
                     "Tools permitidos: none, get_product_availability, get_order_status, get_shipping_options, get_payment_options, create_payment_link, create_order_draft. "
                     "Extrae productos y cantidades. Si no hay cantidad explicita usa 1. "
-                    "Si pide quitar unidades del carrito usa remove_from_cart. Si pide dejar una cantidad exacta usa set_cart_quantity. Si pide vaciar el carrito usa clear_cart. "
+                    "Si pide quitar unidades del carrito usa remove_from_cart. Si pide dejar una cantidad exacta usa set_cart_quantity. Si pide vaciar el carrito usa clear_cart. Si pregunta por el carrito actual, resumen del carrito o como va el carrito, usa cart_status y NO order_status. "
                     "Si el mensaje pregunta disponibilidad, precio, stock o catalogo usa get_product_availability. "
                     "Si pregunta estado de pedido usa get_order_status y extrae order_reference cuando exista. "
                     "Si quiere pagar ahora o generar link usa create_payment_link solo si ya hay productos/orden suficientes, si no pide el dato faltante. "
@@ -2067,6 +2072,16 @@ def _resolve_shared_commerce_payload(
             "cart_action": {"type": "clear_cart"},
         }
 
+    if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "cart_status":
+        _trace_route("commerce.resolve_cart_status", session_id=session_id)
+        return {
+            "answer": "Te muestro el estado actual de tu carrito.",
+            "intent_label": "cart_status",
+            "workflow_stage": str((workflow_state or {}).get("stage") or "cart_building") or "cart_building",
+            "pending_next_step": str((workflow_state or {}).get("pending_next_step") or "cart_building"),
+            "workflow_action": _workflow_action("show_cart"),
+        }
+
     if isinstance(llm_commerce_intent, dict):
         _trace_route(
             "commerce.llm_intent",
@@ -2185,6 +2200,19 @@ def _resolve_shared_commerce_payload(
             )
             cart_requests = _checkout_requests_for_workflow(message, session_id, llm_commerce_intent)
             if not cart_requests:
+                if _is_checkout_redirect_channel(channel):
+                    return {
+                        "answer": "Te llevo al checkout para revisar tu carrito, despacho y pago.",
+                        "intent_label": str(llm_commerce_intent.get("intent") or intent_label or "checkout_web").strip() or "checkout_web",
+                        "workflow_stage": "checkout_ready",
+                        "checkout_stage": "web_checkout_redirect",
+                        "pending_next_step": "payment_selection",
+                        "redirect_to": "/checkout",
+                        "workflow_action": _workflow_action(
+                            "open_checkout",
+                            redirect_to="/checkout",
+                        ),
+                    }
                 clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
                 if clarification:
                     return {"answer": clarification}
