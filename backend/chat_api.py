@@ -1259,16 +1259,30 @@ def _resolve_checkout_items(
         for cart_request in cart_requests
         if str(cart_request.get("product_query") or "").strip()
     ]
+    logger.warning(
+        "commerce_checkout_resolve cart_requests=%s canonical_results_count=%s",
+        cart_requests,
+        len(canonical_results),
+    )
     items: list[dict[str, Any]] = []
     products: list[dict[str, Any]] = []
     seen_products: set[str] = set()
     for cart_request, result in zip(cart_requests, canonical_results):
         if not isinstance(result, dict) or not result.get("ok"):
+            logger.warning(
+                "commerce_checkout_skip reason=result_not_ok cart_request=%s result=%s",
+                cart_request,
+                result.get("ok") if isinstance(result, dict) else type(result).__name__,
+            )
             continue
         data = result.get("data") if isinstance(result.get("data"), dict) else {}
         rows = data.get("items") if isinstance(data.get("items"), list) else []
         safe_rows = [row for row in rows if isinstance(row, dict)]
         if not safe_rows:
+            logger.warning(
+                "commerce_checkout_skip reason=no_items cart_request=%s",
+                cart_request,
+            )
             continue
         first = safe_rows[0]
         product_id = str(first.get("id") or "").strip()
@@ -1276,7 +1290,19 @@ def _resolve_checkout_items(
         variant_id = str(first.get("id") or "").strip()
         name = str(first.get("name") or "Producto").strip() or "Producto"
         quantity = int(cart_request.get("quantity") or 1)
+
+        logger.warning(
+            "commerce_checkout_raw_item raw_item=%s cart_request=%s",
+            {k: first.get(k) for k in ("id", "code", "name", "price", "available_units") if k in first},
+            cart_request,
+        )
+
         if not product_id:
+            logger.warning(
+                "commerce_checkout_skip reason=no_product_id raw_item=%s cart_request=%s",
+                {k: first.get(k) for k in ("id", "code", "name") if k in first},
+                cart_request,
+            )
             continue
         items.append(
             {
@@ -1628,19 +1654,26 @@ def _format_public_widget_tool_payload(
         if cart_request and intent == "add_to_cart":
             first = products[0] if products else None
             if first and first.get("id"):
+                cart_action = {
+                    "type": "add_to_cart",
+                    "item": {
+                        "product_id": first["checkout_product_id"] or first["id"],
+                        "checkout_product_id": first["checkout_product_id"] or first["id"],
+                        "variant_id": first["variant_id"] or first["id"],
+                        "quantity": cart_request["quantity"],
+                        "name": first["name"],
+                    },
+                }
+                logger.warning(
+                    "commerce_tool_cart_action action=%s product=%s raw_products=%s",
+                    cart_action,
+                    first,
+                    safe_items[0] if safe_items else None,
+                )
                 return {
                     "answer": f"Listo, agregue {cart_request['quantity']} {first['name']} al carrito. Si queres, seguimos con checkout cuando me digas \"quiero pagar\".",
                     "products": products,
-                    "cart_action": {
-                        "type": "add_to_cart",
-                        "item": {
-                            "product_id": first["checkout_product_id"] or first["id"],
-                            "checkout_product_id": first["checkout_product_id"] or first["id"],
-                            "variant_id": first["variant_id"] or first["id"],
-                            "quantity": cart_request["quantity"],
-                            "name": first["name"],
-                        },
-                    },
+                    "cart_action": cart_action,
                 }
 
         remove_request = _resolve_cart_request_for_intent(
@@ -1652,19 +1685,26 @@ def _format_public_widget_tool_payload(
             first = products[0] if products else None
             if first and first.get("id"):
                 quantity = max(1, int(remove_request["quantity"]))
+                cart_action = {
+                    "type": "remove_from_cart",
+                    "item": {
+                        "product_id": first["checkout_product_id"] or first["id"],
+                        "checkout_product_id": first["checkout_product_id"] or first["id"],
+                        "variant_id": first["variant_id"] or first["id"],
+                        "quantity": quantity,
+                        "name": first["name"],
+                    },
+                }
+                logger.warning(
+                    "commerce_tool_cart_action action=%s product=%s raw_products=%s",
+                    cart_action,
+                    first,
+                    safe_items[0] if safe_items else None,
+                )
                 return {
                     "answer": f"Listo, quite {quantity} {first['name']} del carrito.",
                     "products": products,
-                    "cart_action": {
-                        "type": "remove_from_cart",
-                        "item": {
-                            "product_id": first["checkout_product_id"] or first["id"],
-                            "checkout_product_id": first["checkout_product_id"] or first["id"],
-                            "variant_id": first["variant_id"] or first["id"],
-                            "quantity": quantity,
-                            "name": first["name"],
-                        },
-                    },
+                    "cart_action": cart_action,
                     "workflow_stage": "cart_building",
                     "pending_next_step": "cart_building",
                 }
@@ -1678,30 +1718,52 @@ def _format_public_widget_tool_payload(
             first = products[0] if products else None
             if first and first.get("id"):
                 quantity = max(1, int(set_quantity_request["quantity"]))
+                cart_action = {
+                    "type": "set_cart_quantity",
+                    "item": {
+                        "product_id": first["checkout_product_id"] or first["id"],
+                        "checkout_product_id": first["checkout_product_id"] or first["id"],
+                        "variant_id": first["variant_id"] or first["id"],
+                        "quantity": quantity,
+                        "name": first["name"],
+                    },
+                }
+                logger.warning(
+                    "commerce_tool_cart_action action=%s product=%s raw_products=%s",
+                    cart_action,
+                    first,
+                    safe_items[0] if safe_items else None,
+                )
                 return {
                     "answer": f"Listo, deje {first['name']} en {quantity} unidades en el carrito.",
                     "products": products,
-                    "cart_action": {
-                        "type": "set_cart_quantity",
-                        "item": {
-                            "product_id": first["checkout_product_id"] or first["id"],
-                            "checkout_product_id": first["checkout_product_id"] or first["id"],
-                            "variant_id": first["variant_id"] or first["id"],
-                            "quantity": quantity,
-                            "name": first["name"],
-                        },
-                    },
+                    "cart_action": cart_action,
                     "workflow_stage": "cart_building",
                     "pending_next_step": "cart_building",
                 }
 
-        availability_tokens = ["tienen ", "tenes ", "hay ", "stock", "disponible", "precio", "cuesta"]
+        availability_tokens = ["tienen ", "tenes ", "tienes ", "tiene ", "hay ", "stock", "disponible", "precio", "cuesta"]
         normalized_message = (user_message or "").strip().lower()
+        clean_channel = (channel or "").strip().lower()
+        is_whatsapp = "whatsapp" in clean_channel
+
         if any(token in normalized_message for token in availability_tokens):
             first = products[0]
+            answer = f"Si, {first['name']} esta disponible. Precio: {first['price']}. Stock: {first['stock']}."
+            if is_whatsapp:
+                remaining = [f"• {p['name']} — ${p['price']}" for p in products[1:3]]
+                if remaining:
+                    answer += " Tambien tengo:\n" + "\n".join(remaining)
             return {
-                "answer": f"Si, {first['name']} esta disponible ahora. Precio: {first['price']}. Stock: {first['stock']}.",
-                "products": products[:1],
+                "answer": answer,
+                "products": products[:3],
+            }
+
+        if is_whatsapp:
+            formatted = "\n".join(f"• {p['name']} — ${p['price']}" for p in products[:5])
+            return {
+                "answer": f"Te paso las opciones que tengo:\n{formatted}",
+                "products": products,
             }
 
         return {"answer": "Te paso estas opciones disponibles:", "products": products}
@@ -1828,20 +1890,36 @@ def _build_multi_cart_tool_payload(
         checkout_product_id = str(first.get("code") or first.get("id") or "").strip()
         variant_id = str(first.get("id") or "").strip()
         name = str(first.get("name") or "Producto").strip() or "Producto"
+
+        logger.warning(
+            "commerce_cart_build_raw raw_item=%s cart_request=%s",
+            {k: first.get(k) for k in ("id", "code", "name", "price", "available_units", "image_url") if k in first},
+            cart_request,
+        )
+
         if not product_id:
+            logger.warning(
+                "commerce_cart_build_skip reason=no_product_id raw_item=%s cart_request=%s",
+                {k: first.get(k) for k in ("id", "code", "name") if k in first},
+                cart_request,
+            )
             continue
 
-        cart_actions.append(
-            {
-                "type": "add_to_cart",
-                "item": {
-                    "product_id": checkout_product_id or product_id,
-                    "checkout_product_id": checkout_product_id or product_id,
-                    "variant_id": variant_id or product_id,
-                    "quantity": int(cart_request.get("quantity") or 1),
-                    "name": name,
-                },
-            }
+        cart_action_item = {
+            "product_id": checkout_product_id or product_id,
+            "checkout_product_id": checkout_product_id or product_id,
+            "variant_id": variant_id or product_id,
+            "quantity": int(cart_request.get("quantity") or 1),
+            "name": name,
+        }
+        cart_actions.append({"type": "add_to_cart", "item": cart_action_item})
+
+        logger.warning(
+            "commerce_cart_build_action item=%s raw_id=%s raw_code=%s raw_name=%s",
+            cart_action_item,
+            first.get("id"),
+            first.get("code"),
+            first.get("name"),
         )
 
         for item in safe_items[:3]:
@@ -1881,6 +1959,7 @@ def _build_multi_product_lookup_payload(
     canonical_results: list[dict[str, Any]],
     queries: list[str],
     user_message: str,
+    channel: str | None = None,
 ) -> dict[str, Any] | None:
     products: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -1903,11 +1982,17 @@ def _build_multi_product_lookup_payload(
     if not products:
         return None
 
+    clean_channel = (channel or "").strip().lower()
+    is_whatsapp = "whatsapp" in clean_channel
     normalized_message = _normalize_widget_text(user_message)
-    if any(token in normalized_message for token in ["stock", "disponible", "precio", "cuesta", "tienen", "tenian", "hay"]):
+    if any(token in normalized_message for token in ["stock", "disponible", "precio", "cuesta", "tienen", "tienes", "tiene", "tenian", "hay"]):
         answer = "Si, encontre estas opciones disponibles:"
     else:
         answer = "Te paso estas opciones disponibles:"
+
+    if is_whatsapp and products:
+        formatted = "\n".join(f"• {p['name']} — ${p['price']}" for p in products[:5])
+        answer = f"{answer}\n{formatted}"
 
     return {
         "answer": answer,
@@ -2093,8 +2178,17 @@ def _resolve_shared_commerce_payload(
 
     if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "cart_status":
         _trace_route("commerce.resolve_cart_status", session_id=session_id)
+        clean_channel = (channel or "").strip().lower()
+        recent = _recent_commerce_products(session_id)
+        if "whatsapp" in clean_channel and recent:
+            lines = [f"• {p.get('name','Producto')} — ${p.get('price','?')}" for p in recent[:5]]
+            answer = "En tu carrito tenes:\n" + "\n".join(lines)
+        elif recent:
+            answer = f"Te muestro el estado actual de tu carrito. Productos vistos: {', '.join(p.get('name','Producto') for p in recent[:3])}."
+        else:
+            answer = "Tu carrito esta vacio. Decime que producto queres llevar."
         return {
-            "answer": "Te muestro el estado actual de tu carrito.",
+            "answer": answer,
             "intent_label": "cart_status",
             "workflow_stage": str((workflow_state or {}).get("stage") or "cart_building") or "cart_building",
             "pending_next_step": str((workflow_state or {}).get("pending_next_step") or "cart_building"),
@@ -2401,7 +2495,7 @@ def _resolve_shared_commerce_payload(
             )
             for query in lookup_queries
         ]
-        payload = _build_multi_product_lookup_payload(canonical_results, lookup_queries, message)
+        payload = _build_multi_product_lookup_payload(canonical_results, lookup_queries, message, channel=channel)
         if payload:
             _trace_route(
                 "commerce.resolve_multi_lookup_payload",
