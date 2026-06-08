@@ -11,6 +11,7 @@ import re
 import sqlite3
 import threading
 import time
+from datetime import UTC, datetime
 import unicodedata
 import urllib.error
 import urllib.request
@@ -424,6 +425,10 @@ def _update_agent_memory_from_payload(
     invoice_business_name = invoice_data.get("business_name")
     invoice_address = invoice_data.get("invoice_address")
     customer_authenticated = True if _is_login_confirmed_message(user_message) else None
+    if customer_authenticated is None and isinstance(payload, dict):
+        intent = str(payload.get("intent_label") or "").strip()
+        if intent in {"checkout_auth_confirmed", "checkout_otp_sent", "checkout_otp_invalid"}:
+            customer_authenticated = intent == "checkout_auth_confirmed"
     order_reference = _extract_order_reference(user_message)
     try:
         agent_service.update_session_summary(
@@ -451,6 +456,7 @@ def _update_agent_memory_from_payload(
             pending_next_step=str((payload or {}).get("pending_next_step") or "").strip() or None,
             checkout_stage=str((payload or {}).get("checkout_stage") or "").strip() or None,
             otp_email=str((payload or {}).get("otp_email") or "").strip() or None,
+            authenticated_at=str((payload or {}).get("authenticated_at") or "").strip() or None,
             reset_workflow=bool((payload or {}).get("reset_workflow")),
         )
     except Exception as exc:  # noqa: BLE001
@@ -492,6 +498,14 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
             agent_id=agent_id,
             session_id=session_id,
         )
+        customer_authenticated = summary.customer_authenticated
+        if customer_authenticated and summary.authenticated_at:
+            try:
+                authed_at = datetime.fromisoformat(summary.authenticated_at)
+                if (datetime.now(UTC) - authed_at).total_seconds() > 900:
+                    customer_authenticated = False
+            except (ValueError, TypeError):
+                pass
         return {
             "stage": summary.funnel_stage,
             "checkout_stage": summary.checkout_stage,
@@ -506,9 +520,10 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
             "invoice_business_name": summary.invoice_business_name,
             "invoice_address": summary.invoice_address,
             "payment_preference": summary.payment_preference,
-            "customer_authenticated": "true" if summary.customer_authenticated else "",
+            "customer_authenticated": "true" if customer_authenticated else "",
             "order_reference": summary.order_reference,
             "otp_email": summary.otp_email,
+            "authenticated_at": summary.authenticated_at,
         }
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -561,6 +576,43 @@ def _resolve_affirmative_workflow_followup(
     return None
 
 
+def _create_address_for_user(
+    clubhx_tools_client: Any | None,
+    company_id: str | None,
+    user_id: str | None,
+    address_text: str,
+    channel: str | None = None,
+) -> None:
+    if clubhx_tools_client is None or not user_id or not address_text:
+        return
+    parts = [p.strip() for p in address_text.split(",")]
+    street = parts[0] if parts else address_text
+    city = parts[1] if len(parts) > 1 else ""
+    number = ""
+    for segment in street.split():
+        if any(c.isdigit() for c in segment) and not number:
+            idx = street.find(segment)
+            number = segment
+            street = street[:idx].strip()
+            break
+    try:
+        clubhx_tools_client.execute_canonical(
+            tenant_id=company_id or "",
+            tool="create_address",
+            channel=channel or "",
+            user_id=user_id,
+            arguments={
+                "name": "Dirección de despacho",
+                "street": street,
+                "number": number,
+                "city": city,
+            },
+        )
+        logger.info("create_address_ok user_id=%s street=%s number=%s city=%s", user_id, street, number, city)
+    except Exception as exc:
+        logger.warning("create_address_failed user_id=%s address=%s detail=%s", user_id, address_text, exc)
+
+
 def _resolve_checkout_workflow_followup(
     *,
     message: str,
@@ -572,6 +624,11 @@ def _resolve_checkout_workflow_followup(
     clubhx_tools_client: Any | None = None,
 ) -> dict[str, Any] | None:
     current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip()
+    logger.warning(
+        "checkout_followup_state session_id=%s checkout_stage=%s message=%s otp_email=%s",
+        session_id, current_checkout_stage, message,
+        str((workflow_state or {}).get("otp_email") or ""),
+    )
     _trace_route(
         "checkout_followup.check_stage",
         session_id=session_id,
@@ -640,6 +697,7 @@ def _resolve_checkout_workflow_followup(
             "workflow_stage": "shipping_selection",
             "checkout_stage": "shipping_method_pending",
             "pending_next_step": "shipping_selection",
+            "authenticated_at": datetime.now(UTC).isoformat(),
             "workflow_action": _workflow_action("auth_confirmed", authenticated=True),
         }
 
@@ -650,6 +708,7 @@ def _resolve_checkout_workflow_followup(
             "workflow_stage": "shipping_selection",
             "checkout_stage": "shipping_method_pending",
             "pending_next_step": "shipping_selection",
+            "authenticated_at": datetime.now(UTC).isoformat(),
             "workflow_action": _workflow_action("auth_confirmed", authenticated=True),
         }
 
@@ -681,6 +740,13 @@ def _resolve_checkout_workflow_followup(
     address_confirmed = _workflow_state_bool((workflow_state or {}).get("delivery_address_confirmed"))
 
     if existing_address and _is_address_confirmation(message):
+        _create_address_for_user(
+            clubhx_tools_client=clubhx_tools_client,
+            company_id=company_id,
+            user_id=user_id,
+            address_text=existing_address,
+            channel=channel,
+        )
         return {
             "answer": f"Perfecto, confirmo direccion: {existing_address}. Ahora pasemos al pago.",
             "intent_label": "delivery_address_confirmed",
@@ -2897,6 +2963,41 @@ def _resolve_shared_commerce_payload(
                     }
             if not _is_checkout_redirect_channel(channel):
                 if not current_workflow.customer_authenticated:
+                    if _is_otp_code_message(message):
+                        otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
+                        if otp_email and clubhx_tools_client is not None:
+                            try:
+                                result = clubhx_tools_client.execute_canonical(
+                                    tenant_id=company_id,
+                                    tool="verify_verification_code",
+                                    channel=channel,
+                                    user_id=user_id,
+                                    arguments={"email": otp_email, "code": message.strip()},
+                                )
+                                logger.info(
+                                    "verify_verification_code_result session_id=%s email=%s code=%s result=%s",
+                                    session_id, otp_email, message.strip(), result,
+                                )
+                                if isinstance(result, dict) and result.get("verified") is True:
+                                    return {
+                                        "answer": "Perfecto, ya estas autenticado. Ahora dime si prefieres retiro en tienda o despacho.",
+                                        "intent_label": "checkout_auth_confirmed",
+                                        "workflow_stage": "shipping_selection",
+                                        "checkout_stage": "shipping_method_pending",
+                                        "pending_next_step": "shipping_selection",
+                                        "authenticated_at": datetime.now(UTC).isoformat(),
+                                        "workflow_action": _workflow_action("auth_confirmed", authenticated=True),
+                                    }
+                            except Exception as exc:
+                                logger.warning("verify_verification_code_failed session_id=%s code=%s detail=%s", session_id, message.strip(), exc)
+                        return {
+                            "answer": "El codigo ingresado no es valido. Intenta de nuevo o escribe tu correo para reenviar el codigo.",
+                            "intent_label": "checkout_otp_invalid",
+                            "workflow_stage": "checkout_ready",
+                            "checkout_stage": "otp_pending",
+                            "pending_next_step": "otp_verification",
+                            "workflow_action": _workflow_action("otp_invalid"),
+                        }
                     if _is_email_message(message):
                         if clubhx_tools_client is not None:
                             try:

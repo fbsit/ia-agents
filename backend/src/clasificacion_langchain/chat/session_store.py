@@ -30,6 +30,7 @@ class SessionSummary:
     customer_authenticated: bool = False
     order_reference: str = ""
     otp_email: str = ""
+    authenticated_at: str = ""
     last_tool: str = ""
     last_action: str = ""
     notes: str = ""
