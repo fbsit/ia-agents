@@ -472,11 +472,6 @@ def _agent_summary_context(company_id: str, agent_id: str, session_id: str) -> s
 def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> dict[str, str]:
     if agent_service is None or not session_id:
         return {}
-
-
-def _workflow_state_customer_authenticated(workflow_state: dict[str, str] | None) -> bool:
-    raw = str((workflow_state or {}).get("customer_authenticated") or "").strip().lower()
-    return raw in {"1", "true", "yes", "si"}
     try:
         summary = agent_service.get_session_summary(
             company_id=company_id,
@@ -503,6 +498,11 @@ def _workflow_state_customer_authenticated(workflow_state: dict[str, str] | None
             exc,
         )
         return {}
+
+
+def _workflow_state_customer_authenticated(workflow_state: dict[str, str] | None) -> bool:
+    raw = str((workflow_state or {}).get("customer_authenticated") or "").strip().lower()
+    return raw in {"1", "true", "yes", "si"}
 
 
 def _resolve_affirmative_workflow_followup(
@@ -2246,6 +2246,8 @@ def _resolve_shared_commerce_payload(
                 return {"answer": clarification}
 
         planned_tool = _tool_from_llm_commerce_intent(llm_commerce_intent, session_id)
+        if planned_tool is None and llm_intent_name in {"create_payment_link", "create_order_draft", "checkout"}:
+            planned_tool = (llm_intent_name, {"session_id": session_id})
         transition = resolve_workflow_transition(
             current=current_workflow,
             intent_label=str(llm_commerce_intent.get("intent") or intent_label or ""),
@@ -2342,10 +2344,40 @@ def _resolve_shared_commerce_payload(
                             redirect_to="/cart",
                         ),
                     }
-                clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
-                if clarification:
-                    return {"answer": clarification}
-                return {"answer": "Para avanzar necesito que me confirmes que producto quieres llevar y en que cantidad."}
+                recent = _recent_commerce_products(session_id)
+                if recent:
+                    cart_requests = [
+                        {"product_query": p.get("name", ""), "quantity": 1}
+                        for p in recent[:3] if p.get("name")
+                    ]
+                    logger.warning(
+                        "commerce_checkout_recent_fallback session_id=%s cart_requests=%s",
+                        session_id, cart_requests,
+                    )
+                if not cart_requests:
+                    return {
+                        "answer": "Primero decime que producto queres llevar y te ayudo con el pago.",
+                        "intent_label": str(llm_commerce_intent.get("intent") or intent_label or "commerce").strip() or "commerce",
+                    }
+            if not _is_checkout_redirect_channel(channel):
+                if not current_workflow.customer_authenticated:
+                    return {
+                        "answer": "Para seguir con el pago necesito que me confirmes tus datos. Decime si ya iniciaste sesion o tu nombre para continuar.",
+                        "intent_label": "checkout_auth_needed",
+                        "workflow_stage": "checkout_ready",
+                        "checkout_stage": "auth_pending",
+                        "pending_next_step": "auth_confirmation",
+                        "workflow_action": _workflow_action("request_auth"),
+                    }
+                if not current_workflow.has_shipping_preference and not current_workflow.has_pickup_location:
+                    return {
+                        "answer": "Ahora necesito saber si preferis retiro en tienda o despacho a domicilio.",
+                        "intent_label": "shipping_options",
+                        "workflow_stage": "shipping_selection",
+                        "checkout_stage": "shipping_method_pending",
+                        "pending_next_step": "shipping_selection",
+                        "workflow_action": _workflow_action("choose_shipping_method"),
+                    }
             checkout_items, checkout_products = _resolve_checkout_items(
                 company_id=company_id,
                 user_id=user_id,
