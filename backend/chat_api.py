@@ -2138,10 +2138,10 @@ def _resolve_shared_commerce_payload(
                 "workflow_stage": "checkout_ready",
                 "checkout_stage": "web_checkout_redirect",
                 "pending_next_step": "payment_selection",
-                "redirect_to": "/checkout",
+                "redirect_to": "/cart",
                 "workflow_action": _workflow_action(
                     "open_checkout",
-                    redirect_to="/checkout",
+                    redirect_to="/cart",
                 ),
             }
 
@@ -2253,10 +2253,10 @@ def _resolve_shared_commerce_payload(
                         "workflow_stage": "checkout_ready",
                         "checkout_stage": "web_checkout_redirect",
                         "pending_next_step": "payment_selection",
-                        "redirect_to": "/checkout",
+                        "redirect_to": "/cart",
                         "workflow_action": _workflow_action(
                             "open_checkout",
-                            redirect_to="/checkout",
+                            redirect_to="/cart",
                         ),
                     }
                 clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
