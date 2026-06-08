@@ -137,6 +137,17 @@ _SUPPORTED_COMMERCE_TOOLS = {
     "create_payment_link",
     "create_order_draft",
 }
+_GREETING_TERMS = {
+    "hola",
+    "buenas",
+    "buen dia",
+    "buenos dias",
+    "buenas tardes",
+    "buenas noches",
+    "holi",
+    "hello",
+    "hi",
+}
 
 
 def _normalize_widget_text(text: str) -> str:
@@ -144,6 +155,11 @@ def _normalize_widget_text(text: str) -> str:
     normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
     normalized = re.sub(r"[^a-zA-Z0-9\s]+", " ", normalized).lower()
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _is_likely_greeting_message(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    return normalized in _GREETING_TERMS
 
 
 def _remember_commerce_products(session_id: str, products: list[dict[str, Any]]) -> None:
@@ -1913,7 +1929,25 @@ def _resolve_shared_commerce_payload(
     workflow_state: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
     if clubhx_tools_client is None:
+        logger.info(
+            "commerce_router_skip reason=no_tools_client session_id=%s channel=%s message=%s",
+            session_id,
+            channel,
+            message,
+        )
         return None
+
+    normalized_message = _normalize_widget_text(message)
+    logger.info(
+        "commerce_router_start session_id=%s channel=%s greeting_like=%s message=%s workflow_stage=%s checkout_stage=%s pending_next_step=%s",
+        session_id,
+        channel,
+        _is_likely_greeting_message(message),
+        normalized_message,
+        str((workflow_state or {}).get("stage") or ""),
+        str((workflow_state or {}).get("checkout_stage") or ""),
+        str((workflow_state or {}).get("pending_next_step") or ""),
+    )
 
     llm_commerce_intent = _parse_commerce_intent_with_openai(
         message,
@@ -1944,6 +1978,13 @@ def _resolve_shared_commerce_payload(
         workflow_state=workflow_state,
     )
     if followup_payload:
+        logger.info(
+            "commerce_router_resolved kind=affirmative_followup session_id=%s payload_intent=%s workflow_stage=%s pending_next_step=%s",
+            session_id,
+            str(followup_payload.get("intent_label") or ""),
+            str(followup_payload.get("workflow_stage") or ""),
+            str(followup_payload.get("pending_next_step") or ""),
+        )
         return followup_payload
 
     checkout_followup_payload = _resolve_checkout_workflow_followup(
@@ -1951,9 +1992,20 @@ def _resolve_shared_commerce_payload(
         workflow_state=workflow_state,
     )
     if checkout_followup_payload:
+        logger.info(
+            "commerce_router_resolved kind=checkout_followup session_id=%s payload_intent=%s workflow_stage=%s checkout_stage=%s",
+            session_id,
+            str(checkout_followup_payload.get("intent_label") or ""),
+            str(checkout_followup_payload.get("workflow_stage") or ""),
+            str(checkout_followup_payload.get("checkout_stage") or ""),
+        )
         return checkout_followup_payload
 
     if _is_clear_cart_message(message):
+        logger.info(
+            "commerce_router_resolved kind=clear_cart session_id=%s",
+            session_id,
+        )
         return {
             "answer": "Listo, vacie el carrito.",
             "intent_label": "clear_cart",
@@ -1963,9 +2015,23 @@ def _resolve_shared_commerce_payload(
         }
 
     if isinstance(llm_commerce_intent, dict):
+        logger.info(
+            "commerce_router_llm_intent session_id=%s intent=%s tool=%s needs_clarification=%s query=%s",
+            session_id,
+            str(llm_commerce_intent.get("intent") or ""),
+            str(llm_commerce_intent.get("tool") or ""),
+            bool(llm_commerce_intent.get("needs_clarification")),
+            str(llm_commerce_intent.get("query") or ""),
+        )
         if bool(llm_commerce_intent.get("needs_clarification")):
             clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
             if clarification:
+                logger.info(
+                    "commerce_router_resolved kind=clarification session_id=%s intent=%s question=%s",
+                    session_id,
+                    str(llm_commerce_intent.get("intent") or ""),
+                    clarification,
+                )
                 return {"answer": clarification}
 
         planned_tool = _tool_from_llm_commerce_intent(llm_commerce_intent, session_id)
@@ -1975,11 +2041,24 @@ def _resolve_shared_commerce_payload(
             tool_name=planned_tool[0] if planned_tool else None,
         )
         if not transition.allowed and transition.clarification:
+            logger.info(
+                "commerce_router_blocked session_id=%s intent=%s tool=%s clarification=%s",
+                session_id,
+                str(llm_commerce_intent.get("intent") or ""),
+                planned_tool[0] if planned_tool else "",
+                transition.clarification,
+            )
             return {
                 "answer": transition.clarification,
                 "intent_label": str(llm_commerce_intent.get("intent") or intent_label or "commerce").strip() or "commerce",
             }
         if planned_tool and planned_tool[0] in {"get_order_status", "get_shipping_options", "get_payment_options", "get_product_availability"}:
+            logger.info(
+                "commerce_router_tool_call session_id=%s tool=%s arguments=%s",
+                session_id,
+                planned_tool[0],
+                planned_tool[1],
+            )
             canonical = clubhx_tools_client.execute_canonical(
                 tenant_id=company_id,
                 tool=planned_tool[0],
@@ -1994,11 +2073,23 @@ def _resolve_shared_commerce_payload(
                 channel=channel,
             )
             if payload:
+                logger.info(
+                    "commerce_router_resolved kind=tool_payload session_id=%s tool=%s payload_intent=%s workflow_stage=%s",
+                    session_id,
+                    planned_tool[0],
+                    str(payload.get("intent_label") or llm_commerce_intent.get("intent") or ""),
+                    str(payload.get("workflow_stage") or transition.next_stage),
+                )
                 payload.setdefault("intent_label", str(llm_commerce_intent.get("intent") or "commerce").strip() or "commerce")
                 payload.setdefault("workflow_stage", transition.next_stage)
                 return payload
 
         if planned_tool and planned_tool[0] in {"create_order_draft", "create_payment_link"}:
+            logger.info(
+                "commerce_router_checkout_tool session_id=%s tool=%s",
+                session_id,
+                planned_tool[0],
+            )
             cart_requests = _checkout_requests_for_workflow(message, session_id, llm_commerce_intent)
             if not cart_requests:
                 clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
@@ -2033,6 +2124,13 @@ def _resolve_shared_commerce_payload(
                 channel=channel,
             )
             if payload:
+                logger.info(
+                    "commerce_router_resolved kind=checkout_payload session_id=%s tool=%s checkout_stage=%s reset=%s",
+                    session_id,
+                    planned_tool[0],
+                    str(payload.get("checkout_stage") or ""),
+                    bool(payload.get("reset_workflow")),
+                )
                 if checkout_products and not payload.get("products"):
                     payload["products"] = checkout_products[:6]
                 payload.setdefault("intent_label", str(llm_commerce_intent.get("intent") or "commerce").strip() or "commerce")
@@ -2078,6 +2176,11 @@ def _resolve_shared_commerce_payload(
     if not cart_requests:
         cart_requests = _cart_requests_from_recent_products(message, session_id)
     if cart_requests:
+        logger.info(
+            "commerce_router_cart_requests session_id=%s requests=%s",
+            session_id,
+            cart_requests,
+        )
         canonical_results = [
             clubhx_tools_client.execute_canonical(
                 tenant_id=company_id,
@@ -2094,12 +2197,22 @@ def _resolve_shared_commerce_payload(
         ]
         payload = _build_multi_cart_tool_payload(canonical_results, cart_requests)
         if payload:
+            logger.info(
+                "commerce_router_resolved kind=multi_cart_payload session_id=%s workflow_stage=%s",
+                session_id,
+                str(payload.get("workflow_stage") or ""),
+            )
             return payload
 
     lookup_queries = _product_lookup_queries_from_llm_intent(llm_commerce_intent)
     if not lookup_queries:
         lookup_queries = _product_lookup_queries_from_message(message)
     if len(lookup_queries) > 1:
+        logger.info(
+            "commerce_router_lookup_queries session_id=%s queries=%s",
+            session_id,
+            lookup_queries,
+        )
         canonical_results = [
             clubhx_tools_client.execute_canonical(
                 tenant_id=company_id,
@@ -2116,8 +2229,21 @@ def _resolve_shared_commerce_payload(
         ]
         payload = _build_multi_product_lookup_payload(canonical_results, lookup_queries, message)
         if payload:
+            logger.info(
+                "commerce_router_resolved kind=multi_lookup_payload session_id=%s products=%s",
+                session_id,
+                len(payload.get("products") or []),
+            )
             return payload
 
+    logger.info(
+        "commerce_router_no_payload session_id=%s greeting_like=%s normalized_message=%s llm_intent=%s lookup_queries=%s",
+        session_id,
+        _is_likely_greeting_message(message),
+        normalized_message,
+        str((llm_commerce_intent or {}).get("intent") or ""),
+        lookup_queries if 'lookup_queries' in locals() else [],
+    )
     return None
 
 
