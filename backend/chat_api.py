@@ -564,7 +564,67 @@ def _resolve_checkout_workflow_followup(
     message: str,
     session_id: str | None = None,
     workflow_state: dict[str, str] | None,
+    company_id: str | None = None,
+    channel: str | None = None,
+    user_id: str | None = None,
+    clubhx_tools_client: Any | None = None,
 ) -> dict[str, Any] | None:
+    current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip()
+
+    if current_checkout_stage == "auth_pending" and _is_email_message(message):
+        if clubhx_tools_client is not None:
+            try:
+                clubhx_tools_client.execute_canonical(
+                    tenant_id=company_id or "",
+                    tool="send_login_otp",
+                    channel=channel or "",
+                    user_id=user_id,
+                    arguments={"email": message.strip(), "session_id": session_id or ""},
+                )
+            except Exception as exc:
+                logger.warning("send_login_otp_failed session_id=%s detail=%s", session_id, exc)
+        return {
+            "answer": f"Te enviamos un codigo de verificacion a {message.strip()}. Ingresalo aca para continuar.",
+            "intent_label": "checkout_otp_sent",
+            "workflow_stage": "checkout_ready",
+            "checkout_stage": "otp_pending",
+            "pending_next_step": "otp_verification",
+            "workflow_action": _workflow_action("otp_sent"),
+        }
+
+    if current_checkout_stage == "otp_pending" and _is_otp_code_message(message):
+        otp_ok = False
+        if clubhx_tools_client is not None:
+            try:
+                result = clubhx_tools_client.execute_canonical(
+                    tenant_id=company_id or "",
+                    tool="verify_login_otp",
+                    channel=channel or "",
+                    user_id=user_id,
+                    arguments={"code": message.strip(), "session_id": session_id or ""},
+                )
+                if isinstance(result, dict) and result.get("verified") is True:
+                    otp_ok = True
+            except Exception as exc:
+                logger.warning("verify_login_otp_failed session_id=%s detail=%s", session_id, exc)
+        if not otp_ok:
+            return {
+                "answer": "El codigo ingresado no es valido. Intenta de nuevo o escribe tu correo para reenviar el codigo.",
+                "intent_label": "checkout_otp_invalid",
+                "workflow_stage": "checkout_ready",
+                "checkout_stage": "otp_pending",
+                "pending_next_step": "otp_verification",
+                "workflow_action": _workflow_action("otp_invalid"),
+            }
+        return {
+            "answer": "Perfecto, ya estas autenticado. Ahora dime si prefieres retiro en tienda o despacho.",
+            "intent_label": "checkout_auth_confirmed",
+            "workflow_stage": "shipping_selection",
+            "checkout_stage": "shipping_method_pending",
+            "pending_next_step": "shipping_selection",
+            "workflow_action": _workflow_action("auth_confirmed", authenticated=True),
+        }
+
     if _is_login_confirmed_message(message):
         return {
             "answer": "Perfecto, tomo que ya iniciaste sesion. Ahora dime si prefieres retiro en tienda o despacho.",
@@ -649,7 +709,6 @@ def _resolve_checkout_workflow_followup(
             "workflow_action": _workflow_action("choose_delivery_address"),
         }
 
-    current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip()
     past_shipping = current_checkout_stage in {"delivery_address_confirmed", "pickup_location_selected", "delivery_address_proposed", "delivery_address_confirmation"}
     current_invoice_type = str((workflow_state or {}).get("invoice_type") or "").strip().lower()
     current_rut = str((workflow_state or {}).get("invoice_rut") or "").strip()
@@ -959,6 +1018,24 @@ def _is_login_confirmed_message(message: str) -> bool:
         "ya me autentique",
         "ya estoy logueado",
     }
+
+
+EMAIL_RE = re.compile(r"^[\w.+\-]+@[\w.\-]+\.\w{2,}$", re.IGNORECASE)
+
+
+def _is_email_message(message: str) -> bool:
+    if not message or not message.strip():
+        return False
+    return bool(EMAIL_RE.match(message.strip()))
+
+
+OTP_CODE_RE = re.compile(r"^\d{4,8}$")
+
+
+def _is_otp_code_message(message: str) -> bool:
+    if not message or not message.strip():
+        return False
+    return bool(OTP_CODE_RE.match(message.strip()))
 
 
 def _extract_pickup_location(message: str) -> str:
@@ -2573,6 +2650,10 @@ def _resolve_shared_commerce_payload(
         message=message,
         session_id=session_id,
         workflow_state=workflow_state,
+        company_id=company_id,
+        channel=channel,
+        user_id=user_id,
+        clubhx_tools_client=clubhx_tools_client,
     )
     if checkout_followup_payload:
         _trace_route(
@@ -2799,7 +2880,7 @@ def _resolve_shared_commerce_payload(
             if not _is_checkout_redirect_channel(channel):
                 if not current_workflow.customer_authenticated:
                     return {
-                        "answer": "Para seguir con el pago necesito que me confirmes tus datos. Decime si ya iniciaste sesion o tu nombre para continuar.",
+                        "answer": "Para seguir con el pago necesito que inicies sesion primero.",
                         "intent_label": "checkout_auth_needed",
                         "workflow_stage": "checkout_ready",
                         "checkout_stage": "auth_pending",
