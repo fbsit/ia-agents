@@ -135,6 +135,9 @@ def _format_session_summary(summary: SessionSummary) -> str:
         lines.append(f"- Preferencia de despacho: {_truncate_memory_text(summary.shipping_preference, 120)}")
     if summary.pickup_location_label:
         lines.append(f"- Punto de retiro elegido: {_truncate_memory_text(summary.pickup_location_label, 120)}")
+    if summary.delivery_address:
+        status = "confirmada" if summary.delivery_address_confirmed else "pendiente de confirmacion"
+        lines.append(f"- Direccion de despacho ({status}): {_truncate_memory_text(summary.delivery_address, 160)}")
     if summary.payment_preference:
         lines.append(f"- Preferencia de pago: {_truncate_memory_text(summary.payment_preference, 120)}")
     if summary.customer_authenticated:
@@ -1547,6 +1550,8 @@ class AgentService:
         shipping_preference: str | None = None,
         payment_preference: str | None = None,
         pickup_location_label: str | None = None,
+        delivery_address: str | None = None,
+        delivery_address_confirmed: bool | None = None,
         customer_authenticated: bool | None = None,
         order_reference: str | None = None,
         notes: str | None = None,
@@ -1569,6 +1574,8 @@ class AgentService:
             summary.selected_products = ""
             summary.shipping_preference = ""
             summary.pickup_location_label = ""
+            summary.delivery_address = ""
+            summary.delivery_address_confirmed = False
             summary.payment_preference = ""
             summary.customer_authenticated = False
             summary.order_reference = ""
@@ -1598,6 +1605,10 @@ class AgentService:
             summary.shipping_preference = _normalize_summary_value(shipping_preference, 120)
         if pickup_location_label and pickup_location_label.strip():
             summary.pickup_location_label = _normalize_summary_value(pickup_location_label, 120)
+        if delivery_address and delivery_address.strip():
+            summary.delivery_address = _normalize_summary_value(delivery_address, 200)
+        if delivery_address_confirmed is not None:
+            summary.delivery_address_confirmed = bool(delivery_address_confirmed)
         if payment_preference and payment_preference.strip():
             summary.payment_preference = _normalize_summary_value(payment_preference, 120)
         if customer_authenticated is not None:
@@ -1619,6 +1630,8 @@ class AgentService:
             selected_products=summary.selected_products,
             shipping_preference=summary.shipping_preference,
             pickup_location_label=summary.pickup_location_label,
+            delivery_address=summary.delivery_address,
+            delivery_address_confirmed=summary.delivery_address_confirmed,
             payment_preference=summary.payment_preference,
             customer_authenticated=summary.customer_authenticated,
             order_reference=summary.order_reference,

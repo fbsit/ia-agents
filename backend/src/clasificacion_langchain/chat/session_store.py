@@ -20,6 +20,12 @@ class SessionSummary:
     selected_products: str = ""
     shipping_preference: str = ""
     pickup_location_label: str = ""
+    delivery_address: str = ""
+    delivery_address_confirmed: bool = False
+    invoice_type: str = ""
+    invoice_rut: str = ""
+    invoice_business_name: str = ""
+    invoice_address: str = ""
     payment_preference: str = ""
     customer_authenticated: bool = False
     order_reference: str = ""

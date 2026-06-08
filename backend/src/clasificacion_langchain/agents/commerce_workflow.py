@@ -22,6 +22,10 @@ class CommerceWorkflowState:
     has_selected_products: bool = False
     has_shipping_preference: bool = False
     has_pickup_location: bool = False
+    has_delivery_address: bool = False
+    delivery_address_confirmed: bool = False
+    has_invoice_type: bool = False
+    invoice_data_complete: bool = False
     has_payment_preference: bool = False
     customer_authenticated: bool = False
     has_order_reference: bool = False
@@ -49,16 +53,29 @@ def build_state(
     selected_products: str | None,
     shipping_preference: str | None,
     pickup_location_label: str | None,
+    delivery_address: str | None = None,
+    delivery_address_confirmed: bool | None = None,
+    invoice_type: str | None = None,
+    invoice_rut: str | None = None,
+    invoice_business_name: str | None = None,
+    invoice_address: str | None = None,
     payment_preference: str | None,
     customer_authenticated: bool | None,
     order_reference: str | None,
 ) -> CommerceWorkflowState:
+    raw_invoice_type = (invoice_type or "").strip().lower()
+    needs_invoice_data = raw_invoice_type == "factura"
+    invoice_data_provided = bool((invoice_rut or "").strip()) and bool((invoice_business_name or "").strip())
     return CommerceWorkflowState(
         stage=normalize_stage(stage),
         checkout_stage=(checkout_stage or "").strip().lower(),
         has_selected_products=bool((selected_products or "").strip()),
         has_shipping_preference=bool((shipping_preference or "").strip()),
         has_pickup_location=bool((pickup_location_label or "").strip()),
+        has_delivery_address=bool((delivery_address or "").strip()),
+        delivery_address_confirmed=bool(delivery_address_confirmed),
+        has_invoice_type=bool(raw_invoice_type),
+        invoice_data_complete=not needs_invoice_data or invoice_data_provided,
         has_payment_preference=bool((payment_preference or "").strip()),
         customer_authenticated=bool(customer_authenticated),
         has_order_reference=bool((order_reference or "").strip()),
