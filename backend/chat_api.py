@@ -227,6 +227,42 @@ def _is_implicit_add_to_cart_message(message: str) -> bool:
     ) or normalized in {"dale", "si", "ok", "oka", "va", "bueno"}
 
 
+def _has_explicit_add_to_cart_intent(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    if _is_implicit_add_to_cart_message(message):
+        return True
+    return bool(
+        re.search(
+            r"\b(?:agrega|agregame|agregar|suma|sumame|sumar|pon|poneme|poner|mete|meteme|anade|añade|llevo)\b",
+            normalized,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _has_explicit_cart_change_intent(message: str, mode: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    if mode == "remove":
+        return bool(
+            re.search(
+                r"\b(?:quita|quitame|quitar|saca|sacame|sacar|remueve|remover|elimina|eliminar|borra|borrar)\b",
+                normalized,
+                flags=re.IGNORECASE,
+            )
+        )
+    return bool(
+        re.search(
+            r"\b(?:deja|dejame|dejar)\b.*\b(?:solo|solamente|en)\b",
+            normalized,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
 def _is_affirmative_followup_message(message: str) -> bool:
     normalized = _normalize_widget_text(message)
     if not normalized:
@@ -569,6 +605,56 @@ def _personalize_agent_greeting(agent_name: str, company_id: str, default_answer
     return default_answer
 
 
+def _is_identity_question(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    return normalized in {
+        "quien eres",
+        "quien sos",
+        "que eres",
+        "como te llamas",
+        "cual es tu nombre",
+    }
+
+
+def _personalize_agent_freeform_response(
+    *,
+    agent_name: str,
+    company_id: str,
+    message: str,
+    route: str | None,
+    default_answer: str,
+) -> str:
+    tenant_name = _tenant_display_name(company_id)
+    clean_agent_name = (agent_name or "").strip()
+    normalized_route = (route or "").strip().lower()
+
+    if normalized_route == "greeting":
+        return _personalize_agent_greeting(agent_name, company_id, default_answer)
+
+    if _is_identity_question(message):
+        if tenant_name and clean_agent_name:
+            return (
+                f"Soy {clean_agent_name}, asistente comercial de {tenant_name}. "
+                "Puedo ayudarte a encontrar productos, armar carrito y avanzar con despacho o pago."
+            )
+        if tenant_name:
+            return (
+                f"Soy el asistente comercial de {tenant_name}. "
+                "Puedo ayudarte a encontrar productos, armar carrito y avanzar con despacho o pago."
+            )
+
+    if normalized_route in {"no_knowledge", "general_llm"} and tenant_name:
+        answer = default_answer.strip()
+        if not answer:
+            return (
+                f"Soy el asistente comercial de {tenant_name}. "
+                "Puedo ayudarte con productos, carrito, despacho y pago."
+            )
+        return f"{answer} Soy el asistente comercial de {tenant_name}."
+
+    return default_answer
+
+
 def _extract_order_reference(message: str) -> str:
     text = str(message or "").strip()
     if not text:
@@ -698,6 +784,14 @@ def _extract_widget_cart_change_requests(
     )
     if not normalized:
         return []
+    if not _has_explicit_cart_change_intent(message, mode):
+        _trace_route(
+            "cart_change.extract.skip_no_explicit_intent",
+            mode=mode,
+            message=message,
+            normalized=normalized,
+        )
+        return []
 
     segments = [part.strip() for part in re.split(r"\s+(?:y|e|ademas|tambien)\s+", normalized) if part.strip()]
     requests: list[dict[str, Any]] = []
@@ -754,6 +848,13 @@ def _extract_widget_cart_requests(message: str) -> list[dict[str, Any]]:
         implicit_add=_is_implicit_add_to_cart_message(message),
     )
     if not normalized:
+        return []
+    if not _has_explicit_add_to_cart_intent(message):
+        _trace_route(
+            "cart.extract.skip_no_explicit_intent",
+            message=message,
+            normalized=normalized,
+        )
         return []
 
     segments = [part.strip() for part in re.split(r"\s+(?:y|e|ademas|tambien)\s+", normalized) if part.strip()]
@@ -6273,13 +6374,13 @@ def internal_chat_with_agent(
     if rag_result.response_mode in {"repeat_cached", "repeat_generic", "conversation_closed"}:
         tuned_answer = rag_result.answer
     else:
-        final_rag_answer = rag_result.answer
-        if rag_result.route == "greeting":
-            final_rag_answer = _personalize_agent_greeting(
-                agent_name=agent.name,
-                company_id=agent.company_id,
-                default_answer=final_rag_answer,
-            )
+        final_rag_answer = _personalize_agent_freeform_response(
+            agent_name=agent.name,
+            company_id=agent.company_id,
+            message=payload.message,
+            route=rag_result.route,
+            default_answer=rag_result.answer,
+        )
         tuned_answer = enforce_channel_response_contract(
             tune_answer_style(final_rag_answer, query=payload.message),
             query=payload.message,
@@ -6597,13 +6698,13 @@ def chat_with_agent(
     if rag_result.response_mode in {"repeat_cached", "repeat_generic", "conversation_closed"}:
         tuned_answer = rag_result.answer
     else:
-        final_rag_answer = rag_result.answer
-        if rag_result.route == "greeting":
-            final_rag_answer = _personalize_agent_greeting(
-                agent_name=agent.name,
-                company_id=agent.company_id,
-                default_answer=final_rag_answer,
-            )
+        final_rag_answer = _personalize_agent_freeform_response(
+            agent_name=agent.name,
+            company_id=agent.company_id,
+            message=payload.message,
+            route=rag_result.route,
+            default_answer=rag_result.answer,
+        )
         tuned_answer = enforce_channel_response_contract(
             tune_answer_style(final_rag_answer, query=payload.message),
             query=payload.message,
@@ -7479,26 +7580,26 @@ def public_widget_chat(
             )
 
     if rag_result.response_mode in {"repeat_cached", "repeat_generic", "conversation_closed"}:
-        base_answer = rag_result.answer
-        if rag_result.route == "greeting":
-            base_answer = _personalize_agent_greeting(
-                agent_name=agent.name,
-                company_id=agent.company_id,
-                default_answer=base_answer,
-            )
+        base_answer = _personalize_agent_freeform_response(
+            agent_name=agent.name,
+            company_id=agent.company_id,
+            message=payload.message,
+            route=rag_result.route,
+            default_answer=rag_result.answer,
+        )
         final_answer = enforce_channel_response_contract(
             base_answer,
             query=payload.message,
             channel="widget_public",
         )
     else:
-        base_answer = rag_result.answer
-        if rag_result.route == "greeting":
-            base_answer = _personalize_agent_greeting(
-                agent_name=agent.name,
-                company_id=agent.company_id,
-                default_answer=base_answer,
-            )
+        base_answer = _personalize_agent_freeform_response(
+            agent_name=agent.name,
+            company_id=agent.company_id,
+            message=payload.message,
+            route=rag_result.route,
+            default_answer=rag_result.answer,
+        )
         final_answer = enforce_channel_response_contract(
             tune_answer_style(base_answer, query=payload.message),
             query=payload.message,
