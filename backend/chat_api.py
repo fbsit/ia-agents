@@ -1268,17 +1268,7 @@ def _resolve_checkout_items(
             if not row_id or row_id in seen_products:
                 continue
             seen_products.add(row_id)
-            products.append(
-                {
-                    "id": row_id,
-                    "checkout_product_id": str(row.get("code") or row.get("id") or "").strip(),
-                    "variant_id": str(row.get("id") or "").strip(),
-                    "name": str(row.get("name") or "Producto").strip(),
-                    "price": str(row.get("price") or "N/D").strip(),
-                    "stock": str(row.get("available_units") or "0").strip(),
-                    "image_url": str(row.get("image_url") or "").strip() or None,
-                }
-            )
+            products.append(_normalize_catalog_product(row))
     return items, products
 
 
@@ -1455,6 +1445,25 @@ def _first_present_string(payload: Any, keys: list[str]) -> str:
     return ""
 
 
+def _normalize_catalog_product(item: dict[str, Any]) -> dict[str, Any]:
+    product_id = _first_present_string(item, ["id", "product_id", "variant_id", "sku", "code"])
+    checkout_product_id = _first_present_string(item, ["code", "checkout_product_id", "product_id", "id", "sku"])
+    variant_id = _first_present_string(item, ["variant_id", "id", "product_id", "sku", "code"])
+    image_url = _first_present_string(item, ["image_url", "image", "imageUrl", "thumbnail", "thumbnail_url", "photo"])
+    price = _first_present_string(item, ["price", "unit_price", "sale_price", "amount", "value"])
+    stock = _first_present_string(item, ["available_units", "stock", "quantity", "available", "inventory"])
+    name = _first_present_string(item, ["name", "title", "product_name", "label"]) or "Producto"
+    return {
+        "id": product_id,
+        "checkout_product_id": checkout_product_id or product_id,
+        "variant_id": variant_id or product_id,
+        "name": name,
+        "price": price or "N/D",
+        "stock": stock or "0",
+        "image_url": image_url or None,
+    }
+
+
 def _format_canonical_tool_answer(result: dict[str, Any]) -> str | None:
     if not result.get("ok"):
         return None
@@ -1464,11 +1473,8 @@ def _format_canonical_tool_answer(result: dict[str, Any]) -> str | None:
         items = data.get("items") if isinstance(data.get("items"), list) else []
         if not items:
             return "No encontré productos con ese criterio."
-        first = items[0] if isinstance(items[0], dict) else {}
-        name = str(first.get("name") or "Producto").strip()
-        price = str(first.get("price") or "N/D").strip()
-        units = str(first.get("available_units") or "0").strip()
-        return f"Sí, {name} está disponible. Precio: {price}. Stock: {units}."
+        first = _normalize_catalog_product(items[0] if isinstance(items[0], dict) else {})
+        return f"Sí, {first['name']} está disponible. Precio: {first['price']}. Stock: {first['stock']}."
     if tool == "get_shipping_options":
         options = data.get("options") if isinstance(data.get("options"), list) else []
         names = [str((o or {}).get("name") or "").strip() for o in options if isinstance(o, dict)]
@@ -1588,20 +1594,7 @@ def _format_public_widget_tool_payload(
 
         products = []
         for item in safe_items[:3]:
-            product_id = str(item.get("id") or "").strip()
-            variant_id = str(item.get("id") or "").strip()
-            checkout_product_id = str(item.get("code") or item.get("id") or "").strip()
-            products.append(
-                {
-                    "id": product_id,
-                    "checkout_product_id": checkout_product_id,
-                    "variant_id": variant_id,
-                    "name": str(item.get("name") or "Producto").strip(),
-                    "price": str(item.get("price") or "N/D").strip(),
-                    "stock": str(item.get("available_units") or "0").strip(),
-                    "image_url": str(item.get("image_url") or "").strip() or None,
-                }
-            )
+            products.append(_normalize_catalog_product(item))
 
         cart_request = _resolve_cart_request_for_intent(
             user_message=user_message,
@@ -1879,18 +1872,9 @@ def _build_multi_product_lookup_payload(
             if not product_id or product_id in seen:
                 continue
             seen.add(product_id)
-            products.append(
-                {
-                    "id": product_id,
-                    "checkout_product_id": str(item.get("code") or item.get("id") or "").strip(),
-                    "variant_id": str(item.get("id") or "").strip(),
-                    "name": str(item.get("name") or "Producto").strip(),
-                    "price": str(item.get("price") or "N/D").strip(),
-                    "stock": str(item.get("available_units") or "0").strip(),
-                    "image_url": str(item.get("image_url") or "").strip() or None,
-                    "query": query,
-                }
-            )
+            normalized_product = _normalize_catalog_product(item)
+            normalized_product["query"] = query
+            products.append(normalized_product)
 
     if not products:
         return None
@@ -1945,17 +1929,7 @@ def _build_recipe_recommendation_payload(
                 if not product_id or product_id in seen:
                     continue
                 seen.add(product_id)
-                products.append(
-                    {
-                        "id": product_id,
-                        "checkout_product_id": str(item.get("code") or item.get("id") or "").strip(),
-                        "variant_id": str(item.get("id") or "").strip(),
-                        "name": str(item.get("name") or "Producto").strip(),
-                        "price": str(item.get("price") or "N/D").strip(),
-                        "stock": str(item.get("available_units") or "0").strip(),
-                        "image_url": str(item.get("image_url") or "").strip() or None,
-                    }
-                )
+                products.append(_normalize_catalog_product(item))
 
         if available_names:
             recipe_lines.append(f"- {recipe_name}: {reason or 'Te puede servir'} Ingredientes sugeridos: {', '.join(available_names[:5])}.")
