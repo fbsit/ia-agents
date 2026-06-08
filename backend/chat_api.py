@@ -450,6 +450,7 @@ def _update_agent_memory_from_payload(
             workflow_stage=str((payload or {}).get("workflow_stage") or "").strip() or None,
             pending_next_step=str((payload or {}).get("pending_next_step") or "").strip() or None,
             checkout_stage=str((payload or {}).get("checkout_stage") or "").strip() or None,
+            otp_email=str((payload or {}).get("otp_email") or "").strip() or None,
             reset_workflow=bool((payload or {}).get("reset_workflow")),
         )
     except Exception as exc:  # noqa: BLE001
@@ -507,6 +508,7 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
             "payment_preference": summary.payment_preference,
             "customer_authenticated": "true" if summary.customer_authenticated else "",
             "order_reference": summary.order_reference,
+            "otp_email": summary.otp_email,
         }
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -599,19 +601,21 @@ def _resolve_checkout_workflow_followup(
             "workflow_stage": "checkout_ready",
             "checkout_stage": "otp_pending",
             "pending_next_step": "otp_verification",
+            "otp_email": message.strip(),
             "workflow_action": _workflow_action("otp_sent"),
         }
 
     if current_checkout_stage == "otp_pending" and _is_otp_code_message(message):
         otp_ok = False
-        if clubhx_tools_client is not None:
+        otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
+        if clubhx_tools_client is not None and otp_email:
             try:
                 result = clubhx_tools_client.execute_canonical(
                     tenant_id=company_id or "",
                     tool="verify_verification_code",
                     channel=channel or "",
                     user_id=user_id,
-                    arguments={"code": message.strip()},
+                    arguments={"email": otp_email, "code": message.strip()},
                 )
                 logger.info(
                     "verify_verification_code_result session_id=%s code=%s result=%s",
@@ -2915,6 +2919,7 @@ def _resolve_shared_commerce_payload(
                             "workflow_stage": "checkout_ready",
                             "checkout_stage": "otp_pending",
                             "pending_next_step": "otp_verification",
+                            "otp_email": message.strip(),
                             "workflow_action": _workflow_action("otp_sent"),
                         }
                     return {

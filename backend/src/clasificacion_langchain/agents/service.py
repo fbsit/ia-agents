@@ -1559,6 +1559,7 @@ class AgentService:
         pending_next_step: str | None = None,
         checkout_stage: str | None = None,
         reset_workflow: bool = False,
+        otp_email: str | None = None,
     ) -> None:
         clean_session_id = (session_id or "").strip()
         if not clean_session_id:
@@ -1579,6 +1580,7 @@ class AgentService:
             summary.payment_preference = ""
             summary.customer_authenticated = False
             summary.order_reference = ""
+            summary.otp_email = ""
 
         explicit_workflow_stage = normalize_stage(workflow_stage) if workflow_stage else ""
         if user_message and user_message.strip():
@@ -1623,6 +1625,8 @@ class AgentService:
             summary.pending_next_step = _normalize_summary_value(pending_next_step, 120) if pending_next_step.strip() else ""
         if checkout_stage is not None:
             summary.checkout_stage = _normalize_summary_value(checkout_stage, 80) if checkout_stage.strip() else ""
+        if otp_email is not None:
+            summary.otp_email = _normalize_summary_value(otp_email, 120) if otp_email.strip() else ""
 
         current_state = build_workflow_state(
             stage=summary.funnel_stage,

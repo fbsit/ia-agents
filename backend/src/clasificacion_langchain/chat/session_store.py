@@ -29,6 +29,7 @@ class SessionSummary:
     payment_preference: str = ""
     customer_authenticated: bool = False
     order_reference: str = ""
+    otp_email: str = ""
     last_tool: str = ""
     last_action: str = ""
     notes: str = ""
