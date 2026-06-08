@@ -1744,29 +1744,23 @@ def _format_public_widget_tool_payload(
 
         availability_tokens = ["tienen ", "tenes ", "tienes ", "tiene ", "hay ", "stock", "disponible", "precio", "cuesta"]
         normalized_message = (user_message or "").strip().lower()
-        clean_channel = (channel or "").strip().lower()
-        is_whatsapp = "whatsapp" in clean_channel
 
         if any(token in normalized_message for token in availability_tokens):
             first = products[0]
-            answer = f"Si, {first['name']} esta disponible. Precio: {first['price']}. Stock: {first['stock']}."
-            if is_whatsapp:
-                remaining = [f"• {p['name']} — ${p['price']}" for p in products[1:3]]
-                if remaining:
-                    answer += " Tambien tengo:\n" + "\n".join(remaining)
+            answer = f"Si, {first['name']} esta disponible. Precio: ${first['price']}. Stock: {first['stock']}."
+            remaining = [f"• {p['name']} — ${p['price']}" for p in products[1:3] if p.get('price') and p.get('name')]
+            if remaining:
+                answer += "\nTambien tengo:\n" + "\n".join(remaining)
             return {
                 "answer": answer,
                 "products": products[:3],
             }
 
-        if is_whatsapp:
-            formatted = "\n".join(f"• {p['name']} — ${p['price']}" for p in products[:5])
-            return {
-                "answer": f"Te paso las opciones que tengo:\n{formatted}",
-                "products": products,
-            }
-
-        return {"answer": "Te paso estas opciones disponibles:", "products": products}
+        formatted = "\n".join(f"• {p['name']} — ${p['price']}" for p in products[:5] if p.get('name'))
+        return {
+            "answer": f"Te paso las opciones que tengo:\n{formatted}" if formatted else "No encontre productos.",
+            "products": products,
+        }
 
     if tool == "get_shipping_options":
         options = data.get("options") if isinstance(data.get("options"), list) else []
@@ -1982,16 +1976,14 @@ def _build_multi_product_lookup_payload(
     if not products:
         return None
 
-    clean_channel = (channel or "").strip().lower()
-    is_whatsapp = "whatsapp" in clean_channel
     normalized_message = _normalize_widget_text(user_message)
     if any(token in normalized_message for token in ["stock", "disponible", "precio", "cuesta", "tienen", "tienes", "tiene", "tenian", "hay"]):
-        answer = "Si, encontre estas opciones disponibles:"
+        answer = "Si, encontre estas opciones:"
     else:
-        answer = "Te paso estas opciones disponibles:"
+        answer = "Te paso las opciones:"
 
-    if is_whatsapp and products:
-        formatted = "\n".join(f"• {p['name']} — ${p['price']}" for p in products[:5])
+    if products:
+        formatted = "\n".join(f"• {p['name']} — ${p['price']}" for p in products[:5] if p.get('name'))
         answer = f"{answer}\n{formatted}"
 
     return {
@@ -2178,15 +2170,12 @@ def _resolve_shared_commerce_payload(
 
     if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "cart_status":
         _trace_route("commerce.resolve_cart_status", session_id=session_id)
-        clean_channel = (channel or "").strip().lower()
         recent = _recent_commerce_products(session_id)
-        if "whatsapp" in clean_channel and recent:
-            lines = [f"• {p.get('name','Producto')} — ${p.get('price','?')}" for p in recent[:5]]
-            answer = "En tu carrito tenes:\n" + "\n".join(lines)
-        elif recent:
-            answer = f"Te muestro el estado actual de tu carrito. Productos vistos: {', '.join(p.get('name','Producto') for p in recent[:3])}."
+        if recent:
+            lines = [f"• {p.get('name', 'Producto')} — ${p.get('price', '?')}" for p in recent[:5]]
+            answer = "Resumen de tu carrito:\n" + "\n".join(lines)
         else:
-            answer = "Tu carrito esta vacio. Decime que producto queres llevar."
+            answer = "Tu carrito esta vacio. Decime que producto queres llevar y te lo agrego."
         return {
             "answer": answer,
             "intent_label": "cart_status",
