@@ -580,15 +580,19 @@ def _resolve_checkout_workflow_followup(
     if current_checkout_stage == "auth_pending" and _is_email_message(message):
         if clubhx_tools_client is not None:
             try:
-                clubhx_tools_client.execute_canonical(
+                result = clubhx_tools_client.execute_canonical(
                     tenant_id=company_id or "",
                     tool="send_verification_code",
                     channel=channel or "",
                     user_id=user_id,
-                    arguments={"email": message.strip(), "session_id": session_id or ""},
+                    arguments={"email": message.strip()},
+                )
+                logger.info(
+                    "send_verification_code_ok session_id=%s email=%s result=%s",
+                    session_id, message.strip(), result,
                 )
             except Exception as exc:
-                logger.warning("send_verification_code_failed session_id=%s detail=%s", session_id, exc)
+                logger.warning("send_verification_code_failed session_id=%s email=%s detail=%s", session_id, message.strip(), exc)
         return {
             "answer": f"Te enviamos un codigo de verificacion a {message.strip()}. Ingresalo aca para continuar.",
             "intent_label": "checkout_otp_sent",
@@ -604,15 +608,19 @@ def _resolve_checkout_workflow_followup(
             try:
                 result = clubhx_tools_client.execute_canonical(
                     tenant_id=company_id or "",
-                    tool="verify_login_otp",
+                    tool="verify_verification_code",
                     channel=channel or "",
                     user_id=user_id,
-                    arguments={"code": message.strip(), "session_id": session_id or ""},
+                    arguments={"code": message.strip()},
+                )
+                logger.info(
+                    "verify_verification_code_result session_id=%s code=%s result=%s",
+                    session_id, message.strip(), result,
                 )
                 if isinstance(result, dict) and result.get("verified") is True:
                     otp_ok = True
             except Exception as exc:
-                logger.warning("verify_login_otp_failed session_id=%s detail=%s", session_id, exc)
+                logger.warning("verify_verification_code_failed session_id=%s code=%s detail=%s", session_id, message.strip(), exc)
         if not otp_ok:
             return {
                 "answer": "El codigo ingresado no es valido. Intenta de nuevo o escribe tu correo para reenviar el codigo.",
@@ -2888,15 +2896,19 @@ def _resolve_shared_commerce_payload(
                     if _is_email_message(message):
                         if clubhx_tools_client is not None:
                             try:
-                                clubhx_tools_client.execute_canonical(
+                                result = clubhx_tools_client.execute_canonical(
                                     tenant_id=company_id,
-                                    tool="send_login_otp",
+                                    tool="send_verification_code",
                                     channel=channel,
                                     user_id=user_id,
-                                    arguments={"email": message.strip(), "session_id": session_id},
+                                    arguments={"email": message.strip()},
+                                )
+                                logger.info(
+                                    "send_verification_code_ok session_id=%s email=%s result=%s",
+                                    session_id, message.strip(), result,
                                 )
                             except Exception as exc:
-                                logger.warning("send_login_otp_failed session_id=%s detail=%s", session_id, exc)
+                                logger.warning("send_verification_code_failed session_id=%s email=%s detail=%s", session_id, message.strip(), exc)
                         return {
                             "answer": f"Te enviamos un codigo de verificacion a {message.strip()}. Ingresalo aca para continuar.",
                             "intent_label": "checkout_otp_sent",
