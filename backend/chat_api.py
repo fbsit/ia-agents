@@ -1929,7 +1929,7 @@ def _resolve_shared_commerce_payload(
     workflow_state: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
     if clubhx_tools_client is None:
-        logger.info(
+        logger.warning(
             "commerce_router_skip reason=no_tools_client session_id=%s channel=%s message=%s",
             session_id,
             channel,
@@ -1938,7 +1938,7 @@ def _resolve_shared_commerce_payload(
         return None
 
     normalized_message = _normalize_widget_text(message)
-    logger.info(
+    logger.warning(
         "commerce_router_start session_id=%s channel=%s greeting_like=%s message=%s workflow_stage=%s checkout_stage=%s pending_next_step=%s",
         session_id,
         channel,
@@ -1978,7 +1978,7 @@ def _resolve_shared_commerce_payload(
         workflow_state=workflow_state,
     )
     if followup_payload:
-        logger.info(
+        logger.warning(
             "commerce_router_resolved kind=affirmative_followup session_id=%s payload_intent=%s workflow_stage=%s pending_next_step=%s",
             session_id,
             str(followup_payload.get("intent_label") or ""),
@@ -1992,7 +1992,7 @@ def _resolve_shared_commerce_payload(
         workflow_state=workflow_state,
     )
     if checkout_followup_payload:
-        logger.info(
+        logger.warning(
             "commerce_router_resolved kind=checkout_followup session_id=%s payload_intent=%s workflow_stage=%s checkout_stage=%s",
             session_id,
             str(checkout_followup_payload.get("intent_label") or ""),
@@ -2002,7 +2002,7 @@ def _resolve_shared_commerce_payload(
         return checkout_followup_payload
 
     if _is_clear_cart_message(message):
-        logger.info(
+        logger.warning(
             "commerce_router_resolved kind=clear_cart session_id=%s",
             session_id,
         )
@@ -2015,7 +2015,7 @@ def _resolve_shared_commerce_payload(
         }
 
     if isinstance(llm_commerce_intent, dict):
-        logger.info(
+        logger.warning(
             "commerce_router_llm_intent session_id=%s intent=%s tool=%s needs_clarification=%s query=%s",
             session_id,
             str(llm_commerce_intent.get("intent") or ""),
@@ -2026,7 +2026,7 @@ def _resolve_shared_commerce_payload(
         if bool(llm_commerce_intent.get("needs_clarification")):
             clarification = str(llm_commerce_intent.get("clarification_question") or "").strip()
             if clarification:
-                logger.info(
+                logger.warning(
                     "commerce_router_resolved kind=clarification session_id=%s intent=%s question=%s",
                     session_id,
                     str(llm_commerce_intent.get("intent") or ""),
@@ -2041,7 +2041,7 @@ def _resolve_shared_commerce_payload(
             tool_name=planned_tool[0] if planned_tool else None,
         )
         if not transition.allowed and transition.clarification:
-            logger.info(
+            logger.warning(
                 "commerce_router_blocked session_id=%s intent=%s tool=%s clarification=%s",
                 session_id,
                 str(llm_commerce_intent.get("intent") or ""),
@@ -2053,7 +2053,7 @@ def _resolve_shared_commerce_payload(
                 "intent_label": str(llm_commerce_intent.get("intent") or intent_label or "commerce").strip() or "commerce",
             }
         if planned_tool and planned_tool[0] in {"get_order_status", "get_shipping_options", "get_payment_options", "get_product_availability"}:
-            logger.info(
+            logger.warning(
                 "commerce_router_tool_call session_id=%s tool=%s arguments=%s",
                 session_id,
                 planned_tool[0],
@@ -2073,7 +2073,7 @@ def _resolve_shared_commerce_payload(
                 channel=channel,
             )
             if payload:
-                logger.info(
+                logger.warning(
                     "commerce_router_resolved kind=tool_payload session_id=%s tool=%s payload_intent=%s workflow_stage=%s",
                     session_id,
                     planned_tool[0],
@@ -2085,7 +2085,7 @@ def _resolve_shared_commerce_payload(
                 return payload
 
         if planned_tool and planned_tool[0] in {"create_order_draft", "create_payment_link"}:
-            logger.info(
+            logger.warning(
                 "commerce_router_checkout_tool session_id=%s tool=%s",
                 session_id,
                 planned_tool[0],
@@ -2124,7 +2124,7 @@ def _resolve_shared_commerce_payload(
                 channel=channel,
             )
             if payload:
-                logger.info(
+                logger.warning(
                     "commerce_router_resolved kind=checkout_payload session_id=%s tool=%s checkout_stage=%s reset=%s",
                     session_id,
                     planned_tool[0],
@@ -2176,7 +2176,7 @@ def _resolve_shared_commerce_payload(
     if not cart_requests:
         cart_requests = _cart_requests_from_recent_products(message, session_id)
     if cart_requests:
-        logger.info(
+        logger.warning(
             "commerce_router_cart_requests session_id=%s requests=%s",
             session_id,
             cart_requests,
@@ -2197,7 +2197,7 @@ def _resolve_shared_commerce_payload(
         ]
         payload = _build_multi_cart_tool_payload(canonical_results, cart_requests)
         if payload:
-            logger.info(
+            logger.warning(
                 "commerce_router_resolved kind=multi_cart_payload session_id=%s workflow_stage=%s",
                 session_id,
                 str(payload.get("workflow_stage") or ""),
@@ -2208,7 +2208,7 @@ def _resolve_shared_commerce_payload(
     if not lookup_queries:
         lookup_queries = _product_lookup_queries_from_message(message)
     if len(lookup_queries) > 1:
-        logger.info(
+        logger.warning(
             "commerce_router_lookup_queries session_id=%s queries=%s",
             session_id,
             lookup_queries,
@@ -2229,14 +2229,14 @@ def _resolve_shared_commerce_payload(
         ]
         payload = _build_multi_product_lookup_payload(canonical_results, lookup_queries, message)
         if payload:
-            logger.info(
+            logger.warning(
                 "commerce_router_resolved kind=multi_lookup_payload session_id=%s products=%s",
                 session_id,
                 len(payload.get("products") or []),
             )
             return payload
 
-    logger.info(
+    logger.warning(
         "commerce_router_no_payload session_id=%s greeting_like=%s normalized_message=%s llm_intent=%s lookup_queries=%s",
         session_id,
         _is_likely_greeting_message(message),
