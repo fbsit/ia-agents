@@ -570,6 +570,12 @@ def _resolve_checkout_workflow_followup(
     clubhx_tools_client: Any | None = None,
 ) -> dict[str, Any] | None:
     current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip()
+    _trace_route(
+        "checkout_followup.check_stage",
+        session_id=session_id,
+        current_stage=current_checkout_stage,
+        is_email=_is_email_message(message),
+    )
 
     if current_checkout_stage == "auth_pending" and _is_email_message(message):
         if clubhx_tools_client is not None:
@@ -2879,6 +2885,26 @@ def _resolve_shared_commerce_payload(
                     }
             if not _is_checkout_redirect_channel(channel):
                 if not current_workflow.customer_authenticated:
+                    if _is_email_message(message):
+                        if clubhx_tools_client is not None:
+                            try:
+                                clubhx_tools_client.execute_canonical(
+                                    tenant_id=company_id,
+                                    tool="send_login_otp",
+                                    channel=channel,
+                                    user_id=user_id,
+                                    arguments={"email": message.strip(), "session_id": session_id},
+                                )
+                            except Exception as exc:
+                                logger.warning("send_login_otp_failed session_id=%s detail=%s", session_id, exc)
+                        return {
+                            "answer": f"Te enviamos un codigo de verificacion a {message.strip()}. Ingresalo aca para continuar.",
+                            "intent_label": "checkout_otp_sent",
+                            "workflow_stage": "checkout_ready",
+                            "checkout_stage": "otp_pending",
+                            "pending_next_step": "otp_verification",
+                            "workflow_action": _workflow_action("otp_sent"),
+                        }
                     return {
                         "answer": "Para seguir con el pago necesito que inicies sesion primero. Escribe tu correo electronico para enviarte un codigo de verificacion.",
                         "intent_label": "checkout_auth_needed",
