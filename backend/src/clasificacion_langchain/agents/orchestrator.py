@@ -7,39 +7,6 @@ from dataclasses import dataclass
 from urllib import error, request
 
 
-COMPANY_SPECIFIC_PATTERNS = [
-    re.compile(r"\bnuestra empresa\b", re.IGNORECASE),
-    re.compile(r"\bmi empresa\b", re.IGNORECASE),
-    re.compile(r"\bempresa\b", re.IGNORECASE),
-    re.compile(r"\bintern[oa]s?\b", re.IGNORECASE),
-    re.compile(r"\bpolitica interna\b", re.IGNORECASE),
-    re.compile(r"\bde la compania\b", re.IGNORECASE),
-    re.compile(r"\bde la compa[ñn]ia\b", re.IGNORECASE),
-]
-
-GENERAL_KNOWLEDGE_PATTERNS = [
-    re.compile(r"\ben chile\b", re.IGNORECASE),
-    re.compile(r"\ben argentina\b", re.IGNORECASE),
-    re.compile(r"\bpor ley\b", re.IGNORECASE),
-    re.compile(r"\blegislaci[oó]n\b", re.IGNORECASE),
-    re.compile(r"\ben general\b", re.IGNORECASE),
-    re.compile(r"\bc[oó]mo funciona\b", re.IGNORECASE),
-    re.compile(r"\bque es\b", re.IGNORECASE),
-    re.compile(r"\bvacaciones\b", re.IGNORECASE),
-]
-
-GREETING_TERMS = {
-    "hola",
-    "buenas",
-    "buen dia",
-    "buenas tardes",
-    "buenas noches",
-    "holi",
-    "hello",
-    "hi",
-}
-
-
 @dataclass
 class OrchestrationDecision:
     intent: str
@@ -53,19 +20,6 @@ class AgentIntentOrchestrator:
             use_llm = os.getenv("AGENT_ORCHESTRATOR_USE_LLM", "true").strip().lower() == "true"
         self.use_llm = use_llm
         self.timeout_seconds = timeout_seconds
-
-    @staticmethod
-    def _is_greeting(text: str) -> bool:
-        cleaned = re.sub(r"\s+", " ", re.sub(r"[^a-zA-Z0-9áéíóúñüÁÉÍÓÚÑÜ ]+", " ", text))
-        normalized = cleaned.strip().lower()
-        if not normalized:
-            return False
-        if normalized in GREETING_TERMS:
-            return True
-        words = normalized.split(" ")
-        if len(words) <= 3 and normalized in GREETING_TERMS:
-            return True
-        return False
 
     def _llm_classify_intent(
         self,
@@ -191,9 +145,6 @@ class AgentIntentOrchestrator:
         if not text:
             return "unknown"
 
-        if self._is_greeting(text):
-            return "smalltalk_greeting"
-
         if self.use_llm and llm_requested and llm_available:
             llm_intent = self._llm_classify_intent(
                 message=message,
@@ -205,17 +156,6 @@ class AgentIntentOrchestrator:
             )
             if llm_intent is not None:
                 return llm_intent
-
-        for pattern in COMPANY_SPECIFIC_PATTERNS:
-            if pattern.search(text):
-                return "company_specific"
-
-        for pattern in GENERAL_KNOWLEDGE_PATTERNS:
-            if pattern.search(text):
-                return "general_knowledge"
-
-        if text.endswith("?"):
-            return "general_knowledge"
         return "unknown"
 
     def decide(

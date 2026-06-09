@@ -283,85 +283,6 @@ def _is_affirmative_followup_message(message: str) -> bool:
     }
 
 
-def _cart_requests_from_recent_products(message: str, session_id: str) -> list[dict[str, Any]]:
-    if not _is_implicit_add_to_cart_message(message):
-        return []
-    products = _recent_commerce_products(session_id)
-    if not products:
-        return []
-    first = products[0]
-    product_name = str(first.get("name") or "").strip()
-    if not product_name:
-        return []
-    quantity = _parse_widget_quantity(message)
-    logger.info(
-        "commerce_recent_product_reused session_id=%s message=%s product=%s quantity=%s",
-        session_id,
-        message,
-        product_name,
-        quantity,
-    )
-    return [{"product_query": product_name, "quantity": quantity}]
-
-
-def _single_recent_product_quantity_request(message: str, session_id: str) -> list[dict[str, Any]]:
-    products = _recent_commerce_products(session_id)
-    if len(products) != 1:
-        return []
-    quantity = _parse_widget_quantity(message)
-    if quantity <= 0:
-        return []
-    product_name = str(products[0].get("name") or "").strip()
-    if not product_name:
-        return []
-    logger.info(
-        "commerce_recent_single_product_quantity session_id=%s message=%s product=%s quantity=%s",
-        session_id,
-        message,
-        product_name,
-        quantity,
-    )
-    return [{"product_query": product_name, "quantity": quantity}]
-
-
-def _cart_requests_from_recent_product_reference(message: str, session_id: str) -> list[dict[str, Any]]:
-    normalized = _normalize_widget_text(message)
-    if not normalized:
-        return []
-    products = _recent_commerce_products(session_id)
-    if not products:
-        return []
-
-    referenced_index = 0
-    if "segundo" in normalized:
-        referenced_index = 1
-    elif "tercero" in normalized:
-        referenced_index = 2
-    elif any(token in normalized for token in ["primero", "primer", "ese", "esa", "ese producto", "esa opcion", "ese item", "esa leche", "ese milo"]):
-        referenced_index = 0
-    else:
-        return []
-
-    if referenced_index >= len(products):
-        return []
-
-    product = products[referenced_index]
-    product_name = str(product.get("name") or "").strip()
-    if not product_name:
-        return []
-
-    quantity = _parse_widget_quantity(message)
-    logger.info(
-        "commerce_recent_reference_reused session_id=%s message=%s product=%s index=%s quantity=%s",
-        session_id,
-        message,
-        product_name,
-        referenced_index,
-        quantity,
-    )
-    return [{"product_query": product_name, "quantity": quantity}]
-
-
 def _product_lookup_queries_from_message(message: str) -> list[str]:
     normalized = _normalize_widget_text(message)
     if not normalized:
@@ -449,7 +370,6 @@ def _update_agent_memory_from_payload(
         intent = str(payload.get("intent_label") or "").strip()
         if intent in {"checkout_auth_confirmed", "checkout_otp_sent", "checkout_otp_invalid"}:
             customer_authenticated = intent == "checkout_auth_confirmed"
-    order_reference = _extract_order_reference(user_message)
     try:
         agent_service.update_session_summary(
             company_id=company_id,
@@ -471,7 +391,7 @@ def _update_agent_memory_from_payload(
             invoice_address=invoice_address,
             payment_preference=payment_preference,
             customer_authenticated=customer_authenticated,
-            order_reference=order_reference or None,
+            order_reference=None,
             workflow_stage=str((payload or {}).get("workflow_stage") or "").strip() or None,
             pending_next_step=str((payload or {}).get("pending_next_step") or "").strip() or None,
             checkout_stage=str((payload or {}).get("checkout_stage") or "").strip() or None,
@@ -705,18 +625,7 @@ def _resolve_checkout_workflow_followup(
             "workflow_action": _workflow_action("otp_sent"),
         }
 
-    if current_checkout_stage == "otp_pending" and not _is_otp_code_message(message) and not _is_email_message(message):
-        return {
-            "answer": "Ya te envié un código de verificación. Mandame el código de 4 a 8 dígitos o reenvía tu correo para generar otro.",
-            "intent_label": "checkout_otp_waiting",
-            "workflow_stage": "checkout_ready",
-            "checkout_stage": "otp_pending",
-            "pending_next_step": "otp_verification",
-            "otp_email": current_otp_email or None,
-            "workflow_action": _workflow_action("otp_waiting"),
-        }
-
-    if current_checkout_stage == "otp_pending" and _is_otp_code_message(message):
+    if current_checkout_stage == "otp_pending":
         otp_ok = False
         otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
         if clubhx_tools_client is not None and otp_email:
@@ -1067,21 +976,6 @@ def _personalize_agent_freeform_response(
     return default_answer
 
 
-def _extract_order_reference(message: str) -> str:
-    text = str(message or "").strip()
-    if not text:
-        return ""
-    patterns = [
-        r"(?:pedido|orden|order)\s*#?\s*([A-Za-z0-9\-]{4,})",
-        r"#([A-Za-z0-9\-]{4,})",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-        if match:
-            return str(match.group(1) or "").strip()
-    return ""
-
-
 def _parse_widget_quantity(text: str) -> int:
     tokens = _normalize_widget_text(text).split()
     for token in tokens[:4]:
@@ -1165,15 +1059,6 @@ def _is_email_message(message: str) -> bool:
     if not message or not message.strip():
         return False
     return bool(EMAIL_RE.match(message.strip()))
-
-
-OTP_CODE_RE = re.compile(r"^\d{4,8}$")
-
-
-def _is_otp_code_message(message: str) -> bool:
-    if not message or not message.strip():
-        return False
-    return bool(OTP_CODE_RE.match(message.strip()))
 
 
 def _extract_pickup_location(message: str) -> str:
@@ -1516,7 +1401,8 @@ def _parse_commerce_intent_with_openai(
                     "{\"intent\":string,\"confidence\":number,\"query\":string,\"items\":[{\"query\":string,\"quantity\":number}],\"tool\":string,\"tool_arguments\":object,\"needs_clarification\":boolean,\"clarification_question\":string,\"customer_goal\":string,\"response_style\":{\"stage\":string,\"tone\":string,\"next_step\":string,\"format\":string}}. "
                     "Intent permitidos: none, product_lookup, add_to_cart, remove_from_cart, set_cart_quantity, clear_cart, cart_status, shipping_options, payment_options, order_status, create_payment_link, create_order_draft, recipe_recommendation. "
                     "Tools permitidos: none, get_product_availability, get_order_status, get_shipping_options, get_payment_options, create_payment_link, create_order_draft. "
-                    "Extrae productos y cantidades. Si no hay cantidad explicita usa 1. "
+                    "Usa el workflow_context como prioridad para interpretar la intencion. Si workflow_context indica checkout_stage=auth_pending, el mensaje actual debe tratarse como un correo para enviar el codigo. Si checkout_stage=otp_pending, el mensaje actual debe tratarse como el valor a verificar con verify_verification_code usando otp_email persistido. "
+                    "Extrae productos y cantidades solo cuando el usuario lo exprese de forma clara en el mensaje y en contexto de compra. Si no hay cantidad explicita usa 1. "
                     "Si pide quitar unidades del carrito usa remove_from_cart. Si pide dejar una cantidad exacta usa set_cart_quantity. Si pide vaciar el carrito usa clear_cart. Si pregunta por el carrito actual, resumen del carrito o como va el carrito, usa cart_status y NO order_status. "
                     "Si el mensaje pregunta disponibilidad, precio, stock o catalogo usa get_product_availability. "
                     "Si pregunta estado de pedido usa get_order_status y extrae order_reference cuando exista. "
@@ -2238,39 +2124,14 @@ def _resolve_cart_request_for_intent(
         explicit = _extract_widget_add_to_cart(user_message)
         if explicit:
             return explicit
-        if session_id:
-            recent_reference = _cart_requests_from_recent_product_reference(user_message, session_id)
-            if recent_reference:
-                return recent_reference[0]
-            recent_products = _cart_requests_from_recent_products(user_message, session_id)
-            if recent_products:
-                return recent_products[0]
-            single_product = _single_recent_product_quantity_request(user_message, session_id)
-            if single_product:
-                return single_product[0]
     if normalized_intent == "remove_from_cart":
         explicit = _extract_widget_remove_from_cart(user_message)
         if explicit:
             return explicit
-        if session_id:
-            recent_reference = _cart_requests_from_recent_product_reference(user_message, session_id)
-            if recent_reference:
-                return recent_reference[0]
     if normalized_intent == "set_cart_quantity":
         explicit = _extract_widget_set_cart_quantity(user_message)
         if explicit:
             return explicit
-        if session_id:
-            recent_reference = _cart_requests_from_recent_product_reference(user_message, session_id)
-            if recent_reference:
-                quantity = _parse_widget_quantity(user_message)
-                return {
-                    "product_query": recent_reference[0]["product_query"],
-                    "quantity": quantity,
-                }
-            single_product = _single_recent_product_quantity_request(user_message, session_id)
-            if single_product:
-                return single_product[0]
     return None
 
 
@@ -2764,7 +2625,6 @@ def _resolve_shared_commerce_payload(
         ),
     )
 
-    runtime_order_reference = _extract_order_reference(message)
     current_invoice_data = _extract_invoice_data(message, session_id=session_id)
     current_workflow = build_workflow_state(
         stage=(workflow_state or {}).get("stage"),
@@ -2780,7 +2640,7 @@ def _resolve_shared_commerce_payload(
         invoice_address=(workflow_state or {}).get("invoice_address") or current_invoice_data.get("invoice_address"),
         payment_preference=(workflow_state or {}).get("payment_preference") or (message if any(token in _normalize_widget_text(message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else ""),
         customer_authenticated=_workflow_state_customer_authenticated(workflow_state) or _is_login_confirmed_message(message),
-        order_reference=(workflow_state or {}).get("order_reference") or runtime_order_reference,
+        order_reference=(workflow_state or {}).get("order_reference") or "",
     )
 
     followup_payload = _resolve_affirmative_workflow_followup(
@@ -3036,41 +2896,6 @@ def _resolve_shared_commerce_payload(
                     }
             if not _is_checkout_redirect_channel(channel):
                 if not current_workflow.customer_authenticated:
-                    if _is_otp_code_message(message):
-                        otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
-                        if otp_email and clubhx_tools_client is not None:
-                            try:
-                                result = clubhx_tools_client.execute_canonical(
-                                    tenant_id=company_id,
-                                    tool="verify_verification_code",
-                                    channel=channel,
-                                    user_id=user_id,
-                                    arguments={"email": otp_email, "code": message.strip()},
-                                )
-                                logger.info(
-                                    "verify_verification_code_result session_id=%s email=%s code=%s result=%s",
-                                    session_id, otp_email, message.strip(), result,
-                                )
-                                if _canonical_tool_succeeded(result, expected_statuses={"verified", "valid", "ok", "success"}):
-                                    return {
-                                        "answer": "Perfecto, ya estas autenticado. Ahora dime si prefieres retiro en tienda o despacho.",
-                                        "intent_label": "checkout_auth_confirmed",
-                                        "workflow_stage": "shipping_selection",
-                                        "checkout_stage": "shipping_method_pending",
-                                        "pending_next_step": "shipping_selection",
-                                        "authenticated_at": datetime.now(UTC).isoformat(),
-                                        "workflow_action": _workflow_action("auth_confirmed", authenticated=True),
-                                    }
-                            except Exception as exc:
-                                logger.warning("verify_verification_code_failed session_id=%s code=%s detail=%s", session_id, message.strip(), exc)
-                        return {
-                            "answer": "El codigo ingresado no es valido. Intenta de nuevo o escribe tu correo para reenviar el codigo.",
-                            "intent_label": "checkout_otp_invalid",
-                            "workflow_stage": "checkout_ready",
-                            "checkout_stage": "otp_pending",
-                            "pending_next_step": "otp_verification",
-                            "workflow_action": _workflow_action("otp_invalid"),
-                        }
                     if _is_email_message(message):
                         send_ok = False
                         if clubhx_tools_client is not None:

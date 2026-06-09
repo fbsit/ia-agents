@@ -9,10 +9,6 @@ from datetime import UTC, datetime, timedelta
 
 _MULTI_SPACE_PATTERN = re.compile(r"\s+")
 _NON_ALNUM_PATTERN = re.compile(r"[^\w\s]", re.UNICODE)
-_CLOSE_INTENT_PATTERN = re.compile(
-    r"\b(gracias|muchas\s+gracias|listo|eso\s+era|era\s+todo|chau|adios|nos\s+vemos|bye)\b",
-    re.IGNORECASE,
-)
 
 
 @dataclass(frozen=True)
@@ -161,14 +157,6 @@ class ConversationPolicyEngine:
             return ""
         return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
-    @staticmethod
-    def _is_close_intent(normalized_message: str) -> bool:
-        if not normalized_message:
-            return False
-        if len(normalized_message) > 60:
-            return False
-        return bool(_CLOSE_INTENT_PATTERN.search(normalized_message))
-
     def evaluate(
         self,
         key: ConversationKey,
@@ -194,46 +182,8 @@ class ConversationPolicyEngine:
         if external_user_id:
             state.external_user_id = external_user_id.strip()
 
-        if self._is_close_intent(normalized):
-            answer = (
-                "Perfecto, cerramos por ahora. Si necesitas algo mas, escribime cuando quieras."
-            )
-            state.status = "closed"
-            state.last_answer = answer
-            self.state_store.save_state(key, state, self.ttl_seconds)
-            return ConversationPolicyDecision(
-                action="conversation_closed",
-                reason="close_intent_detected",
-                repeat_count=repeat_count,
-                answer=answer,
-            )
-
         if state.status == "closed":
             state.status = "open"
-
-        if repeat_count >= self.cached_repeat_threshold and state.last_answer.strip():
-            self.state_store.save_state(key, state, self.ttl_seconds)
-            return ConversationPolicyDecision(
-                action="repeat_cached",
-                reason="repeat_threshold_cached",
-                repeat_count=repeat_count,
-                answer=state.last_answer,
-            )
-
-        if repeat_count >= self.generic_repeat_threshold:
-            answer = (
-                "Veo que repetiste la misma consulta varias veces. Para no marearte, "
-                "te resumo: esta consulta ya fue respondida. Si queres, la reformulamos "
-                "o te derivo con soporte humano."
-            )
-            state.last_answer = answer
-            self.state_store.save_state(key, state, self.ttl_seconds)
-            return ConversationPolicyDecision(
-                action="repeat_generic",
-                reason="repeat_threshold_generic",
-                repeat_count=repeat_count,
-                answer=answer,
-            )
 
         self.state_store.save_state(key, state, self.ttl_seconds)
         return ConversationPolicyDecision(
