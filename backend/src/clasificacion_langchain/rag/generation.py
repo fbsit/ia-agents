@@ -248,10 +248,7 @@ def _presentation_score(chunk: RetrievedChunk) -> float:
 
 
 def _fallback_no_context_answer(query: str) -> str:
-    return (
-        "No tengo conocimiento cargado suficiente en este momento. "
-        "Si queres, subi documentos y te respondo con evidencia."
-    )
+    return "Hola. Puedo ayudarte con la tienda; decime qué necesitás y te acompaño con eso."
 
 
 def format_context(
@@ -453,6 +450,7 @@ class OpenAIAnswerGenerator:
                             "Sos un asistente conversacional empresarial. "
                             "Responde SIEMPRE en espanol natural y cercano. "
                             "No repitas el contexto operativo ni el resumen como si fueran parte de la respuesta. "
+                            "Si la consulta es un saludo o una pregunta de identidad, responde de forma natural, breve y util, sin mencionar falta de documentos. "
                             "Reglas obligatorias:\n"
                             f"{rules}\n\n"
                             "Reglas del rol y conocimiento compartido:\n"
@@ -465,7 +463,7 @@ class OpenAIAnswerGenerator:
                             "Consulta del usuario: {query}\n"
                             "Objetivo del agente: {objective}\n"
                             "Tono requerido: {tone}\n"
-                            "No hay contexto recuperado para esta consulta. Responde igual de forma util si la consulta es un saludo, identidad o una pregunta operativa general."
+                            "No hay contexto recuperado para esta consulta. Responde igual de forma util si la consulta es un saludo, identidad o una pregunta operativa general. No hables de documentos faltantes si el usuario solo saluda o pregunta quien eres."
                         ),
                     ),
                 ]
@@ -579,6 +577,7 @@ class AnthropicAnswerGenerator:
                 "Sos un asistente conversacional empresarial. "
                 "Responde SIEMPRE en espanol natural y cercano. "
                 "No repitas el contexto operativo ni el resumen como si fueran parte de la respuesta. "
+                "Si la consulta es un saludo o una pregunta de identidad, responde de forma natural, breve y util, sin mencionar falta de documentos. "
                 "Reglas obligatorias:\n"
                 f"{rules}\n\n"
                 "Reglas del rol y conocimiento compartido:\n"
@@ -588,7 +587,7 @@ class AnthropicAnswerGenerator:
                 f"Consulta del usuario: {query}\n"
                 f"Objetivo del agente: {objective or 'Resolver consultas de negocio con precision'}\n"
                 f"Tono requerido: {tone or 'profesional'}\n"
-                "No hay contexto recuperado para esta consulta. Responde igual de forma util si la consulta es un saludo, identidad o una pregunta operativa general."
+                "No hay contexto recuperado para esta consulta. Responde igual de forma util si la consulta es un saludo, identidad o una pregunta operativa general. No hables de documentos faltantes si el usuario solo saluda o pregunta quien eres."
             )
             content = self._anthropic_completion(system_prompt=system_prompt, user_prompt=user_prompt)
             if not content:
