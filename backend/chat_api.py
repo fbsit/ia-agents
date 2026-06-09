@@ -577,12 +577,14 @@ def _resolve_checkout_workflow_followup(
 ) -> dict[str, Any] | None:
     current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip()
     current_pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
+    current_customer_authenticated = _workflow_state_customer_authenticated(workflow_state)
     current_otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
     logger.warning(
-        "checkout_followup_state session_id=%s checkout_stage=%s pending_next_step=%s message=%s otp_email=%s",
+        "checkout_followup_state session_id=%s checkout_stage=%s pending_next_step=%s authenticated=%s message=%s otp_email=%s",
         session_id,
         current_checkout_stage,
         current_pending_next_step,
+        current_customer_authenticated,
         message,
         current_otp_email,
     )
@@ -602,7 +604,7 @@ def _resolve_checkout_workflow_followup(
         is_email=_is_email_message(message),
     )
 
-    if current_pending_next_step in {"auth_confirmation", "auth_pending"} and _is_email_message(message):
+    if not current_customer_authenticated and current_pending_next_step in {"auth_confirmation", "auth_pending"} and _is_email_message(message):
         logger.info(
             "checkout_followup_send_otp_attempt session_id=%s email=%s stage=%s pending_next_step=%s",
             session_id,
@@ -2588,7 +2590,7 @@ def _resolve_shared_commerce_payload(
         )
         return None
 
-    normalized_message = _normalize_widget_text(message)
+    normalized_message = message
     _trace_route(
         "commerce.start",
         session_id=session_id,
@@ -8169,7 +8171,7 @@ def public_widget_chat(
         session_id=effective_session_id,
         visitor_id=payload.visitor_id or "",
         external_user_id=payload.external_user_id or "",
-        message=_normalize_widget_text(payload.message),
+        message=payload.message,
     )
     started = time.perf_counter()
 
