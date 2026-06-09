@@ -1721,7 +1721,22 @@ class AgentService:
         role_context: RoleContext,
     ) -> tuple[RAGAnswer, str]:
         if decision.route == "greeting":
-            return self._greeting_answer(company_id=company_id), "greeting"
+            result = self._empty_knowledge_answer(
+                company_id=company_id,
+                message=message,
+                contextual_query=contextual_query,
+                use_openai=use_openai,
+                generation_provider=generation_provider,
+                generation_model=generation_model,
+                anthropic_model=anthropic_model,
+                openai_api_key=openai_api_key,
+                anthropic_api_key=anthropic_api_key,
+                objective=role_context.objective,
+                tone=role_context.tone,
+                system_rules=role_context.system_rules,
+                allow_general_llm=True,
+            )
+            return result, "greeting"
 
         if decision.route == "general_llm":
             result = self._empty_knowledge_answer(

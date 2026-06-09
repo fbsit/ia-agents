@@ -304,6 +304,26 @@ def _cart_requests_from_recent_products(message: str, session_id: str) -> list[d
     return [{"product_query": product_name, "quantity": quantity}]
 
 
+def _single_recent_product_quantity_request(message: str, session_id: str) -> list[dict[str, Any]]:
+    products = _recent_commerce_products(session_id)
+    if len(products) != 1:
+        return []
+    quantity = _parse_widget_quantity(message)
+    if quantity <= 0:
+        return []
+    product_name = str(products[0].get("name") or "").strip()
+    if not product_name:
+        return []
+    logger.info(
+        "commerce_recent_single_product_quantity session_id=%s message=%s product=%s quantity=%s",
+        session_id,
+        message,
+        product_name,
+        quantity,
+    )
+    return [{"product_query": product_name, "quantity": quantity}]
+
+
 def _cart_requests_from_recent_product_reference(message: str, session_id: str) -> list[dict[str, Any]]:
     normalized = _normalize_widget_text(message)
     if not normalized:
@@ -662,6 +682,17 @@ def _resolve_checkout_workflow_followup(
             "workflow_action": _workflow_action("otp_sent"),
         }
 
+    if current_checkout_stage == "otp_pending" and not _is_otp_code_message(message) and not _is_email_message(message):
+        return {
+            "answer": "Ya te envié un código de verificación. Mandame el código de 4 a 8 dígitos o reenvía tu correo para generar otro.",
+            "intent_label": "checkout_otp_waiting",
+            "workflow_stage": "checkout_ready",
+            "checkout_stage": "otp_pending",
+            "pending_next_step": "otp_verification",
+            "otp_email": current_otp_email or None,
+            "workflow_action": _workflow_action("otp_waiting"),
+        }
+
     if current_checkout_stage == "otp_pending" and _is_otp_code_message(message):
         otp_ok = False
         otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
@@ -987,7 +1018,7 @@ def _personalize_agent_freeform_response(
     normalized_route = (route or "").strip().lower()
 
     if normalized_route == "greeting":
-        return _personalize_agent_greeting(agent_name, company_id, default_answer)
+        return default_answer
 
     if _is_identity_question(message):
         if tenant_name and clean_agent_name:
@@ -1436,6 +1467,7 @@ def _parse_commerce_intent_with_openai(
     intent_label: str | None = None,
     channel: str | None = None,
     response_style_context: str | None = None,
+    workflow_context: str | None = None,
 ) -> dict[str, Any] | None:
     if not _should_try_llm_commerce_parser(intent_label, message):
         return None
@@ -1469,6 +1501,7 @@ def _parse_commerce_intent_with_openai(
                     "Si quiere cerrar pedido, reservar o generar borrador usa create_order_draft solo si hay items claros. "
                     "Si pregunta medios de pago usa get_payment_options. Si pregunta despacho, envio o retiro usa get_shipping_options. "
                     "Si el mensaje usa referencias como 'agregamelo', 'ese', 'el primero', 'el segundo', debes resolverlas usando recent_products si existe contexto. "
+                    "Si el usuario responde solo con una cantidad como '1', '2' o 'quiero 1' luego de ver un producto o un listado, interpretalo como seguimiento de compra y usa recent_products o workflow_context para decidir add_to_cart o set_cart_quantity. "
                     "No inventes datos faltantes. Si faltan datos criticos marca needs_clarification=true y escribe clarification_question concreta."
                 ),
             },
@@ -1480,6 +1513,7 @@ def _parse_commerce_intent_with_openai(
                         "intent_label_hint": intent_label or "",
                         "channel": channel or "",
                         "response_style_context": response_style_context or "",
+                        "workflow_context": workflow_context or "",
                         "recent_products": recent_products,
                     },
                     ensure_ascii=False,
@@ -2188,6 +2222,9 @@ def _resolve_cart_request_for_intent(
             recent_products = _cart_requests_from_recent_products(user_message, session_id)
             if recent_products:
                 return recent_products[0]
+            single_product = _single_recent_product_quantity_request(user_message, session_id)
+            if single_product:
+                return single_product[0]
     if normalized_intent == "remove_from_cart":
         explicit = _extract_widget_remove_from_cart(user_message)
         if explicit:
@@ -2208,6 +2245,9 @@ def _resolve_cart_request_for_intent(
                     "product_query": recent_reference[0]["product_query"],
                     "quantity": quantity,
                 }
+            single_product = _single_recent_product_quantity_request(user_message, session_id)
+            if single_product:
+                return single_product[0]
     return None
 
 
@@ -2344,12 +2384,16 @@ def _format_public_widget_tool_payload(
             return {
                 "answer": answer,
                 "products": products[:3],
+                "workflow_stage": "product_lookup",
+                "pending_next_step": "add_to_cart",
             }
 
         formatted = "\n".join(f"• {p['name']} — ${p['price']}" for p in products[:5] if p.get('name'))
         return {
             "answer": f"Te paso las opciones que tengo:\n{formatted}" if formatted else "No encontre productos.",
             "products": products,
+            "workflow_stage": "product_lookup",
+            "pending_next_step": "add_to_cart",
         }
 
     if tool == "get_shipping_options":
@@ -2689,6 +2733,12 @@ def _resolve_shared_commerce_payload(
         intent_label=intent_label,
         channel=channel,
         response_style_context=response_style_context,
+        workflow_context=(
+            f"stage={str((workflow_state or {}).get('stage') or '')};"
+            f"checkout_stage={str((workflow_state or {}).get('checkout_stage') or '')};"
+            f"pending_next_step={str((workflow_state or {}).get('pending_next_step') or '')};"
+            f"otp_email={str((workflow_state or {}).get('otp_email') or '')}"
+        ),
     )
 
     runtime_order_reference = _extract_order_reference(message)
