@@ -633,6 +633,18 @@ def _create_address_for_user(
         logger.warning("create_address_failed user_id=%s address=%s detail=%s", user_id, address_text, exc)
 
 
+def _canonical_tool_succeeded(result: Any, expected_statuses: set[str] | None = None) -> bool:
+    if not isinstance(result, dict) or not result.get("ok"):
+        return False
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    if data.get("ok") is True:
+        return True
+    status = str(data.get("status") or result.get("code") or result.get("status") or "").strip().lower()
+    if expected_statuses and status in expected_statuses:
+        return True
+    return status in {"ok", "sent", "verified", "success", "valid"}
+
+
 def _resolve_checkout_workflow_followup(
     *,
     message: str,
@@ -657,6 +669,7 @@ def _resolve_checkout_workflow_followup(
     )
 
     if current_checkout_stage == "auth_pending" and _is_email_message(message):
+        send_ok = False
         if clubhx_tools_client is not None:
             try:
                 result = clubhx_tools_client.execute_canonical(
@@ -670,8 +683,18 @@ def _resolve_checkout_workflow_followup(
                     "send_verification_code_ok session_id=%s email=%s result=%s",
                     session_id, message.strip(), result,
                 )
+                send_ok = _canonical_tool_succeeded(result, expected_statuses={"sent", "ok", "success"})
             except Exception as exc:
                 logger.warning("send_verification_code_failed session_id=%s email=%s detail=%s", session_id, message.strip(), exc)
+        if not send_ok:
+            return {
+                "answer": "No pude enviar el código de verificación. Probá de nuevo o avisame si querés reintentar con otro correo.",
+                "intent_label": "checkout_otp_send_failed",
+                "workflow_stage": "checkout_ready",
+                "checkout_stage": "auth_pending",
+                "pending_next_step": "auth_confirmation",
+                "workflow_action": _workflow_action("otp_send_failed"),
+            }
         return {
             "answer": f"Te enviamos un codigo de verificacion a {message.strip()}. Ingresalo aca para continuar.",
             "intent_label": "checkout_otp_sent",
@@ -709,7 +732,7 @@ def _resolve_checkout_workflow_followup(
                     "verify_verification_code_result session_id=%s code=%s result=%s",
                     session_id, message.strip(), result,
                 )
-                if isinstance(result, dict) and result.get("verified") is True:
+                if _canonical_tool_succeeded(result, expected_statuses={"verified", "valid", "ok", "success"}):
                     otp_ok = True
             except Exception as exc:
                 logger.warning("verify_verification_code_failed session_id=%s code=%s detail=%s", session_id, message.strip(), exc)
@@ -3028,7 +3051,7 @@ def _resolve_shared_commerce_payload(
                                     "verify_verification_code_result session_id=%s email=%s code=%s result=%s",
                                     session_id, otp_email, message.strip(), result,
                                 )
-                                if isinstance(result, dict) and result.get("verified") is True:
+                                if _canonical_tool_succeeded(result, expected_statuses={"verified", "valid", "ok", "success"}):
                                     return {
                                         "answer": "Perfecto, ya estas autenticado. Ahora dime si prefieres retiro en tienda o despacho.",
                                         "intent_label": "checkout_auth_confirmed",
@@ -3049,6 +3072,7 @@ def _resolve_shared_commerce_payload(
                             "workflow_action": _workflow_action("otp_invalid"),
                         }
                     if _is_email_message(message):
+                        send_ok = False
                         if clubhx_tools_client is not None:
                             try:
                                 result = clubhx_tools_client.execute_canonical(
@@ -3062,8 +3086,18 @@ def _resolve_shared_commerce_payload(
                                     "send_verification_code_ok session_id=%s email=%s result=%s",
                                     session_id, message.strip(), result,
                                 )
+                                send_ok = _canonical_tool_succeeded(result, expected_statuses={"sent", "ok", "success"})
                             except Exception as exc:
                                 logger.warning("send_verification_code_failed session_id=%s email=%s detail=%s", session_id, message.strip(), exc)
+                        if not send_ok:
+                            return {
+                                "answer": "No pude enviar el código de verificación. Probá de nuevo con tu correo.",
+                                "intent_label": "checkout_otp_send_failed",
+                                "workflow_stage": "checkout_ready",
+                                "checkout_stage": "auth_pending",
+                                "pending_next_step": "auth_confirmation",
+                                "workflow_action": _workflow_action("otp_send_failed"),
+                            }
                         return {
                             "answer": f"Te enviamos un codigo de verificacion a {message.strip()}. Ingresalo aca para continuar.",
                             "intent_label": "checkout_otp_sent",
