@@ -577,10 +577,22 @@ def _resolve_checkout_workflow_followup(
 ) -> dict[str, Any] | None:
     current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip()
     current_pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
+    current_otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
     logger.warning(
         "checkout_followup_state session_id=%s checkout_stage=%s pending_next_step=%s message=%s otp_email=%s",
-        session_id, current_checkout_stage, current_pending_next_step, message,
-        str((workflow_state or {}).get("otp_email") or ""),
+        session_id,
+        current_checkout_stage,
+        current_pending_next_step,
+        message,
+        current_otp_email,
+    )
+    logger.info(
+        "checkout_followup_entry session_id=%s stage=%s pending_next_step=%s otp_email=%s message=%s",
+        session_id,
+        current_checkout_stage,
+        current_pending_next_step,
+        current_otp_email,
+        message,
     )
     _trace_route(
         "checkout_followup.check_stage",
@@ -591,6 +603,13 @@ def _resolve_checkout_workflow_followup(
     )
 
     if current_pending_next_step in {"auth_confirmation", "auth_pending"} and _is_email_message(message):
+        logger.info(
+            "checkout_followup_send_otp_attempt session_id=%s email=%s stage=%s pending_next_step=%s",
+            session_id,
+            message.strip(),
+            current_checkout_stage,
+            current_pending_next_step,
+        )
         send_ok = False
         if clubhx_tools_client is not None:
             try:
@@ -602,13 +621,27 @@ def _resolve_checkout_workflow_followup(
                     arguments={"email": message.strip()},
                 )
                 logger.info(
-                    "send_verification_code_ok session_id=%s email=%s result=%s",
-                    session_id, message.strip(), result,
+                    "checkout_followup_send_otp_result session_id=%s email=%s result=%s",
+                    session_id,
+                    message.strip(),
+                    result,
                 )
                 send_ok = _canonical_tool_succeeded(result, expected_statuses={"sent", "ok", "success"})
             except Exception as exc:
-                logger.warning("send_verification_code_failed session_id=%s email=%s detail=%s", session_id, message.strip(), exc)
+                logger.warning(
+                    "checkout_followup_send_otp_failed session_id=%s email=%s detail=%s",
+                    session_id,
+                    message.strip(),
+                    exc,
+                )
         if not send_ok:
+            logger.warning(
+                "checkout_followup_send_otp_not_ok session_id=%s email=%s stage=%s pending_next_step=%s",
+                session_id,
+                message.strip(),
+                current_checkout_stage,
+                current_pending_next_step,
+            )
             return {
                 "answer": "No pude enviar el código de verificación. Probá de nuevo o avisame si querés reintentar con otro correo.",
                 "intent_label": "checkout_otp_send_failed",
@@ -628,8 +661,16 @@ def _resolve_checkout_workflow_followup(
         }
 
     if current_pending_next_step == "otp_verification" or current_checkout_stage == "otp_pending":
-        otp_ok = False
         otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
+        logger.info(
+            "checkout_followup_verify_otp_attempt session_id=%s message=%s stage=%s pending_next_step=%s otp_email=%s",
+            session_id,
+            message.strip(),
+            current_checkout_stage,
+            current_pending_next_step,
+            otp_email,
+        )
+        otp_ok = False
         if clubhx_tools_client is not None and otp_email:
             try:
                 result = clubhx_tools_client.execute_canonical(
@@ -640,14 +681,31 @@ def _resolve_checkout_workflow_followup(
                     arguments={"email": otp_email, "code": message.strip()},
                 )
                 logger.info(
-                    "verify_verification_code_result session_id=%s code=%s result=%s",
-                    session_id, message.strip(), result,
+                    "checkout_followup_verify_otp_result session_id=%s code=%s otp_email=%s result=%s",
+                    session_id,
+                    message.strip(),
+                    otp_email,
+                    result,
                 )
                 if _canonical_tool_succeeded(result, expected_statuses={"verified", "valid", "ok", "success"}):
                     otp_ok = True
             except Exception as exc:
-                logger.warning("verify_verification_code_failed session_id=%s code=%s detail=%s", session_id, message.strip(), exc)
+                logger.warning(
+                    "checkout_followup_verify_otp_failed session_id=%s code=%s otp_email=%s detail=%s",
+                    session_id,
+                    message.strip(),
+                    otp_email,
+                    exc,
+                )
         if not otp_ok:
+            logger.warning(
+                "checkout_followup_verify_otp_not_ok session_id=%s code=%s stage=%s pending_next_step=%s otp_email=%s",
+                session_id,
+                message.strip(),
+                current_checkout_stage,
+                current_pending_next_step,
+                otp_email,
+            )
             return {
                 "answer": "El codigo ingresado no es valido. Intenta de nuevo o escribe tu correo para reenviar el codigo.",
                 "intent_label": "checkout_otp_invalid",
@@ -2583,6 +2641,17 @@ def _resolve_shared_commerce_payload(
         customer_authenticated=_workflow_state_customer_authenticated(workflow_state) or _is_login_confirmed_message(message),
         order_reference=(workflow_state or {}).get("order_reference") or "",
     )
+    logger.info(
+        "commerce_workflow_snapshot session_id=%s stage=%s checkout_stage=%s pending_next_step=%s authenticated=%s otp_email=%s selected_products=%s shipping_preference=%s",
+        session_id,
+        str((workflow_state or {}).get("stage") or ""),
+        str((workflow_state or {}).get("checkout_stage") or ""),
+        str((workflow_state or {}).get("pending_next_step") or ""),
+        _workflow_state_customer_authenticated(workflow_state),
+        str((workflow_state or {}).get("otp_email") or ""),
+        str((workflow_state or {}).get("selected_products") or ""),
+        str((workflow_state or {}).get("shipping_preference") or ""),
+    )
 
     followup_payload = _resolve_affirmative_workflow_followup(
         message=message,
@@ -2629,6 +2698,14 @@ def _resolve_shared_commerce_payload(
             str(checkout_followup_payload.get("checkout_stage") or ""),
         )
         return checkout_followup_payload
+    logger.info(
+        "commerce_checkout_followup_miss session_id=%s checkout_stage=%s pending_next_step=%s message=%s llm_intent=%s",
+        session_id,
+        str((workflow_state or {}).get("checkout_stage") or ""),
+        str((workflow_state or {}).get("pending_next_step") or ""),
+        message,
+        str((llm_commerce_intent or {}).get("intent") or ""),
+    )
 
     if _is_clear_cart_message(message):
         _trace_route("commerce.resolve_clear_cart", session_id=session_id)
