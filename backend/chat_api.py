@@ -3034,91 +3034,55 @@ def _resolve_shared_commerce_payload(
                         "answer": "Primero decime que producto queres llevar y te ayudo con el pago.",
                         "intent_label": str(llm_commerce_intent.get("intent") or intent_label or "commerce").strip() or "commerce",
                     }
-                if not _is_checkout_redirect_channel(channel):
-                    final_summary_stage = str(getattr(current_workflow, "checkout_stage", "") or "").strip() in {
-                        "order_summary_pending",
-                        "order_summary_ready",
-                        "order_summary_confirmed",
-                    }
-                if not current_workflow.customer_authenticated and not final_summary_stage:
-                    if _is_email_message(message):
-                        send_ok = False
-                        if clubhx_tools_client is not None:
-                            try:
-                                result = clubhx_tools_client.execute_canonical(
-                                    tenant_id=company_id,
-                                    tool="send_verification_code",
-                                    channel=channel,
-                                    user_id=user_id,
-                                    arguments={"email": message.strip()},
-                                )
-                                logger.info(
-                                    "send_verification_code_ok session_id=%s email=%s result=%s",
-                                    session_id, message.strip(), result,
-                                )
-                                send_ok = _canonical_tool_succeeded(result, expected_statuses={"sent", "ok", "success"})
-                            except Exception as exc:
-                                logger.warning("send_verification_code_failed session_id=%s email=%s detail=%s", session_id, message.strip(), exc)
-                        if not send_ok:
-                            return {
-                                "answer": "No pude enviar el código de verificación. Probá de nuevo con tu correo.",
-                                "intent_label": "checkout_otp_send_failed",
-                                "workflow_stage": "checkout_ready",
-                                "checkout_stage": "auth_pending",
-                                "pending_next_step": "auth_confirmation",
-                                "workflow_action": _workflow_action("otp_send_failed"),
-                            }
+            if not _is_checkout_redirect_channel(channel):
+                final_summary_stage = str(getattr(current_workflow, "checkout_stage", "") or "").strip() in {
+                    "order_summary_confirmed",
+                }
+            if not current_workflow.customer_authenticated and not final_summary_stage:
+                if _is_email_message(message):
+                    send_ok = False
+                    if clubhx_tools_client is not None:
+                        try:
+                            result = clubhx_tools_client.execute_canonical(
+                                tenant_id=company_id,
+                                tool="send_verification_code",
+                                channel=channel,
+                                user_id=user_id,
+                                arguments={"email": message.strip()},
+                            )
+                            logger.info(
+                                "send_verification_code_ok session_id=%s email=%s result=%s",
+                                session_id, message.strip(), result,
+                            )
+                            send_ok = _canonical_tool_succeeded(result, expected_statuses={"sent", "ok", "success"})
+                        except Exception as exc:
+                            logger.warning("send_verification_code_failed session_id=%s email=%s detail=%s", session_id, message.strip(), exc)
+                    if not send_ok:
                         return {
-                            "answer": f"Te enviamos un codigo de verificacion a {message.strip()}. Ingresalo aca para continuar.",
-                            "intent_label": "checkout_otp_sent",
+                            "answer": "No pude enviar el código de verificación. Probá de nuevo con tu correo.",
+                            "intent_label": "checkout_otp_send_failed",
                             "workflow_stage": "checkout_ready",
-                            "checkout_stage": "otp_pending",
-                            "pending_next_step": "otp_verification",
-                            "otp_email": message.strip(),
-                            "workflow_action": _workflow_action("otp_sent"),
+                            "checkout_stage": "auth_pending",
+                            "pending_next_step": "auth_confirmation",
+                            "workflow_action": _workflow_action("otp_send_failed"),
                         }
                     return {
-                        "answer": "Para seguir con el pago necesito que inicies sesion primero. Escribe tu correo electronico para enviarte un codigo de verificacion.",
-                        "intent_label": "checkout_auth_needed",
+                        "answer": f"Te enviamos un codigo de verificacion a {message.strip()}. Ingresalo aca para continuar.",
+                        "intent_label": "checkout_otp_sent",
                         "workflow_stage": "checkout_ready",
-                        "checkout_stage": "auth_pending",
-                        "pending_next_step": "auth_confirmation",
-                        "workflow_action": _workflow_action("request_auth"),
+                        "checkout_stage": "otp_pending",
+                        "pending_next_step": "otp_verification",
+                        "otp_email": message.strip(),
+                        "workflow_action": _workflow_action("otp_sent"),
                     }
-                if not final_summary_stage:
-                    shipping_ready = (
-                        current_workflow.has_pickup_location
-                        or (current_workflow.has_delivery_address and current_workflow.delivery_address_confirmed)
-                    )
-                    if not shipping_ready:
-                        existing_address = str((workflow_state or {}).get("delivery_address") or "").strip()
-                        if existing_address and not _workflow_state_bool((workflow_state or {}).get("delivery_address_confirmed")):
-                            return {
-                                "answer": f"Encontre esta direccion de despacho:\n{existing_address}\n\nEsta correcta?",
-                                "intent_label": "delivery_address_confirmation_pending",
-                                "workflow_stage": "shipping_selection",
-                                "checkout_stage": "delivery_address_proposed",
-                                "pending_next_step": "delivery_address_confirmation",
-                                "workflow_action": _workflow_action("request_address_confirmation"),
-                            }
-                        return {
-                            "answer": "Ahora necesito saber si preferis retiro en tienda o despacho a domicilio.",
-                            "intent_label": "shipping_options",
-                            "workflow_stage": "shipping_selection",
-                            "checkout_stage": "shipping_method_pending",
-                            "pending_next_step": "shipping_selection",
-                            "workflow_action": _workflow_action("choose_shipping_method"),
-                        }
-                    invoice_ready = not current_workflow.has_invoice_type or current_workflow.invoice_data_complete
-                    if not invoice_ready:
-                        return {
-                            "answer": "Antes de generar el pago, necesito saber si quieres boleta o factura.",
-                            "intent_label": "invoice_type_pending",
-                            "workflow_stage": "payment_selection",
-                            "checkout_stage": "invoice_type_pending",
-                            "pending_next_step": "invoice_type",
-                            "workflow_action": _workflow_action("request_invoice_type"),
-                        }
+                return {
+                    "answer": "Para seguir con el pago necesito que inicies sesion primero. Escribe tu correo electronico para enviarte un codigo de verificacion.",
+                    "intent_label": "checkout_auth_needed",
+                    "workflow_stage": "checkout_ready",
+                    "checkout_stage": "auth_pending",
+                    "pending_next_step": "auth_confirmation",
+                    "workflow_action": _workflow_action("request_auth"),
+                }
             checkout_items, checkout_products = _resolve_checkout_items(
                 company_id=company_id,
                 user_id=user_id,

@@ -2359,6 +2359,60 @@ def test_payment_options_routes_to_order_draft_on_whatsapp(monkeypatch: pytest.M
     assert calls[1][0] == "create_order_draft"
 
 
+def test_payment_options_requires_auth_before_checkout_on_whatsapp(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: {
+            "intent": "payment_options",
+            "tool": "get_payment_options",
+            "query": "quiero pagar",
+            "needs_clarification": False,
+        },
+    )
+
+    class FakeToolsClient:
+        def execute_canonical(self, **kwargs):
+            if kwargs.get("tool") == "get_product_availability":
+                return {
+                    "ok": True,
+                    "tool": "get_product_availability",
+                    "data": {
+                        "items": [
+                            {"id": "1", "name": "Milo", "price": 5490, "available_units": 20},
+                        ]
+                    },
+                }
+            raise AssertionError("Checkout should stop before payment tools when auth is missing")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-wa-auth-1",
+        message="quiero pagar",
+        channel="api_internal",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "stage": "payment_selection",
+            "checkout_stage": "order_summary_pending",
+            "pending_next_step": "order_confirmation",
+            "payment_preference": "mercado pago",
+            "selected_products": "Milo",
+            "customer_authenticated": False,
+        },
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "checkout_auth_needed"
+    assert payload["checkout_stage"] == "auth_pending"
+    assert payload["pending_next_step"] == "auth_confirmation"
+    assert "inicies sesion" in payload["answer"].lower()
+
+
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
