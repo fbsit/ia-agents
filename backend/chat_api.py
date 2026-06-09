@@ -2711,6 +2711,37 @@ def _resolve_shared_commerce_payload(
         str((workflow_state or {}).get("pending_next_step") or ""),
     )
 
+    greeting_like = _is_likely_greeting_message(message)
+    has_active_workflow = any(
+        str((workflow_state or {}).get(field) or "").strip()
+        for field in {
+            "stage",
+            "checkout_stage",
+            "pending_next_step",
+            "selected_products",
+            "shipping_preference",
+            "payment_preference",
+            "pickup_location_label",
+            "delivery_address",
+            "invoice_type",
+            "otp_email",
+        }
+    ) or _workflow_state_customer_authenticated(workflow_state)
+    if greeting_like and not has_active_workflow:
+        _trace_route(
+            "commerce.greeting_passthrough",
+            session_id=session_id,
+            channel=channel,
+            message=message,
+        )
+        logger.info(
+            "commerce_router_greeting_passthrough session_id=%s channel=%s message=%s",
+            session_id,
+            channel,
+            message,
+        )
+        return None
+
     llm_commerce_intent = _parse_commerce_intent_with_openai(
         message,
         session_id=session_id,

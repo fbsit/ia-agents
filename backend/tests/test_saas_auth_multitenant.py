@@ -2413,6 +2413,34 @@ def test_payment_options_requires_auth_before_checkout_on_whatsapp(monkeypatch: 
     assert "inicies sesion" in payload["answer"].lower()
 
 
+def test_greeting_without_active_workflow_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Greeting should not reach the commerce LLM")),
+    )
+
+    class FakeToolsClient:
+        def execute_canonical(self, **kwargs):
+            raise AssertionError("Greeting should not call commerce tools")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-greeting-1",
+        message="Hola",
+        channel="api_internal",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={},
+    )
+
+    assert payload is None
+
+
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
