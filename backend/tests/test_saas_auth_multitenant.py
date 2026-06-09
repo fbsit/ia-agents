@@ -2611,6 +2611,41 @@ def test_greeting_with_order_summary_workflow_returns_contextual_followup(monkey
     assert "resumen" in payload["answer"].lower()
 
 
+def test_workflow_status_question_returns_specific_active_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Workflow status question should not reach the commerce LLM")),
+    )
+
+    class FakeToolsClient:
+        def execute_canonical(self, **kwargs):
+            raise AssertionError("Workflow status question should not call commerce tools")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        agent_id="demo-agent",
+        user_id="user-1",
+        session_id="session-status-1",
+        message="Que proceso es ?",
+        channel="api_internal",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "checkout_stage": "auth_pending",
+            "pending_next_step": "auth_confirmation",
+        },
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "checkout_auth_needed"
+    assert "verificacion de acceso" in payload["answer"].lower()
+    assert "correo" in payload["answer"].lower()
+
+
 def test_expired_workflow_requests_confirmation_before_reset(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
