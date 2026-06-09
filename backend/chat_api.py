@@ -130,6 +130,8 @@ _WIDGET_QUANTITY_WORDS: dict[str, int] = {
 
 _COMMERCE_CONTEXT_LOCK = threading.Lock()
 _COMMERCE_PRODUCT_CONTEXT: dict[str, dict[str, Any]] = {}
+_WORKFLOW_EXPIRATION_SECONDS = 300
+_WORKFLOW_RESET_CONFIRMATION_SECONDS = 180
 _SUPPORTED_COMMERCE_TOOLS = {
     "get_product_availability",
     "get_order_status",
@@ -444,6 +446,54 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
             agent_id=agent_id,
             session_id=session_id,
         )
+        summary_updated_at = str(getattr(summary, "updated_at", "") or "").strip()
+        workflow_reset_started_at = str(getattr(summary, "workflow_reset_started_at", "") or "").strip()
+        has_active_workflow = any(
+            str(value or "").strip()
+            for value in [
+                summary.funnel_stage,
+                summary.checkout_stage,
+                summary.pending_next_step,
+                summary.selected_products,
+                summary.shipping_preference,
+                summary.pickup_location_label,
+                summary.delivery_address,
+                summary.invoice_type,
+                summary.payment_preference,
+                summary.otp_email,
+            ]
+        ) or bool(summary.customer_authenticated)
+        if has_active_workflow and workflow_reset_started_at:
+            try:
+                reset_started_at = datetime.fromisoformat(workflow_reset_started_at)
+                if reset_started_at.tzinfo is None:
+                    reset_started_at = reset_started_at.replace(tzinfo=UTC)
+                if (datetime.now(UTC) - reset_started_at).total_seconds() > _WORKFLOW_RESET_CONFIRMATION_SECONDS:
+                    agent_service.update_session_summary(
+                        company_id=company_id,
+                        agent_id=agent_id,
+                        session_id=session_id,
+                        reset_workflow=True,
+                    )
+                    return {"workflow_expired": "true"}
+            except (ValueError, TypeError):
+                pass
+        if has_active_workflow and summary_updated_at and not workflow_reset_started_at:
+            try:
+                updated_at = datetime.fromisoformat(summary_updated_at)
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=UTC)
+                if (datetime.now(UTC) - updated_at).total_seconds() > _WORKFLOW_EXPIRATION_SECONDS:
+                    reset_now = datetime.now(UTC).isoformat()
+                    agent_service.update_session_summary(
+                        company_id=company_id,
+                        agent_id=agent_id,
+                        session_id=session_id,
+                        workflow_reset_started_at=reset_now,
+                    )
+                    workflow_reset_started_at = reset_now
+            except (ValueError, TypeError):
+                pass
         customer_authenticated = summary.customer_authenticated
         if customer_authenticated and summary.authenticated_at:
             try:
@@ -470,6 +520,9 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
             "order_reference": summary.order_reference,
             "otp_email": summary.otp_email,
             "authenticated_at": summary.authenticated_at,
+            "updated_at": summary_updated_at,
+            "workflow_reset_started_at": workflow_reset_started_at,
+            "workflow_timeout_confirmation": "true" if workflow_reset_started_at else "",
         }
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -634,6 +687,77 @@ def _resolve_greeting_workflow_followup(
     if current_stage or current_checkout_stage or current_pending_next_step:
         return {
             "answer": "Hola. Tenemos un proceso en curso. Si quieres, seguimos desde donde quedamos; si no, dime que quieres hacer y cambiamos de tema.",
+            "intent_label": "workflow_in_progress",
+            "workflow_stage": current_stage or "commerce",
+            "checkout_stage": current_checkout_stage,
+            "pending_next_step": current_pending_next_step,
+        }
+
+    return None
+
+
+def _resolve_workflow_resume_followup(workflow_state: dict[str, str] | None) -> dict[str, Any] | None:
+    current_stage = str((workflow_state or {}).get("stage") or "").strip().lower()
+    current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip().lower()
+    current_pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
+    otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
+    selected_products = str((workflow_state or {}).get("selected_products") or "").strip()
+
+    if current_checkout_stage == "auth_pending" or current_pending_next_step in {"auth_pending", "auth_confirmation"}:
+        return {
+            "answer": "Perfecto, retomamos tu pedido. Escribime tu correo y te envio el codigo de verificacion para seguir.",
+            "intent_label": "checkout_auth_needed",
+            "workflow_stage": "checkout_ready",
+            "checkout_stage": "auth_pending",
+            "pending_next_step": "auth_confirmation",
+        }
+
+    if current_checkout_stage == "otp_pending" or current_pending_next_step == "otp_verification":
+        email_hint = f" a {otp_email}" if otp_email else ""
+        return {
+            "answer": f"Perfecto, retomamos tu pedido. Ingresame el codigo que te enviamos{email_hint} para continuar.",
+            "intent_label": "checkout_otp_pending",
+            "workflow_stage": "checkout_ready",
+            "checkout_stage": "otp_pending",
+            "pending_next_step": "otp_verification",
+        }
+
+    if current_checkout_stage in {"shipping_method_pending", "pickup_location_pending", "delivery_address_pending", "delivery_address_proposed"} or current_pending_next_step in {"shipping_selection", "delivery_address", "delivery_address_confirmation"}:
+        answer = "Perfecto, retomamos tu pedido. Dime si prefieres retiro en tienda o despacho para seguir."
+        if current_checkout_stage == "pickup_location_pending":
+            answer = "Perfecto, retomamos tu pedido. Dime en que tienda o punto quieres retirar."
+        elif current_checkout_stage in {"delivery_address_pending", "delivery_address_proposed"} or current_pending_next_step in {"delivery_address", "delivery_address_confirmation"}:
+            answer = "Perfecto, retomamos tu pedido. Enviame la direccion de despacho o confirmame la que ya te mostre."
+        return {
+            "answer": answer,
+            "intent_label": "shipping_options",
+            "workflow_stage": "shipping_selection",
+            "checkout_stage": current_checkout_stage or "shipping_method_pending",
+            "pending_next_step": current_pending_next_step or "shipping_selection",
+        }
+
+    if current_checkout_stage in {"invoice_type_pending", "invoice_data_pending", "invoice_address_pending"} or current_pending_next_step in {"invoice_type", "invoice_data", "invoice_address"}:
+        return {
+            "answer": "Perfecto, retomamos tu pedido. Dime si quieres boleta o factura para seguir.",
+            "intent_label": "invoice_type_pending",
+            "workflow_stage": "payment_selection",
+            "checkout_stage": current_checkout_stage or "invoice_type_pending",
+            "pending_next_step": current_pending_next_step or "invoice_type",
+        }
+
+    if current_checkout_stage == "order_summary_pending" or current_pending_next_step == "order_confirmation":
+        product_hint = f" de {selected_products}" if selected_products else ""
+        return {
+            "answer": f"Perfecto, retomamos el resumen{product_hint}. Si esta todo correcto, confirmamelo y seguimos con el pago.",
+            "intent_label": "order_summary_pending",
+            "workflow_stage": "payment_selection",
+            "checkout_stage": "order_summary_pending",
+            "pending_next_step": "order_confirmation",
+        }
+
+    if current_stage or current_checkout_stage or current_pending_next_step:
+        return {
+            "answer": "Perfecto, retomamos el proceso donde lo dejamos. Dime como quieres continuar.",
             "intent_label": "workflow_in_progress",
             "workflow_stage": current_stage or "commerce",
             "checkout_stage": current_checkout_stage,
@@ -2747,6 +2871,7 @@ def _build_recipe_recommendation_payload(
 def _resolve_shared_commerce_payload(
     *,
     company_id: str,
+    agent_id: str | None = None,
     user_id: str,
     session_id: str,
     message: str,
@@ -2794,6 +2919,53 @@ def _resolve_shared_commerce_payload(
     )
 
     greeting_like = _is_likely_greeting_message(message)
+    if _workflow_state_bool((workflow_state or {}).get("workflow_expired")):
+        _trace_route(
+            "commerce.workflow_expired",
+            session_id=session_id,
+            channel=channel,
+            message=message,
+        )
+        logger.info(
+            "commerce_router_workflow_expired session_id=%s channel=%s message=%s",
+            session_id,
+            channel,
+            message,
+        )
+        return {
+            "answer": "El proceso anterior se reinicio por inactividad despues de 5 minutos. Arranquemos de nuevo: dime que necesitas.",
+            "intent_label": "workflow_reset",
+            "workflow_stage": "browsing",
+            "checkout_stage": "",
+            "pending_next_step": "",
+            "reset_workflow": True,
+        }
+    if _workflow_state_bool((workflow_state or {}).get("workflow_timeout_confirmation")):
+        if _is_affirmative_followup_message(message):
+            if agent_service is not None and agent_id:
+                agent_service.update_session_summary(
+                    company_id=company_id,
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    workflow_reset_started_at="",
+                )
+            resumed_payload = _resolve_workflow_resume_followup(workflow_state)
+            if resumed_payload:
+                _trace_route(
+                    "commerce.workflow_resumed",
+                    session_id=session_id,
+                    channel=channel,
+                    checkout_stage=str(resumed_payload.get("checkout_stage") or ""),
+                    pending_next_step=str(resumed_payload.get("pending_next_step") or ""),
+                )
+                return resumed_payload
+        return {
+            "answer": "El proceso quedo pausado por inactividad. Si quieres retomarlo donde lo dejamos, responde 'si' dentro de 3 minutos. Si no, reinicio todo.",
+            "intent_label": "workflow_resume_confirmation",
+            "workflow_stage": str((workflow_state or {}).get("stage") or "").strip() or "commerce",
+            "checkout_stage": str((workflow_state or {}).get("checkout_stage") or "").strip(),
+            "pending_next_step": str((workflow_state or {}).get("pending_next_step") or "").strip(),
+        }
     has_active_workflow = any(
         str((workflow_state or {}).get(field) or "").strip()
         for field in {
@@ -7276,6 +7448,7 @@ def internal_chat_with_agent(
         workflow_state = _agent_workflow_state(agent.company_id, agent.agent_id, effective_session_id)
         shared_commerce_payload = _resolve_shared_commerce_payload(
             company_id=agent.company_id,
+            agent_id=agent.agent_id,
             user_id=user_id,
             session_id=effective_session_id,
             message=payload.message,
@@ -7602,6 +7775,7 @@ def chat_with_agent(
         workflow_state = _agent_workflow_state(agent.company_id, agent.agent_id, effective_session_id)
         shared_commerce_payload = _resolve_shared_commerce_payload(
             company_id=agent.company_id,
+            agent_id=agent.agent_id,
             user_id=principal.user_id,
             session_id=effective_session_id,
             message=payload.message,
@@ -8403,6 +8577,7 @@ def public_widget_chat(
     workflow_state = _agent_workflow_state(agent.company_id, agent.agent_id, effective_session_id)
     shared_commerce_payload = _resolve_shared_commerce_payload(
         company_id=agent.company_id,
+        agent_id=agent.agent_id,
         user_id=payload.external_user_id or payload.visitor_id or client_id,
         session_id=effective_session_id,
         message=payload.message,

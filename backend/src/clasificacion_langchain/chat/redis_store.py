@@ -84,6 +84,8 @@ class RedisSessionStore:
         if not isinstance(payload, dict):
             return SessionSummary()
         return SessionSummary(
+            updated_at=str(payload.get("updated_at", "")),
+            workflow_reset_started_at=str(payload.get("workflow_reset_started_at", "")),
             user_goal=str(payload.get("user_goal", "")),
             funnel_stage=str(payload.get("funnel_stage", "")),
             checkout_stage=str(payload.get("checkout_stage", "")),

@@ -1565,6 +1565,7 @@ class AgentService:
         reset_workflow: bool = False,
         otp_email: str | None = None,
         authenticated_at: str | None = None,
+        workflow_reset_started_at: str | None = None,
     ) -> None:
         clean_session_id = (session_id or "").strip()
         if not clean_session_id:
@@ -1587,6 +1588,7 @@ class AgentService:
             summary.order_reference = ""
             summary.otp_email = ""
             summary.authenticated_at = ""
+            summary.workflow_reset_started_at = ""
 
         explicit_workflow_stage = normalize_stage(workflow_stage) if workflow_stage else ""
         if user_message and user_message.strip():
@@ -1643,6 +1645,8 @@ class AgentService:
             summary.otp_email = _normalize_summary_value(otp_email, 120) if otp_email.strip() else ""
         if authenticated_at is not None:
             summary.authenticated_at = authenticated_at.strip() if authenticated_at.strip() else ""
+        if workflow_reset_started_at is not None:
+            summary.workflow_reset_started_at = workflow_reset_started_at.strip() if workflow_reset_started_at.strip() else ""
 
         current_state = build_workflow_state(
             stage=summary.funnel_stage,
@@ -1669,6 +1673,8 @@ class AgentService:
             summary.funnel_stage = current_state.stage
             if transition.notes and not summary.notes:
                 summary.notes = transition.notes
+
+        summary.updated_at = datetime.now(UTC).isoformat()
 
         self.session_store.save_summary(
             company_id=company_id,

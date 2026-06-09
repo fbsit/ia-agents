@@ -12,6 +12,8 @@ class SessionTurn:
 
 @dataclass
 class SessionSummary:
+    updated_at: str = ""
+    workflow_reset_started_at: str = ""
     user_goal: str = ""
     funnel_stage: str = ""
     checkout_stage: str = ""
