@@ -507,7 +507,7 @@ def test_agents_chat_without_index_falls_back_to_live_knowledge(
 def test_agent_analyze_web_url_returns_structured_summary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module, client = _load_api(monkeypatch, compat_mode="false")
+    module, client = _load_api(monkeypatch, compat_mode="true")
     _register(client, email="owner@web-analysis.com")
     login_response = _login(client, email="owner@web-analysis.com")
     access_token = login_response.json()["tokens"]["access_token"]
@@ -1566,7 +1566,7 @@ def test_orchestrator_can_use_llm_intent_classifier_for_routing(
     monkeypatch.setenv("AGENT_ORCHESTRATOR_USE_LLM", "true")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    module, client = _load_api(monkeypatch, compat_mode="false")
+    module, client = _load_api(monkeypatch, compat_mode="true")
 
     assert module.agent_service is not None
 
@@ -2077,3 +2077,375 @@ def test_public_widget_chat_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     )
     assert second.status_code == 429
+
+
+def test_public_widget_checkout_auth_flow_uses_otp_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PUBLIC_WIDGET_SIGNING_SECRET", "widget-secret")
+    monkeypatch.setenv("PUBLIC_WIDGET_ALLOW_ORIGINS", "http://localhost:3000")
+
+    module, client = _load_api(monkeypatch, compat_mode="true")
+    agent = module.agent_service.repository.create_agent(  # type: ignore[attr-defined]
+        org_id="org-widget-checkout",
+        company_id="org-widget-checkout",
+        name="Widget Checkout Agent",
+        objective="Flujo checkout con OTP",
+        tone="claro y comercial",
+        description="Flujo checkout con OTP",
+        rag_backend="tfidf",
+        generation_provider="openai",
+        use_openai_generation=False,
+        openai_model="gpt-4o-mini",
+        knowledge_dir="C:/tmp/widget-checkout-knowledge",
+        index_path="C:/tmp/widget-checkout-index.joblib",
+    )
+    widget_payload = {
+        "widget_id": agent.agent_id,
+        "widget_token": module._public_widget_token(agent.agent_id, agent.company_id),  # type: ignore[attr-defined]
+        "endpoint_url": "/public/widget/chat",
+    }
+
+    session_id = "checkout-session-1"
+    module.agent_service.update_session_summary(  # type: ignore[attr-defined]
+        company_id="org-widget-checkout",
+        agent_id=agent.agent_id,
+        session_id=session_id,
+        selected_products=["Milo"],
+        workflow_stage="checkout_ready",
+        pending_next_step="auth_confirmation",
+        checkout_stage="auth_pending",
+        customer_authenticated=False,
+    )
+
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    class FakeToolsClient:
+        def execute_canonical(
+            self,
+            *,
+            tenant_id: str,
+            tool: str,
+            channel: str,
+            user_id: str,
+            arguments: dict[str, str],
+        ):
+            calls.append((tool, arguments))
+            if tool == "send_verification_code":
+                return {"ok": True, "data": {"ok": True, "status": "sent", "sent": True}}
+            if tool == "verify_verification_code":
+                return {"ok": True, "data": {"ok": True, "status": "verified", "verified": True}}
+            raise AssertionError(f"Unexpected tool: {tool}")
+
+    monkeypatch.setattr(module, "_get_clubhx_tools_client", lambda: FakeToolsClient())
+
+    first = client.post(
+        "/public/widget/chat",
+        headers={"Origin": "http://localhost:3000"},
+        json={
+            "widget_id": widget_payload["widget_id"],
+            "widget_token": widget_payload["widget_token"],
+            "session_id": session_id,
+            "visitor_id": "visitor-1",
+            "external_user_id": "user-1",
+            "message": "ehl_piphe3@outlook.com",
+        },
+    )
+    assert first.status_code == 200
+    first_payload = first.json()
+    assert "codigo de verificacion" in first_payload["answer"].lower()
+
+    summary_after_first = module.agent_service.get_session_summary(  # type: ignore[attr-defined]
+        company_id="org-widget-checkout",
+        agent_id=agent.agent_id,
+        session_id=session_id,
+    )
+    assert summary_after_first.checkout_stage == "otp_pending"
+    assert summary_after_first.pending_next_step == "otp_verification"
+    assert summary_after_first.otp_email == "ehl_piphe3@outlook.com"
+
+    second = client.post(
+        "/public/widget/chat",
+        headers={"Origin": "http://localhost:3000"},
+        json={
+            "widget_id": widget_payload["widget_id"],
+            "widget_token": widget_payload["widget_token"],
+            "session_id": session_id,
+            "visitor_id": "visitor-1",
+            "external_user_id": "user-1",
+            "message": "842384",
+        },
+    )
+    assert second.status_code == 200
+    second_payload = second.json()
+    assert second_payload["intent_label"] == "checkout_auth_confirmed"
+
+    summary_after_second = module.agent_service.get_session_summary(  # type: ignore[attr-defined]
+        company_id="org-widget-checkout",
+        agent_id=agent.agent_id,
+        session_id=session_id,
+    )
+    assert summary_after_second.customer_authenticated is True
+    assert summary_after_second.checkout_stage == "shipping_method_pending"
+    assert summary_after_second.pending_next_step == "shipping_selection"
+    assert summary_after_second.authenticated_at
+    assert calls == [
+        ("send_verification_code", {"email": "ehl_piphe3@outlook.com"}),
+        ("verify_verification_code", {"email": "ehl_piphe3@outlook.com", "code": "842384"}),
+    ]
+
+
+def test_payment_options_routes_to_cart_only_on_web(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: {
+            "intent": "payment_options",
+            "tool": "get_payment_options",
+            "query": "mercado pago",
+            "needs_clarification": False,
+        },
+    )
+
+    class FakeToolsClient:
+        def execute_canonical(self, **kwargs):
+            raise AssertionError("Web redirect should not call tools")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-web-1",
+        message="mercado pago",
+        channel="widget_public",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "stage": "payment_selection",
+            "checkout_stage": "order_summary_pending",
+            "pending_next_step": "order_confirmation",
+            "payment_preference": "mercado pago",
+            "customer_authenticated": "true",
+        },
+    )
+
+    assert payload is not None
+    assert payload["redirect_to"] == "/cart"
+    assert payload["checkout_stage"] == "web_checkout_redirect"
+
+
+def test_payment_options_routes_to_payment_link_on_whatsapp(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: {
+            "intent": "payment_options",
+            "tool": "get_payment_options",
+            "query": "mercado pago",
+            "needs_clarification": False,
+        },
+    )
+
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            calls.append((tool, arguments))
+            if tool == "get_product_availability":
+                return {
+                    "ok": True,
+                    "tool": "get_product_availability",
+                    "data": {
+                        "items": [
+                            {"id": "1", "name": "Milo", "price": 5490, "available_units": 20},
+                        ]
+                    },
+                }
+            if tool == "create_payment_link":
+                return {
+                    "ok": True,
+                    "tool": "create_payment_link",
+                    "data": {"payment_url": "https://pay.example/link", "ok": True},
+                }
+            raise AssertionError(f"Unexpected tool: {tool}")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-wa-1",
+        message="mercado pago",
+        channel="api_internal",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "stage": "payment_selection",
+            "checkout_stage": "order_summary_pending",
+            "pending_next_step": "order_confirmation",
+            "payment_preference": "mercado pago",
+            "selected_products": "Milo",
+            "customer_authenticated": "true",
+        },
+    )
+
+    assert payload is not None
+    assert payload.get("redirect_to") == "https://pay.example/link"
+    assert payload.get("checkout_stage") == "completed"
+    assert calls[0][0] == "get_product_availability"
+    assert calls[1][0] == "create_payment_link"
+
+
+def test_payment_options_routes_to_order_draft_on_whatsapp(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: {
+            "intent": "payment_options",
+            "tool": "get_payment_options",
+            "query": "transferencia",
+            "needs_clarification": False,
+        },
+    )
+
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            calls.append((tool, arguments))
+            if tool == "get_product_availability":
+                return {
+                    "ok": True,
+                    "tool": "get_product_availability",
+                    "data": {
+                        "items": [
+                            {"id": "1", "name": "Milo", "price": 5490, "available_units": 20},
+                        ]
+                    },
+                }
+            if tool == "create_order_draft":
+                return {
+                    "ok": True,
+                    "tool": "create_order_draft",
+                    "data": {"order_reference": "draft-123", "ok": True},
+                }
+            raise AssertionError(f"Unexpected tool: {tool}")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-wa-2",
+        message="transferencia",
+        channel="api_internal",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "stage": "payment_selection",
+            "checkout_stage": "order_summary_pending",
+            "pending_next_step": "order_confirmation",
+            "payment_preference": "transferencia",
+            "selected_products": "Milo",
+            "customer_authenticated": "true",
+        },
+    )
+
+    assert payload is not None
+    assert payload.get("checkout_stage") == "completed"
+    assert calls[0][0] == "get_product_availability"
+    assert calls[1][0] == "create_order_draft"
+
+
+def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            calls.append((tool, arguments))
+            return {"ok": True, "data": {"ok": True, "status": "sent", "sent": True}}
+
+    payload = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="ehl_piphe3@outlook.com",
+        session_id="session-otp-1",
+        workflow_state={
+            "checkout_stage": "auth_pending",
+            "pending_next_step": "auth_confirmation",
+            "customer_authenticated": "",
+            "otp_email": "",
+        },
+        company_id="company-1",
+        channel="widget_public",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert payload["checkout_stage"] == "otp_pending"
+    assert payload["pending_next_step"] == "otp_verification"
+    assert payload["otp_email"] == "ehl_piphe3@outlook.com"
+    assert calls == [("send_verification_code", {"email": "ehl_piphe3@outlook.com"})]
+
+
+def test_checkout_followup_verifies_otp_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            calls.append((tool, arguments))
+            return {"ok": True, "data": {"ok": True, "status": "verified", "verified": True}}
+
+    payload = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="842384",
+        session_id="session-otp-2",
+        workflow_state={
+            "checkout_stage": "otp_pending",
+            "pending_next_step": "otp_verification",
+            "customer_authenticated": "",
+            "otp_email": "ehl_piphe3@outlook.com",
+        },
+        company_id="company-1",
+        channel="widget_public",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert payload["checkout_stage"] == "shipping_method_pending"
+    assert payload["pending_next_step"] == "shipping_selection"
+    assert payload["intent_label"] == "checkout_auth_confirmed"
+    assert calls == [("verify_verification_code", {"email": "ehl_piphe3@outlook.com", "code": "842384"})]
+
+
+def test_checkout_followup_verifies_otp_rejects_invalid_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            return {"ok": True, "data": {"ok": False, "status": "invalid_code", "verified": False}}
+
+    payload = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="842384",
+        session_id="session-otp-3",
+        workflow_state={
+            "checkout_stage": "otp_pending",
+            "pending_next_step": "otp_verification",
+            "customer_authenticated": "",
+            "otp_email": "ehl_piphe3@outlook.com",
+        },
+        company_id="company-1",
+        channel="widget_public",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert payload["checkout_stage"] == "otp_pending"
+    assert payload["pending_next_step"] == "otp_verification"
+    assert payload["intent_label"] == "checkout_otp_invalid"

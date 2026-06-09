@@ -271,6 +271,8 @@ def _is_affirmative_followup_message(message: str) -> bool:
     return normalized in {
         "si",
         "si dale",
+        "si esta correcto",
+        "si correcto",
         "dale",
         "ok",
         "oka",
@@ -280,6 +282,10 @@ def _is_affirmative_followup_message(message: str) -> bool:
         "continuemos",
         "sigamos",
         "si por favor",
+        "confirmo",
+        "confirmar",
+        "esta correcto",
+        "correcto",
     }
 
 
@@ -512,6 +518,45 @@ def _resolve_affirmative_workflow_followup(
             "pending_next_step": "payment_selection",
             "checkout_stage": "payment_method_pending",
             "workflow_action": _workflow_action("choose_payment_method"),
+        }
+    if effective_next in {"order_confirmation", "checkout_confirmation", "review_order"}:
+        selected_products = str((workflow_state or {}).get("selected_products") or "").strip()
+        shipping_preference = str((workflow_state or {}).get("shipping_preference") or "").strip()
+        pickup_location = str((workflow_state or {}).get("pickup_location_label") or "").strip()
+        delivery_address = str((workflow_state or {}).get("delivery_address") or "").strip()
+        invoice_type = str((workflow_state or {}).get("invoice_type") or "").strip()
+        invoice_rut = str((workflow_state or {}).get("invoice_rut") or "").strip()
+        invoice_business_name = str((workflow_state or {}).get("invoice_business_name") or "").strip()
+        invoice_address = str((workflow_state or {}).get("invoice_address") or "").strip()
+        payment_preference = str((workflow_state or {}).get("payment_preference") or "").strip()
+        lines = ["Perfecto, te dejo el resumen para confirmar:"]
+        if selected_products:
+            lines.append(f"Productos: {selected_products}.")
+        if shipping_preference:
+            lines.append(f"Despacho/retiro: {shipping_preference}.")
+        if pickup_location:
+            lines.append(f"Sucursal/retiro: {pickup_location}.")
+        if delivery_address:
+            lines.append(f"Direccion de despacho: {delivery_address}.")
+        if invoice_type:
+            lines.append(f"Documento: {invoice_type}.")
+        if invoice_type == "factura":
+            if invoice_business_name:
+                lines.append(f"Razon social: {invoice_business_name}.")
+            if invoice_rut:
+                lines.append(f"RUT: {invoice_rut}.")
+            if invoice_address:
+                lines.append(f"Direccion de factura: {invoice_address}.")
+        if payment_preference:
+            lines.append(f"Pago: {payment_preference}.")
+        lines.append("Si esta correcto, te genero el siguiente paso.")
+        return {
+            "answer": "\n".join(lines),
+            "intent_label": "order_summary_confirmation",
+            "workflow_stage": "payment_selection",
+            "pending_next_step": "payment_selection",
+            "checkout_stage": "order_summary_pending",
+            "workflow_action": _workflow_action("confirm_order_summary"),
         }
     return None
 
@@ -864,13 +909,16 @@ def _resolve_checkout_workflow_followup(
                     "workflow_action": _workflow_action("request_invoice_address"),
                 }
             return {
-                "answer": f"Perfecto, factura a nombre de {business_name}, RUT {rut}. Direccion: {invoice_addr}. Pasamos al pago?",
-                "intent_label": "invoice_data_confirmed",
+                "answer": (
+                    f"Perfecto, tengo factura a nombre de {business_name}, RUT {rut} y direccion {invoice_addr}.\n"
+                    "Si esta correcto, confirmamelo y te genero el siguiente paso."
+                ),
+                "intent_label": "invoice_summary_ready",
                 "workflow_stage": "payment_selection",
-                "checkout_stage": "invoice_data_complete",
-                "pending_next_step": "payment_selection",
+                "checkout_stage": "order_summary_pending",
+                "pending_next_step": "order_confirmation",
                 "workflow_action": _workflow_action(
-                    "invoice_data_confirmed",
+                    "invoice_summary_ready",
                     rut=rut,
                     business_name=business_name,
                     invoice_address=invoice_addr,
@@ -878,12 +926,12 @@ def _resolve_checkout_workflow_followup(
             }
         if boleta_match:
             return {
-                "answer": "Perfecto, se emite boleta. Pasamos al pago?",
-                "intent_label": "invoice_boleta",
+                "answer": "Perfecto, se emite boleta. Si esta correcto, confirmamelo y te genero el siguiente paso.",
+                "intent_label": "invoice_summary_ready",
                 "workflow_stage": "payment_selection",
-                "checkout_stage": "invoice_boleta_selected",
-                "pending_next_step": "payment_selection",
-                "workflow_action": _workflow_action("invoice_boleta"),
+                "checkout_stage": "order_summary_pending",
+                "pending_next_step": "order_confirmation",
+                "workflow_action": _workflow_action("invoice_summary_ready", invoice_type="boleta"),
             }
 
     if current_invoice_type == "factura" and current_checkout_stage in {"invoice_data_pending", "delivery_address_confirmed", "pickup_location_selected"}:
@@ -910,13 +958,16 @@ def _resolve_checkout_workflow_followup(
             if not invoice_addr:
                 return {"answer": "Dime la direccion de facturacion (calle, numero, comuna)."}
             return {
-                "answer": f"Factura: {business_name}, RUT {rut}, direccion {invoice_addr}. Pasamos al pago?",
-                "intent_label": "invoice_data_confirmed",
+                "answer": (
+                    f"Perfecto, tengo factura a nombre de {business_name}, RUT {rut} y direccion {invoice_addr}.\n"
+                    "Si esta correcto, confirmamelo y te genero el siguiente paso."
+                ),
+                "intent_label": "invoice_summary_ready",
                 "workflow_stage": "payment_selection",
-                "checkout_stage": "invoice_data_complete",
-                "pending_next_step": "payment_selection",
+                "checkout_stage": "order_summary_pending",
+                "pending_next_step": "order_confirmation",
                 "workflow_action": _workflow_action(
-                    "invoice_data_confirmed", rut=rut, business_name=business_name, invoice_address=invoice_addr,
+                    "invoice_summary_ready", rut=rut, business_name=business_name, invoice_address=invoice_addr,
                 ),
             }
 
@@ -924,11 +975,14 @@ def _resolve_checkout_workflow_followup(
         delivery_addr = str((workflow_state or {}).get("delivery_address") or "").strip()
         if _is_address_confirmation(message) and delivery_addr:
             return {
-                "answer": f"Perfecto, uso la misma direccion de despacho: {delivery_addr}. Pasamos al pago?",
+                "answer": (
+                    f"Perfecto, uso la misma direccion de despacho: {delivery_addr}.\n"
+                    "Si esta correcto, confirmamelo y te genero el siguiente paso."
+                ),
                 "intent_label": "invoice_address_confirmed",
                 "workflow_stage": "payment_selection",
-                "checkout_stage": "invoice_data_complete",
-                "pending_next_step": "payment_selection",
+                "checkout_stage": "order_summary_pending",
+                "pending_next_step": "order_confirmation",
                 "workflow_action": _workflow_action(
                     "invoice_address_confirmed", invoice_address=delivery_addr,
                 ),
@@ -937,22 +991,28 @@ def _resolve_checkout_workflow_followup(
         invoice_addr = invoice_data.get("invoice_address") or _extract_address(message)
         if invoice_addr:
             return {
-                "answer": f"Direccion de facturacion: {invoice_addr}. Pasamos al pago?",
+                "answer": (
+                    f"Direccion de facturacion: {invoice_addr}.\n"
+                    "Si esta correcto, confirmamelo y te genero el siguiente paso."
+                ),
                 "intent_label": "invoice_address_confirmed",
                 "workflow_stage": "payment_selection",
-                "checkout_stage": "invoice_data_complete",
-                "pending_next_step": "payment_selection",
+                "checkout_stage": "order_summary_pending",
+                "pending_next_step": "order_confirmation",
                 "workflow_action": _workflow_action(
                     "invoice_address_confirmed", invoice_address=invoice_addr,
                 ),
             }
         if _wants_delivery(message) or any(token in _normalize_widget_text(message) for token in ["misma", "igual", "misma direccion"]):
             return {
-                "answer": f"Perfecto, uso la direccion de despacho. Pasamos al pago?",
+                "answer": (
+                    "Perfecto, uso la direccion de despacho.\n"
+                    "Si esta correcto, confirmamelo y te genero el siguiente paso."
+                ),
                 "intent_label": "invoice_address_confirmed",
                 "workflow_stage": "payment_selection",
-                "checkout_stage": "invoice_data_complete",
-                "pending_next_step": "payment_selection",
+                "checkout_stage": "order_summary_pending",
+                "pending_next_step": "order_confirmation",
                 "workflow_action": _workflow_action(
                     "invoice_address_confirmed", invoice_address=delivery_addr or "",
                 ),
@@ -1765,8 +1825,47 @@ def _tool_from_llm_commerce_intent(parsed: dict[str, Any] | None, session_id: st
     return None
 
 
-def _checkout_requests_for_workflow(message: str, session_id: str, parsed: dict[str, Any] | None) -> list[dict[str, Any]]:
-    return _cart_requests_from_llm_intent(parsed)
+def _selected_product_requests_from_workflow_state(workflow_state: dict[str, str] | None) -> list[dict[str, Any]]:
+    raw = str((workflow_state or {}).get("selected_products") or "").strip()
+    if not raw:
+        return []
+    candidates: list[str] = []
+    if raw.startswith("[") and raw.endswith("]"):
+        raw = raw[1:-1]
+    for chunk in re.split(r"[,\n;•]+", raw):
+        cleaned = chunk.strip().strip("'\"")
+        if cleaned:
+            candidates.append(cleaned)
+    unique: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = _normalize_widget_text(candidate)
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(candidate)
+    return [{"product_query": name, "quantity": 1} for name in unique[:6]]
+
+
+def _checkout_requests_for_workflow(
+    message: str,
+    session_id: str,
+    parsed: dict[str, Any] | None,
+    workflow_state: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    requests = _cart_requests_from_llm_intent(parsed)
+    if requests:
+        return requests
+    workflow_requests = _selected_product_requests_from_workflow_state(workflow_state)
+    if workflow_requests:
+        return workflow_requests
+    recent_products = _recent_commerce_products(session_id)
+    if recent_products:
+        return [
+            {"product_query": str(product.get("name") or "").strip(), "quantity": 1}
+            for product in recent_products[:3]
+            if str(product.get("name") or "").strip()
+        ]
+    return []
 
 
 def _resolve_checkout_items(
@@ -2759,6 +2858,21 @@ def _resolve_shared_commerce_payload(
 
         llm_intent_name = str(llm_commerce_intent.get("intent") or "").strip().lower()
         llm_tool_name = str(llm_commerce_intent.get("tool") or "").strip().lower()
+
+        payment_preference_text = _normalize_widget_text(str((workflow_state or {}).get("payment_preference") or ""))
+        message_payment_text = _normalize_widget_text(message)
+        is_whatsapp_like_channel = (channel or "").strip().lower() in {"api", "api_internal", "whatsapp", "widget_whatsapp"}
+        payment_tool_override: tuple[str, dict[str, Any]] | None = None
+        if (
+            not _is_checkout_redirect_channel(channel)
+            and is_whatsapp_like_channel
+            and llm_intent_name in {"payment_options", "create_payment_link", "create_order_draft"}
+        ):
+            if any(token in message_payment_text or token in payment_preference_text for token in ["mercado pago", "mercadopago", "mp", "link de pago", "pago con tarjeta", "tarjeta"]):
+                payment_tool_override = ("create_payment_link", {"session_id": session_id})
+            elif any(token in message_payment_text or token in payment_preference_text for token in ["transferencia", "transfer", "trasferencia"]):
+                payment_tool_override = ("create_order_draft", {"session_id": session_id})
+
         if _is_checkout_redirect_channel(channel) and (
             llm_intent_name in {"create_payment_link", "payment_options"}
             or llm_tool_name in {"create_payment_link", "get_payment_options"}
@@ -2801,6 +2915,10 @@ def _resolve_shared_commerce_payload(
                 return {"answer": clarification}
 
         planned_tool = _tool_from_llm_commerce_intent(llm_commerce_intent, session_id)
+        if payment_tool_override and planned_tool and planned_tool[0] in {"get_payment_options", "create_payment_link", "create_order_draft"}:
+            planned_tool = payment_tool_override
+        elif payment_tool_override and planned_tool is None:
+            planned_tool = payment_tool_override
         if planned_tool is None and llm_intent_name in {"create_payment_link", "create_order_draft", "checkout"}:
             planned_tool = (llm_intent_name, {"session_id": session_id})
         transition = resolve_workflow_transition(
@@ -2873,7 +2991,9 @@ def _resolve_shared_commerce_payload(
                 payload.setdefault("workflow_stage", transition.next_stage)
                 return payload
 
-        if planned_tool and planned_tool[0] in {"create_order_draft", "create_payment_link"}:
+        payment_checkout_tool = payment_tool_override or planned_tool
+        if payment_checkout_tool and payment_checkout_tool[0] in {"create_order_draft", "create_payment_link"}:
+            planned_tool = payment_checkout_tool
             _trace_route(
                 "commerce.checkout_tool",
                 session_id=session_id,
@@ -2884,7 +3004,7 @@ def _resolve_shared_commerce_payload(
                 session_id,
                 planned_tool[0],
             )
-            cart_requests = _checkout_requests_for_workflow(message, session_id, llm_commerce_intent)
+            cart_requests = _checkout_requests_for_workflow(message, session_id, llm_commerce_intent, workflow_state)
             if not cart_requests:
                 if _is_checkout_redirect_channel(channel):
                     return {
@@ -2914,8 +3034,13 @@ def _resolve_shared_commerce_payload(
                         "answer": "Primero decime que producto queres llevar y te ayudo con el pago.",
                         "intent_label": str(llm_commerce_intent.get("intent") or intent_label or "commerce").strip() or "commerce",
                     }
-            if not _is_checkout_redirect_channel(channel):
-                if not current_workflow.customer_authenticated:
+                if not _is_checkout_redirect_channel(channel):
+                    final_summary_stage = str(getattr(current_workflow, "checkout_stage", "") or "").strip() in {
+                        "order_summary_pending",
+                        "order_summary_ready",
+                        "order_summary_confirmed",
+                    }
+                if not current_workflow.customer_authenticated and not final_summary_stage:
                     if _is_email_message(message):
                         send_ok = False
                         if clubhx_tools_client is not None:
@@ -2960,39 +3085,40 @@ def _resolve_shared_commerce_payload(
                         "pending_next_step": "auth_confirmation",
                         "workflow_action": _workflow_action("request_auth"),
                     }
-                shipping_ready = (
-                    current_workflow.has_pickup_location
-                    or (current_workflow.has_delivery_address and current_workflow.delivery_address_confirmed)
-                )
-                if not shipping_ready:
-                    existing_address = str((workflow_state or {}).get("delivery_address") or "").strip()
-                    if existing_address and not _workflow_state_bool((workflow_state or {}).get("delivery_address_confirmed")):
+                if not final_summary_stage:
+                    shipping_ready = (
+                        current_workflow.has_pickup_location
+                        or (current_workflow.has_delivery_address and current_workflow.delivery_address_confirmed)
+                    )
+                    if not shipping_ready:
+                        existing_address = str((workflow_state or {}).get("delivery_address") or "").strip()
+                        if existing_address and not _workflow_state_bool((workflow_state or {}).get("delivery_address_confirmed")):
+                            return {
+                                "answer": f"Encontre esta direccion de despacho:\n{existing_address}\n\nEsta correcta?",
+                                "intent_label": "delivery_address_confirmation_pending",
+                                "workflow_stage": "shipping_selection",
+                                "checkout_stage": "delivery_address_proposed",
+                                "pending_next_step": "delivery_address_confirmation",
+                                "workflow_action": _workflow_action("request_address_confirmation"),
+                            }
                         return {
-                            "answer": f"Encontre esta direccion de despacho:\n{existing_address}\n\nEsta correcta?",
-                            "intent_label": "delivery_address_confirmation_pending",
+                            "answer": "Ahora necesito saber si preferis retiro en tienda o despacho a domicilio.",
+                            "intent_label": "shipping_options",
                             "workflow_stage": "shipping_selection",
-                            "checkout_stage": "delivery_address_proposed",
-                            "pending_next_step": "delivery_address_confirmation",
-                            "workflow_action": _workflow_action("request_address_confirmation"),
+                            "checkout_stage": "shipping_method_pending",
+                            "pending_next_step": "shipping_selection",
+                            "workflow_action": _workflow_action("choose_shipping_method"),
                         }
-                    return {
-                        "answer": "Ahora necesito saber si preferis retiro en tienda o despacho a domicilio.",
-                        "intent_label": "shipping_options",
-                        "workflow_stage": "shipping_selection",
-                        "checkout_stage": "shipping_method_pending",
-                        "pending_next_step": "shipping_selection",
-                        "workflow_action": _workflow_action("choose_shipping_method"),
-                    }
-                invoice_ready = not current_workflow.has_invoice_type or current_workflow.invoice_data_complete
-                if not invoice_ready:
-                    return {
-                        "answer": "Antes de generar el pago, necesito saber si quieres boleta o factura.",
-                        "intent_label": "invoice_type_pending",
-                        "workflow_stage": "payment_selection",
-                        "checkout_stage": "invoice_type_pending",
-                        "pending_next_step": "invoice_type",
-                        "workflow_action": _workflow_action("request_invoice_type"),
-                    }
+                    invoice_ready = not current_workflow.has_invoice_type or current_workflow.invoice_data_complete
+                    if not invoice_ready:
+                        return {
+                            "answer": "Antes de generar el pago, necesito saber si quieres boleta o factura.",
+                            "intent_label": "invoice_type_pending",
+                            "workflow_stage": "payment_selection",
+                            "checkout_stage": "invoice_type_pending",
+                            "pending_next_step": "invoice_type",
+                            "workflow_action": _workflow_action("request_invoice_type"),
+                        }
             checkout_items, checkout_products = _resolve_checkout_items(
                 company_id=company_id,
                 user_id=user_id,

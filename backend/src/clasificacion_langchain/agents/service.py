@@ -1552,6 +1552,10 @@ class AgentService:
         pickup_location_label: str | None = None,
         delivery_address: str | None = None,
         delivery_address_confirmed: bool | None = None,
+        invoice_type: str | None = None,
+        invoice_rut: str | None = None,
+        invoice_business_name: str | None = None,
+        invoice_address: str | None = None,
         customer_authenticated: bool | None = None,
         order_reference: str | None = None,
         notes: str | None = None,
@@ -1613,6 +1617,14 @@ class AgentService:
             summary.delivery_address = _normalize_summary_value(delivery_address, 200)
         if delivery_address_confirmed is not None:
             summary.delivery_address_confirmed = bool(delivery_address_confirmed)
+        if invoice_type and invoice_type.strip():
+            summary.invoice_type = _normalize_summary_value(invoice_type, 80)
+        if invoice_rut and invoice_rut.strip():
+            summary.invoice_rut = _normalize_summary_value(invoice_rut, 80)
+        if invoice_business_name and invoice_business_name.strip():
+            summary.invoice_business_name = _normalize_summary_value(invoice_business_name, 120)
+        if invoice_address and invoice_address.strip():
+            summary.invoice_address = _normalize_summary_value(invoice_address, 200)
         if payment_preference and payment_preference.strip():
             summary.payment_preference = _normalize_summary_value(payment_preference, 120)
         if customer_authenticated is not None:
