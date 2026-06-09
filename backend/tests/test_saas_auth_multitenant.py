@@ -2768,6 +2768,42 @@ def test_timeout_confirmation_can_resume_workflow(monkeypatch: pytest.MonkeyPatc
     assert summary_after.workflow_reset_started_at == ""
 
 
+def test_timeout_confirmation_resume_from_payment_stage_is_actionable(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    module.agent_service.update_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="resume-payment-session",
+        workflow_stage="payment_selection",
+        selected_products=["Milo"],
+        workflow_reset_started_at=(datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+    )
+
+    workflow_state = module._agent_workflow_state("demo-company", "demo-agent", "resume-payment-session")  # type: ignore[attr-defined]
+    assert workflow_state.get("workflow_timeout_confirmation") == "true"
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="user-1",
+        session_id="resume-payment-session",
+        message="si",
+        channel="api_internal",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state=workflow_state,
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "payment_options"
+    assert payload["workflow_stage"] == "payment_selection"
+    assert "siguiente paso" in payload["answer"].lower()
+    assert "medio de pago" in payload["answer"].lower()
+    assert "como quieres continuar" not in payload["answer"].lower()
+
+
 def test_timeout_confirmation_resets_after_additional_three_minutes(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

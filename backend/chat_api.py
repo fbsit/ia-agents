@@ -625,6 +625,35 @@ def _describe_current_workflow(workflow_state: dict[str, str] | None) -> tuple[s
             "order_summary_pending",
             f"Estamos revisando el resumen{product_hint}. Falta que me confirmes si esta todo correcto para seguir con el pago.",
         )
+    if current_stage == "cart_building":
+        product_hint = f" de {selected_products}" if selected_products else ""
+        return (
+            "cart_building",
+            "cart_building",
+            "",
+            f"Estamos armando tu carrito{product_hint}. El siguiente paso es confirmar si quieres seguir comprando o pasar al checkout.",
+        )
+    if current_stage == "shipping_selection":
+        return (
+            "shipping_options",
+            "shipping_selection",
+            "shipping_method_pending",
+            "Estamos definiendo el despacho del pedido. El siguiente paso es elegir entre retiro en tienda o despacho.",
+        )
+    if current_stage == "payment_selection":
+        return (
+            "payment_options",
+            "payment_selection",
+            "payment_method_pending",
+            "Estamos en la etapa de pago del pedido. El siguiente paso es definir el documento y el medio de pago para poder avanzar.",
+        )
+    if current_stage == "checkout_ready":
+        return (
+            "checkout_ready",
+            "checkout_ready",
+            "",
+            "Estamos en la parte final del checkout. El siguiente paso es retomar la confirmacion pendiente para cerrar el pedido.",
+        )
     return (
         "workflow_in_progress",
         current_stage or "commerce",
@@ -726,71 +755,15 @@ def _resolve_greeting_workflow_followup(
 
 
 def _resolve_workflow_resume_followup(workflow_state: dict[str, str] | None) -> dict[str, Any] | None:
-    current_stage = str((workflow_state or {}).get("stage") or "").strip().lower()
-    current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip().lower()
-    current_pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
-    otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
-    selected_products = str((workflow_state or {}).get("selected_products") or "").strip()
-
-    if current_checkout_stage == "auth_pending" or current_pending_next_step in {"auth_pending", "auth_confirmation"}:
+    intent_label, workflow_stage, checkout_stage, description = _describe_current_workflow(workflow_state)
+    pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip()
+    if description and (workflow_stage or checkout_stage or pending_next_step):
         return {
-            "answer": "Perfecto, retomamos tu pedido. Escribime tu correo y te envio el codigo de verificacion para seguir.",
-            "intent_label": "checkout_auth_needed",
-            "workflow_stage": "checkout_ready",
-            "checkout_stage": "auth_pending",
-            "pending_next_step": "auth_confirmation",
-        }
-
-    if current_checkout_stage == "otp_pending" or current_pending_next_step == "otp_verification":
-        email_hint = f" a {otp_email}" if otp_email else ""
-        return {
-            "answer": f"Perfecto, retomamos tu pedido. Ingresame el codigo que te enviamos{email_hint} para continuar.",
-            "intent_label": "checkout_otp_pending",
-            "workflow_stage": "checkout_ready",
-            "checkout_stage": "otp_pending",
-            "pending_next_step": "otp_verification",
-        }
-
-    if current_checkout_stage in {"shipping_method_pending", "pickup_location_pending", "delivery_address_pending", "delivery_address_proposed"} or current_pending_next_step in {"shipping_selection", "delivery_address", "delivery_address_confirmation"}:
-        answer = "Perfecto, retomamos tu pedido. Dime si prefieres retiro en tienda o despacho para seguir."
-        if current_checkout_stage == "pickup_location_pending":
-            answer = "Perfecto, retomamos tu pedido. Dime en que tienda o punto quieres retirar."
-        elif current_checkout_stage in {"delivery_address_pending", "delivery_address_proposed"} or current_pending_next_step in {"delivery_address", "delivery_address_confirmation"}:
-            answer = "Perfecto, retomamos tu pedido. Enviame la direccion de despacho o confirmame la que ya te mostre."
-        return {
-            "answer": answer,
-            "intent_label": "shipping_options",
-            "workflow_stage": "shipping_selection",
-            "checkout_stage": current_checkout_stage or "shipping_method_pending",
-            "pending_next_step": current_pending_next_step or "shipping_selection",
-        }
-
-    if current_checkout_stage in {"invoice_type_pending", "invoice_data_pending", "invoice_address_pending"} or current_pending_next_step in {"invoice_type", "invoice_data", "invoice_address"}:
-        return {
-            "answer": "Perfecto, retomamos tu pedido. Dime si quieres boleta o factura para seguir.",
-            "intent_label": "invoice_type_pending",
-            "workflow_stage": "payment_selection",
-            "checkout_stage": current_checkout_stage or "invoice_type_pending",
-            "pending_next_step": current_pending_next_step or "invoice_type",
-        }
-
-    if current_checkout_stage == "order_summary_pending" or current_pending_next_step == "order_confirmation":
-        product_hint = f" de {selected_products}" if selected_products else ""
-        return {
-            "answer": f"Perfecto, retomamos el resumen{product_hint}. Si esta todo correcto, confirmamelo y seguimos con el pago.",
-            "intent_label": "order_summary_pending",
-            "workflow_stage": "payment_selection",
-            "checkout_stage": "order_summary_pending",
-            "pending_next_step": "order_confirmation",
-        }
-
-    if current_stage or current_checkout_stage or current_pending_next_step:
-        return {
-            "answer": "Perfecto, retomamos el proceso donde lo dejamos. Dime como quieres continuar.",
-            "intent_label": "workflow_in_progress",
-            "workflow_stage": current_stage or "commerce",
-            "checkout_stage": current_checkout_stage,
-            "pending_next_step": current_pending_next_step,
+            "answer": f"Perfecto, retomamos tu pedido. {description}",
+            "intent_label": intent_label,
+            "workflow_stage": workflow_stage,
+            "checkout_stage": checkout_stage,
+            "pending_next_step": pending_next_step,
         }
 
     return None
