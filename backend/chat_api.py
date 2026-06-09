@@ -576,19 +576,21 @@ def _resolve_checkout_workflow_followup(
     clubhx_tools_client: Any | None = None,
 ) -> dict[str, Any] | None:
     current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip()
+    current_pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
     logger.warning(
-        "checkout_followup_state session_id=%s checkout_stage=%s message=%s otp_email=%s",
-        session_id, current_checkout_stage, message,
+        "checkout_followup_state session_id=%s checkout_stage=%s pending_next_step=%s message=%s otp_email=%s",
+        session_id, current_checkout_stage, current_pending_next_step, message,
         str((workflow_state or {}).get("otp_email") or ""),
     )
     _trace_route(
         "checkout_followup.check_stage",
         session_id=session_id,
         current_stage=current_checkout_stage,
+        pending_next_step=current_pending_next_step,
         is_email=_is_email_message(message),
     )
 
-    if current_checkout_stage == "auth_pending" and _is_email_message(message):
+    if current_pending_next_step in {"auth_confirmation", "auth_pending"} and _is_email_message(message):
         send_ok = False
         if clubhx_tools_client is not None:
             try:
@@ -625,7 +627,7 @@ def _resolve_checkout_workflow_followup(
             "workflow_action": _workflow_action("otp_sent"),
         }
 
-    if current_checkout_stage == "otp_pending":
+    if current_pending_next_step == "otp_verification" or current_checkout_stage == "otp_pending":
         otp_ok = False
         otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
         if clubhx_tools_client is not None and otp_email:
@@ -899,44 +901,6 @@ def _resolve_checkout_workflow_followup(
     return None
 
 
-def _tenant_display_name(company_id: str) -> str:
-    if tenancy_service is None:
-        return ""
-    organization = tenancy_service.organization_repository.get_organization_by_company_id(company_id)
-    if organization is None:
-        return ""
-    return str(organization.name or "").strip()
-
-
-def _personalize_agent_greeting(agent_name: str, company_id: str, default_answer: str) -> str:
-    tenant_name = _tenant_display_name(company_id)
-    clean_agent_name = (agent_name or "").strip()
-    if tenant_name and clean_agent_name:
-        return (
-            f"Hola! Soy {clean_agent_name}, asistente comercial de {tenant_name}. "
-            "Te puedo mostrar catalogo, ayudarte a elegir productos y seguir con despacho o pago. "
-            "Si quieres, dime que producto buscas."
-        )
-    if tenant_name:
-        return (
-            f"Hola! Soy el asistente comercial de {tenant_name}. "
-            "Te puedo mostrar catalogo, ayudarte a elegir productos y seguir con despacho o pago. "
-            "Si quieres, dime que producto buscas."
-        )
-    return default_answer
-
-
-def _is_identity_question(message: str) -> bool:
-    normalized = _normalize_widget_text(message)
-    return normalized in {
-        "quien eres",
-        "quien sos",
-        "que eres",
-        "como te llamas",
-        "cual es tu nombre",
-    }
-
-
 def _personalize_agent_freeform_response(
     *,
     agent_name: str,
@@ -945,33 +909,10 @@ def _personalize_agent_freeform_response(
     route: str | None,
     default_answer: str,
 ) -> str:
-    tenant_name = _tenant_display_name(company_id)
-    clean_agent_name = (agent_name or "").strip()
     normalized_route = (route or "").strip().lower()
 
     if normalized_route == "greeting":
         return default_answer
-
-    if _is_identity_question(message):
-        if tenant_name and clean_agent_name:
-            return (
-                f"Soy {clean_agent_name}, asistente comercial de {tenant_name}. "
-                "Puedo ayudarte a encontrar productos, armar carrito y avanzar con despacho o pago."
-            )
-        if tenant_name:
-            return (
-                f"Soy el asistente comercial de {tenant_name}. "
-                "Puedo ayudarte a encontrar productos, armar carrito y avanzar con despacho o pago."
-            )
-
-    if normalized_route in {"no_knowledge", "general_llm"} and tenant_name:
-        answer = default_answer.strip()
-        if not answer:
-            return (
-                f"Soy el asistente comercial de {tenant_name}. "
-                "Puedo ayudarte con productos, carrito, despacho y pago."
-            )
-        return f"{answer} Soy el asistente comercial de {tenant_name}."
 
     return default_answer
 
