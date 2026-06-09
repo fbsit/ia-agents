@@ -2441,6 +2441,175 @@ def test_greeting_without_active_workflow_passthrough(monkeypatch: pytest.Monkey
     assert payload is None
 
 
+def test_greeting_with_stale_product_context_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Greeting should not reach the commerce LLM")),
+    )
+
+    class FakeToolsClient:
+        def execute_canonical(self, **kwargs):
+            raise AssertionError("Greeting should not call commerce tools")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-greeting-stale-1",
+        message="Hola",
+        channel="api_internal",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "selected_products": "Milo",
+        },
+    )
+
+    assert payload is None
+
+
+def test_greeting_with_auth_pending_workflow_returns_contextual_followup(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Active greeting followup should not reach the commerce LLM")),
+    )
+
+    class FakeToolsClient:
+        def execute_canonical(self, **kwargs):
+            raise AssertionError("Active greeting followup should not call commerce tools")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-greeting-auth-1",
+        message="Hola",
+        channel="api_internal",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "checkout_stage": "auth_pending",
+            "pending_next_step": "auth_confirmation",
+        },
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "checkout_auth_needed"
+    assert payload["checkout_stage"] == "auth_pending"
+    assert "correo" in payload["answer"].lower()
+
+
+def test_greeting_with_otp_pending_workflow_returns_contextual_followup(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Active greeting followup should not reach the commerce LLM")),
+    )
+
+    class FakeToolsClient:
+        def execute_canonical(self, **kwargs):
+            raise AssertionError("Active greeting followup should not call commerce tools")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-greeting-otp-1",
+        message="Hola",
+        channel="api_internal",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "checkout_stage": "otp_pending",
+            "pending_next_step": "otp_verification",
+            "otp_email": "ehl_piphe3@outlook.com",
+        },
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "checkout_otp_pending"
+    assert payload["checkout_stage"] == "otp_pending"
+    assert "codigo" in payload["answer"].lower()
+
+
+def test_greeting_with_shipping_workflow_returns_contextual_followup(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Active greeting followup should not reach the commerce LLM")),
+    )
+
+    class FakeToolsClient:
+        def execute_canonical(self, **kwargs):
+            raise AssertionError("Active greeting followup should not call commerce tools")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-greeting-shipping-1",
+        message="Hola",
+        channel="api_internal",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "checkout_stage": "shipping_method_pending",
+            "pending_next_step": "shipping_selection",
+            "selected_products": "Milo",
+        },
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "shipping_options"
+    assert payload["checkout_stage"] == "shipping_method_pending"
+    assert "despacho" in payload["answer"].lower() or "retiro" in payload["answer"].lower()
+
+
+def test_greeting_with_order_summary_workflow_returns_contextual_followup(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Active greeting followup should not reach the commerce LLM")),
+    )
+
+    class FakeToolsClient:
+        def execute_canonical(self, **kwargs):
+            raise AssertionError("Active greeting followup should not call commerce tools")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-greeting-summary-1",
+        message="Hola",
+        channel="api_internal",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "checkout_stage": "order_summary_pending",
+            "pending_next_step": "order_confirmation",
+            "selected_products": "Milo",
+        },
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "order_summary_pending"
+    assert payload["checkout_stage"] == "order_summary_pending"
+    assert "resumen" in payload["answer"].lower()
+
+
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

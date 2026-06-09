@@ -561,6 +561,88 @@ def _resolve_affirmative_workflow_followup(
     return None
 
 
+def _resolve_greeting_workflow_followup(
+    *,
+    message: str,
+    workflow_state: dict[str, str] | None,
+) -> dict[str, Any] | None:
+    if not _is_likely_greeting_message(message):
+        return None
+
+    current_stage = str((workflow_state or {}).get("stage") or "").strip().lower()
+    current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip().lower()
+    current_pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
+    otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
+    selected_products = str((workflow_state or {}).get("selected_products") or "").strip()
+
+    if current_checkout_stage == "auth_pending" or current_pending_next_step in {"auth_pending", "auth_confirmation"}:
+        answer = "Hola. Estamos en el login del pedido. Para seguir, escribime tu correo y te envio el codigo de verificacion. Si quieres hacer otra cosa, dimelo."
+        return {
+            "answer": answer,
+            "intent_label": "checkout_auth_needed",
+            "workflow_stage": "checkout_ready",
+            "checkout_stage": "auth_pending",
+            "pending_next_step": "auth_confirmation",
+        }
+
+    if current_checkout_stage == "otp_pending" or current_pending_next_step == "otp_verification":
+        email_hint = f" a {otp_email}" if otp_email else ""
+        answer = f"Hola. Estamos validando tu acceso. Ingresame el codigo que te enviamos{email_hint} para seguir con el pedido. Si quieres hacer otra cosa, dimelo."
+        return {
+            "answer": answer,
+            "intent_label": "checkout_otp_pending",
+            "workflow_stage": "checkout_ready",
+            "checkout_stage": "otp_pending",
+            "pending_next_step": "otp_verification",
+        }
+
+    if current_checkout_stage in {"shipping_method_pending", "pickup_location_pending", "delivery_address_pending", "delivery_address_proposed"} or current_pending_next_step in {"shipping_selection", "delivery_address", "delivery_address_confirmation"}:
+        answer = "Hola. Estamos en el despacho del pedido. Dime si prefieres retiro en tienda o despacho, y si quieres hacer otra cosa me avisas."
+        if current_checkout_stage == "pickup_location_pending":
+            answer = "Hola. Estamos definiendo el retiro. Dime en que tienda o punto quieres retirar el pedido. Si quieres hacer otra cosa, me avisas."
+        elif current_checkout_stage in {"delivery_address_pending", "delivery_address_proposed"} or current_pending_next_step in {"delivery_address", "delivery_address_confirmation"}:
+            answer = "Hola. Estamos definiendo la direccion de despacho. Enviame la direccion o confirmame la que ya te mostre para seguir. Si quieres hacer otra cosa, me avisas."
+        return {
+            "answer": answer,
+            "intent_label": "shipping_options",
+            "workflow_stage": "shipping_selection",
+            "checkout_stage": current_checkout_stage or "shipping_method_pending",
+            "pending_next_step": current_pending_next_step or "shipping_selection",
+        }
+
+    if current_checkout_stage in {"invoice_type_pending", "invoice_data_pending", "invoice_address_pending"} or current_pending_next_step in {"invoice_type", "invoice_data", "invoice_address"}:
+        answer = "Hola. Estamos completando los datos del documento. Dime si quieres boleta o factura para seguir, o si quieres hacer otra cosa me avisas."
+        return {
+            "answer": answer,
+            "intent_label": "invoice_type_pending",
+            "workflow_stage": "payment_selection",
+            "checkout_stage": current_checkout_stage or "invoice_type_pending",
+            "pending_next_step": current_pending_next_step or "invoice_type",
+        }
+
+    if current_checkout_stage == "order_summary_pending" or current_pending_next_step == "order_confirmation":
+        product_hint = f" de {selected_products}" if selected_products else ""
+        answer = f"Hola. Estamos revisando el resumen{product_hint}. Si esta todo correcto, confirmamelo y seguimos con el pago. Si quieres cambiar algo, dimelo."
+        return {
+            "answer": answer,
+            "intent_label": "order_summary_pending",
+            "workflow_stage": "payment_selection",
+            "checkout_stage": "order_summary_pending",
+            "pending_next_step": "order_confirmation",
+        }
+
+    if current_stage or current_checkout_stage or current_pending_next_step:
+        return {
+            "answer": "Hola. Tenemos un proceso en curso. Si quieres, seguimos desde donde quedamos; si no, dime que quieres hacer y cambiamos de tema.",
+            "intent_label": "workflow_in_progress",
+            "workflow_stage": current_stage or "commerce",
+            "checkout_stage": current_checkout_stage,
+            "pending_next_step": current_pending_next_step,
+        }
+
+    return None
+
+
 def _create_address_for_user(
     clubhx_tools_client: Any | None,
     company_id: str | None,
@@ -2718,7 +2800,6 @@ def _resolve_shared_commerce_payload(
             "stage",
             "checkout_stage",
             "pending_next_step",
-            "selected_products",
             "shipping_preference",
             "payment_preference",
             "pickup_location_label",
@@ -2727,6 +2808,26 @@ def _resolve_shared_commerce_payload(
             "otp_email",
         }
     ) or _workflow_state_customer_authenticated(workflow_state)
+    greeting_followup_payload = _resolve_greeting_workflow_followup(
+        message=message,
+        workflow_state=workflow_state,
+    )
+    if greeting_followup_payload:
+        _trace_route(
+            "commerce.resolve_greeting_followup",
+            session_id=session_id,
+            intent=str(greeting_followup_payload.get("intent_label") or ""),
+            workflow_stage=str(greeting_followup_payload.get("workflow_stage") or ""),
+            checkout_stage=str(greeting_followup_payload.get("checkout_stage") or ""),
+        )
+        logger.info(
+            "commerce_router_greeting_followup session_id=%s intent=%s workflow_stage=%s checkout_stage=%s",
+            session_id,
+            str(greeting_followup_payload.get("intent_label") or ""),
+            str(greeting_followup_payload.get("workflow_stage") or ""),
+            str(greeting_followup_payload.get("checkout_stage") or ""),
+        )
+        return greeting_followup_payload
     if greeting_like and not has_active_workflow:
         _trace_route(
             "commerce.greeting_passthrough",
