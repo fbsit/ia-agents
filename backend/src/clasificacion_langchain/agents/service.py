@@ -1691,17 +1691,23 @@ class AgentService:
         summary_block = _summarize_history_for_query(history)
         persistent_summary_block = _format_session_summary(summary or SessionSummary())
         context_block = (runtime_context or "").strip()
-        parts: list[str] = []
-        if context_block:
-            parts.append(context_block)
-        if persistent_summary_block:
-            parts.append(persistent_summary_block)
-        if summary_block:
-            parts.append(summary_block)
-        if history_block:
-            parts.append(history_block)
-        parts.append(f"Consulta actual: {message}")
-        return "\n\n".join(parts)
+        parts: list[str] = [
+            "## Rol y contexto operativo",
+            context_block or "Sin contexto operativo adicional.",
+            "",
+            "## Resumen persistente",
+            persistent_summary_block or "Sin resumen persistente.",
+            "",
+            "## Resumen reciente",
+            summary_block or "Sin resumen reciente.",
+            "",
+            "## Historial reciente",
+            history_block or "Sin historial reciente.",
+            "",
+            "## Consulta actual",
+            message,
+        ]
+        return "\n".join(parts)
 
     def _resolve_chat_response(
         self,

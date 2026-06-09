@@ -94,6 +94,10 @@ def _no_context_rules() -> str:
             "4) Nunca inventes politicas internas, numeros, fechas o reglas de una empresa especifica.",
         ]
 
+    rules.append(
+        f"{len(rules) + 1}) Si el usuario saluda o pregunta quien eres, responde natural y breve sin mencionar que faltan documentos, salvo que te pidan informacion interna especifica."
+    )
+
     if include_upload_hint:
         rules.append(
             f"{len(rules) + 1}) Cerra proponiendo cargar documentos para una respuesta con evidencia."
@@ -448,7 +452,7 @@ class OpenAIAnswerGenerator:
                         (
                             "Sos un asistente conversacional empresarial. "
                             "Responde SIEMPRE en espanol natural y cercano. "
-                            "No hay documentos internos cargados para esta consulta. "
+                            "No repitas el contexto operativo ni el resumen como si fueran parte de la respuesta. "
                             "Reglas obligatorias:\n"
                             f"{rules}\n\n"
                             "Reglas del rol y conocimiento compartido:\n"
@@ -461,7 +465,7 @@ class OpenAIAnswerGenerator:
                             "Consulta del usuario: {query}\n"
                             "Objetivo del agente: {objective}\n"
                             "Tono requerido: {tone}\n"
-                            "No hay contexto recuperado para esta consulta."
+                            "No hay contexto recuperado para esta consulta. Responde igual de forma util si la consulta es un saludo, identidad o una pregunta operativa general."
                         ),
                     ),
                 ]
@@ -574,7 +578,7 @@ class AnthropicAnswerGenerator:
             system_prompt = (
                 "Sos un asistente conversacional empresarial. "
                 "Responde SIEMPRE en espanol natural y cercano. "
-                "No hay documentos internos cargados para esta consulta. "
+                "No repitas el contexto operativo ni el resumen como si fueran parte de la respuesta. "
                 "Reglas obligatorias:\n"
                 f"{rules}\n\n"
                 "Reglas del rol y conocimiento compartido:\n"
@@ -584,7 +588,7 @@ class AnthropicAnswerGenerator:
                 f"Consulta del usuario: {query}\n"
                 f"Objetivo del agente: {objective or 'Resolver consultas de negocio con precision'}\n"
                 f"Tono requerido: {tone or 'profesional'}\n"
-                "No hay contexto recuperado para esta consulta."
+                "No hay contexto recuperado para esta consulta. Responde igual de forma util si la consulta es un saludo, identidad o una pregunta operativa general."
             )
             content = self._anthropic_completion(system_prompt=system_prompt, user_prompt=user_prompt)
             if not content:
