@@ -244,12 +244,6 @@ def _presentation_score(chunk: RetrievedChunk) -> float:
 
 
 def _fallback_no_context_answer(query: str) -> str:
-    clean_query = _normalize_text(query)
-    if clean_query:
-        return (
-            f"No tengo conocimiento cargado sobre '{clean_query}' en este momento. "
-            "Si queres una respuesta precisa, subi documentos del tema y volve a consultar."
-        )
     return (
         "No tengo conocimiento cargado suficiente en este momento. "
         "Si queres, subi documentos y te respondo con evidencia."

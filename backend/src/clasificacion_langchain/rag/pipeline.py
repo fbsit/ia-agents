@@ -179,7 +179,7 @@ class RAGPipeline:
                     exc,
                 )
                 return RAGAnswer(
-                    answer="No tengo conocimiento cargado sobre el tema. Pero puedo ayudarte directamente: " + query,
+                    answer="No tengo conocimiento cargado sobre el tema. Si queres, subi documentos o formulame una consulta más específica.",
                     company_id=company_id,
                     sources=[],
                     retrieved_chunks=[],
