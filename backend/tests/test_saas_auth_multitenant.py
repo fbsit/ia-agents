@@ -2848,6 +2848,46 @@ def test_timeout_confirmation_resets_after_additional_three_minutes(monkeypatch:
     assert summary_after.workflow_reset_started_at == ""
 
 
+def test_long_inactivity_resets_without_confirmation_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    module.agent_service.update_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="very-old-session",
+        workflow_stage="payment_selection",
+        checkout_stage="order_summary_pending",
+        pending_next_step="order_confirmation",
+        selected_products=["Milo"],
+    )
+    summary = module.agent_service.get_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="very-old-session",
+    )
+    summary.updated_at = (datetime.now(UTC) - timedelta(hours=3)).isoformat()
+
+    workflow_state = module._agent_workflow_state("demo-company", "demo-agent", "very-old-session")  # type: ignore[attr-defined]
+    assert workflow_state == {"workflow_expired": "true"}
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="user-1",
+        session_id="very-old-session",
+        message="hola",
+        channel="api_internal",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state=workflow_state,
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "workflow_reset"
+    assert "reinicio" in payload["answer"].lower()
+
+
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

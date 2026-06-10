@@ -463,6 +463,23 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
                 summary.otp_email,
             ]
         ) or bool(summary.customer_authenticated)
+        inactivity_seconds: float | None = None
+        if has_active_workflow and summary_updated_at:
+            try:
+                updated_at = datetime.fromisoformat(summary_updated_at)
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=UTC)
+                inactivity_seconds = (datetime.now(UTC) - updated_at).total_seconds()
+            except (ValueError, TypeError):
+                inactivity_seconds = None
+        if has_active_workflow and inactivity_seconds is not None and inactivity_seconds > (_WORKFLOW_EXPIRATION_SECONDS + _WORKFLOW_RESET_CONFIRMATION_SECONDS):
+            agent_service.update_session_summary(
+                company_id=company_id,
+                agent_id=agent_id,
+                session_id=session_id,
+                reset_workflow=True,
+            )
+            return {"workflow_expired": "true"}
         if has_active_workflow and workflow_reset_started_at:
             try:
                 reset_started_at = datetime.fromisoformat(workflow_reset_started_at)
@@ -478,22 +495,15 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
                     return {"workflow_expired": "true"}
             except (ValueError, TypeError):
                 pass
-        if has_active_workflow and summary_updated_at and not workflow_reset_started_at:
-            try:
-                updated_at = datetime.fromisoformat(summary_updated_at)
-                if updated_at.tzinfo is None:
-                    updated_at = updated_at.replace(tzinfo=UTC)
-                if (datetime.now(UTC) - updated_at).total_seconds() > _WORKFLOW_EXPIRATION_SECONDS:
-                    reset_now = datetime.now(UTC).isoformat()
-                    agent_service.update_session_summary(
-                        company_id=company_id,
-                        agent_id=agent_id,
-                        session_id=session_id,
-                        workflow_reset_started_at=reset_now,
-                    )
-                    workflow_reset_started_at = reset_now
-            except (ValueError, TypeError):
-                pass
+        if has_active_workflow and inactivity_seconds is not None and inactivity_seconds > _WORKFLOW_EXPIRATION_SECONDS and not workflow_reset_started_at:
+            reset_now = datetime.now(UTC).isoformat()
+            agent_service.update_session_summary(
+                company_id=company_id,
+                agent_id=agent_id,
+                session_id=session_id,
+                workflow_reset_started_at=reset_now,
+            )
+            workflow_reset_started_at = reset_now
         customer_authenticated = summary.customer_authenticated
         if customer_authenticated and summary.authenticated_at:
             try:
