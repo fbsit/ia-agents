@@ -280,9 +280,13 @@ def _match_recent_product_from_message(message: str, session_id: str) -> dict[st
 
 def _build_recent_product_add_to_cart_payload(
     *,
+    company_id: str,
+    user_id: str,
+    channel: str,
     message: str,
     session_id: str,
     workflow_state: dict[str, str] | None,
+    clubhx_tools_client: ClubHxToolsClient,
 ) -> dict[str, Any] | None:
     pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
     workflow_stage = str((workflow_state or {}).get("stage") or "").strip().lower()
@@ -297,7 +301,33 @@ def _build_recent_product_add_to_cart_payload(
         selected_product = _match_recent_product_from_message(message, session_id)
 
     if not isinstance(selected_product, dict):
-        return None
+        workflow_requests = _selected_product_requests_from_workflow_state(workflow_state)
+        if not workflow_requests:
+            return None
+        quantity = _parse_widget_quantity(message)
+        cart_request = dict(workflow_requests[0])
+        cart_request["quantity"] = quantity
+        try:
+            canonical_result = clubhx_tools_client.execute_canonical(
+                tenant_id=company_id,
+                tool="get_product_availability",
+                channel=channel,
+                user_id=user_id,
+                arguments={
+                    "query": str(cart_request.get("product_query") or "").strip(),
+                    "limit": 5,
+                    "session_id": session_id,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "commerce_recent_product_lookup_failed session_id=%s query=%s detail=%s",
+                session_id,
+                str(cart_request.get("product_query") or ""),
+                exc,
+            )
+            return None
+        return _build_multi_cart_tool_payload([canonical_result], [cart_request])
 
     product_id = str(selected_product.get("id") or "").strip()
     checkout_product_id = str(selected_product.get("checkout_product_id") or product_id).strip()
@@ -3395,9 +3425,13 @@ def _resolve_shared_commerce_payload(
     )
 
     recent_product_add_payload = _build_recent_product_add_to_cart_payload(
+        company_id=company_id,
+        user_id=user_id,
+        channel=channel,
         message=message,
         session_id=session_id,
         workflow_state=workflow_state,
+        clubhx_tools_client=clubhx_tools_client,
     )
     if recent_product_add_payload:
         _trace_route(
