@@ -68,3 +68,19 @@ class ClubHxToolsClient:
         if user_id:
             payload["user_id"] = user_id
         return self._post("/api/v1/ai/tools/execute-canonical", payload)
+
+    def send_whatsapp_message(
+        self,
+        *,
+        tenant_id: str,
+        to: str,
+        message: str,
+    ) -> dict[str, Any]:
+        return self._post(
+            "/api/v1/whatsapp/send",
+            {
+                "tenant_id": tenant_id,
+                "to": to,
+                "message": message,
+            },
+        )

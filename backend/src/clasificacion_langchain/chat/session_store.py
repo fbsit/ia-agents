@@ -14,6 +14,7 @@ class SessionTurn:
 class SessionSummary:
     updated_at: str = ""
     workflow_reset_started_at: str = ""
+    workflow_timeout_sent_at: str = ""
     user_goal: str = ""
     funnel_stage: str = ""
     checkout_stage: str = ""
@@ -36,6 +37,15 @@ class SessionSummary:
     last_tool: str = ""
     last_action: str = ""
     notes: str = ""
+    last_channel: str = ""
+    reminder_recipient: str = ""
+
+
+@dataclass
+class StoredSessionSummary:
+    company_id: str
+    session_id: str
+    summary: SessionSummary
 
 
 class SessionStore(Protocol):
@@ -57,4 +67,7 @@ class SessionStore(Protocol):
         ...
 
     def save_summary(self, company_id: str, session_id: str, summary: SessionSummary) -> None:
+        ...
+
+    def list_summaries(self) -> list[StoredSessionSummary]:
         ...

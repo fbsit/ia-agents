@@ -44,6 +44,7 @@ from clasificacion_langchain.chat.config import ChatServiceConfig
 from clasificacion_langchain.chat.memory_store import InMemorySessionStore
 from clasificacion_langchain.chat.redis_store import RedisSessionStore
 from clasificacion_langchain.chat.schemas import ChatRequest
+from clasificacion_langchain.chat.session_store import SessionSummary, StoredSessionSummary
 from clasificacion_langchain.chat.service import ChatService
 from clasificacion_langchain.auth.schemas import AuthPrincipal
 from clasificacion_langchain.auth.service import AuthService
@@ -132,6 +133,7 @@ _COMMERCE_CONTEXT_LOCK = threading.Lock()
 _COMMERCE_PRODUCT_CONTEXT: dict[str, dict[str, Any]] = {}
 _WORKFLOW_EXPIRATION_SECONDS = 300
 _WORKFLOW_RESET_CONFIRMATION_SECONDS = 180
+_WORKFLOW_REMINDER_SCAN_SECONDS = 15
 _SUPPORTED_COMMERCE_TOOLS = {
     "get_product_availability",
     "get_order_status",
@@ -354,6 +356,8 @@ def _update_agent_memory_from_payload(
     payload: dict[str, Any] | None,
     fallback_intent: str | None = None,
     fallback_tool: str | None = None,
+    channel: str | None = None,
+    reminder_recipient: str | None = None,
 ) -> None:
     if agent_service is None or not session_id:
         return
@@ -406,6 +410,9 @@ def _update_agent_memory_from_payload(
             otp_email=str((payload or {}).get("otp_email") or "").strip() or None,
             authenticated_at=str((payload or {}).get("authenticated_at") or "").strip() or None,
             reset_workflow=bool((payload or {}).get("reset_workflow")),
+            workflow_timeout_sent_at="" if bool((payload or {}).get("reset_workflow")) else None,
+            channel=channel,
+            reminder_recipient=reminder_recipient,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -552,6 +559,162 @@ def _workflow_state_customer_authenticated(workflow_state: dict[str, str] | None
 
 def _workflow_state_bool(raw: str | None) -> bool:
     return str(raw or "").strip().lower() in {"1", "true", "yes", "si"}
+
+
+def _is_whatsapp_reminder_channel(channel: str | None) -> bool:
+    return str(channel or "").strip().lower() in {"whatsapp", "widget_whatsapp"}
+
+
+def _looks_like_phone_number(value: str | None) -> bool:
+    digits = re.sub(r"\D+", "", str(value or ""))
+    return len(digits) >= 8
+
+
+def _reminder_recipient_for_channel(channel: str | None, session_id: str) -> str | None:
+    if not _is_whatsapp_reminder_channel(channel):
+        return None
+    clean_session_id = str(session_id or "").strip()
+    if not _looks_like_phone_number(clean_session_id):
+        return None
+    return re.sub(r"\D+", "", clean_session_id)
+
+
+def _summary_has_active_workflow(summary: SessionSummary) -> bool:
+    return any(
+        str(value or "").strip()
+        for value in [
+            summary.funnel_stage,
+            summary.checkout_stage,
+            summary.pending_next_step,
+            summary.selected_products,
+            summary.shipping_preference,
+            summary.pickup_location_label,
+            summary.delivery_address,
+            summary.invoice_type,
+            summary.payment_preference,
+            summary.otp_email,
+        ]
+    ) or bool(summary.customer_authenticated)
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    clean = str(value or "").strip()
+    if not clean:
+        return None
+    try:
+        parsed = datetime.fromisoformat(clean)
+    except (ValueError, TypeError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def _split_memory_session_id(memory_session_id: str) -> tuple[str, str] | None:
+    clean = str(memory_session_id or "").strip()
+    if not clean or ":" not in clean:
+        return None
+    agent_id, session_id = clean.split(":", 1)
+    if not agent_id.strip() or not session_id.strip():
+        return None
+    return agent_id.strip(), session_id.strip()
+
+
+def _workflow_timeout_message() -> str:
+    return "El proceso quedo pausado por inactividad. Si quieres retomarlo donde lo dejamos, responde 'si' dentro de 3 minutos. Si no, reinicio todo."
+
+
+def _process_workflow_reminders_once() -> None:
+    if agent_service is None:
+        return
+    session_store = getattr(agent_service, "session_store", None)
+    if session_store is None or not hasattr(session_store, "list_summaries"):
+        return
+    client = _get_clubhx_tools_client()
+    if client is None:
+        return
+
+    now = datetime.now(UTC)
+    for stored in session_store.list_summaries():
+        if not isinstance(stored, StoredSessionSummary):
+            continue
+        summary = stored.summary
+        if not _summary_has_active_workflow(summary):
+            continue
+        if not _is_whatsapp_reminder_channel(summary.last_channel):
+            continue
+        recipient = str(summary.reminder_recipient or "").strip()
+        if not recipient:
+            continue
+
+        session_parts = _split_memory_session_id(stored.session_id)
+        if session_parts is None:
+            continue
+        agent_id, plain_session_id = session_parts
+
+        updated_at = _parse_iso_datetime(summary.updated_at)
+        if updated_at is None:
+            continue
+        reset_started_at = _parse_iso_datetime(summary.workflow_reset_started_at)
+        inactivity_seconds = (now - updated_at).total_seconds()
+
+        if reset_started_at is None:
+            if inactivity_seconds <= _WORKFLOW_EXPIRATION_SECONDS:
+                continue
+            if summary.workflow_timeout_sent_at:
+                continue
+            try:
+                client.send_whatsapp_message(
+                    tenant_id=stored.company_id,
+                    to=recipient,
+                    message=_workflow_timeout_message(),
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "workflow_timeout_send_failed company_id=%s agent_id=%s session_id=%s recipient=%s detail=%s",
+                    stored.company_id,
+                    agent_id,
+                    plain_session_id,
+                    recipient,
+                    exc,
+                )
+                continue
+            sent_at = now.isoformat()
+            agent_service.update_session_summary(
+                company_id=stored.company_id,
+                agent_id=agent_id,
+                session_id=plain_session_id,
+                workflow_reset_started_at=sent_at,
+                workflow_timeout_sent_at=sent_at,
+                channel=summary.last_channel,
+                reminder_recipient=recipient,
+            )
+            logger.info(
+                "workflow_timeout_sent company_id=%s agent_id=%s session_id=%s recipient=%s",
+                stored.company_id,
+                agent_id,
+                plain_session_id,
+                recipient,
+            )
+            continue
+
+        if (now - reset_started_at).total_seconds() <= _WORKFLOW_RESET_CONFIRMATION_SECONDS:
+            continue
+        agent_service.update_session_summary(
+            company_id=stored.company_id,
+            agent_id=agent_id,
+            session_id=plain_session_id,
+            reset_workflow=True,
+            workflow_timeout_sent_at="",
+            channel=summary.last_channel,
+            reminder_recipient=recipient,
+        )
+        logger.info(
+            "workflow_timeout_reset company_id=%s agent_id=%s session_id=%s",
+            stored.company_id,
+            agent_id,
+            plain_session_id,
+        )
 
 
 def _is_workflow_status_question(message: str) -> bool:
@@ -2960,6 +3123,7 @@ def _resolve_shared_commerce_payload(
                     agent_id=agent_id,
                     session_id=session_id,
                     workflow_reset_started_at="",
+                    workflow_timeout_sent_at="",
                 )
             resumed_payload = _resolve_workflow_resume_followup(workflow_state)
             if resumed_payload:
@@ -2972,7 +3136,7 @@ def _resolve_shared_commerce_payload(
                 )
                 return resumed_payload
         return {
-            "answer": "El proceso quedo pausado por inactividad. Si quieres retomarlo donde lo dejamos, responde 'si' dentro de 3 minutos. Si no, reinicio todo.",
+            "answer": _workflow_timeout_message(),
             "intent_label": "workflow_resume_confirmation",
             "workflow_stage": str((workflow_state or {}).get("stage") or "").strip() or "commerce",
             "checkout_stage": str((workflow_state or {}).get("checkout_stage") or "").strip(),
@@ -5486,6 +5650,45 @@ def _start_evaluation_worker_once() -> None:
     evaluation_worker_started = True
 
 
+workflow_reminder_worker_started = False
+
+
+def _workflow_reminder_scan_seconds() -> int:
+    raw = os.getenv("WORKFLOW_REMINDER_SCAN_SECONDS", str(_WORKFLOW_REMINDER_SCAN_SECONDS)).strip()
+    try:
+        return max(5, int(raw or str(_WORKFLOW_REMINDER_SCAN_SECONDS)))
+    except ValueError:
+        return _WORKFLOW_REMINDER_SCAN_SECONDS
+
+
+def _workflow_reminder_worker_enabled() -> bool:
+    return os.getenv("WORKFLOW_REMINDER_WORKER_ENABLED", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _workflow_reminder_worker_loop() -> None:
+    logger.info("workflow_reminder_worker_started")
+    while True:
+        try:
+            _process_workflow_reminders_once()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("workflow_reminder_worker_loop_error detail=%s", exc)
+        time.sleep(_workflow_reminder_scan_seconds())
+
+
+def _start_workflow_reminder_worker_once() -> None:
+    global workflow_reminder_worker_started
+    if workflow_reminder_worker_started:
+        return
+    worker = threading.Thread(target=_workflow_reminder_worker_loop, daemon=True, name="workflow-reminder-worker")
+    worker.start()
+    workflow_reminder_worker_started = True
+
+
 def _embedded_worker_enabled() -> bool:
     return os.getenv("EVAL_EMBEDDED_WORKER_ENABLED", "true").strip().lower() in {
         "1",
@@ -5501,6 +5704,9 @@ def run_evaluation_worker_forever() -> None:
 
 if _embedded_worker_enabled():
     _start_evaluation_worker_once()
+
+if _workflow_reminder_worker_enabled():
+    _start_workflow_reminder_worker_once()
 
 
 def _evaluation_runs_to_csv(rows: list[dict[str, object]]) -> str:
@@ -7517,6 +7723,8 @@ def internal_chat_with_agent(
                     user_message=payload.message,
                     answer=shared_answer,
                     payload=shared_commerce_payload,
+                    channel=chat_channel,
+                    reminder_recipient=_reminder_recipient_for_channel(chat_channel, effective_session_id),
                 )
                 return AgentChatResponsePayload(
                     agent_id=agent.agent_id,
@@ -7594,6 +7802,8 @@ def internal_chat_with_agent(
                         payload=tool_payload,
                         fallback_intent=rag_result.intent_label,
                         fallback_tool=routed_tool[0],
+                        channel=chat_channel,
+                        reminder_recipient=_reminder_recipient_for_channel(chat_channel, effective_session_id),
                     )
                     return AgentChatResponsePayload(
                         agent_id=agent.agent_id,
@@ -7844,6 +8054,8 @@ def chat_with_agent(
                     user_message=payload.message,
                     answer=shared_answer,
                     payload=shared_commerce_payload,
+                    channel=chat_channel,
+                    reminder_recipient=_reminder_recipient_for_channel(chat_channel, effective_session_id),
                 )
                 return AgentChatResponsePayload(
                     agent_id=agent.agent_id,
@@ -7921,6 +8133,8 @@ def chat_with_agent(
                         payload=tool_payload,
                         fallback_intent=rag_result.intent_label,
                         fallback_tool=routed_tool[0],
+                        channel=chat_channel,
+                        reminder_recipient=_reminder_recipient_for_channel(chat_channel, effective_session_id),
                     )
                     return AgentChatResponsePayload(
                         agent_id=agent.agent_id,
@@ -8653,6 +8867,8 @@ def public_widget_chat(
             user_message=payload.message,
             answer=final_answer,
             payload=shared_commerce_payload,
+            channel="widget_public",
+            reminder_recipient=None,
         )
         response_latency_ms = int((time.perf_counter() - started) * 1000)
         _record_chat_audit(
@@ -8787,6 +9003,8 @@ def public_widget_chat(
                     payload=tool_payload,
                     fallback_intent=rag_result.intent_label,
                     fallback_tool=routed_tool[0],
+                    channel="widget_public",
+                    reminder_recipient=None,
                 )
                 response_latency_ms = int((time.perf_counter() - started) * 1000)
 

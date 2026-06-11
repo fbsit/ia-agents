@@ -2888,6 +2888,84 @@ def test_long_inactivity_resets_without_confirmation_prompt(monkeypatch: pytest.
     assert "reinicio" in payload["answer"].lower()
 
 
+def test_workflow_reminder_worker_sends_proactive_whatsapp_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    sent_messages: list[dict[str, str]] = []
+
+    class FakeToolsClient:
+        def send_whatsapp_message(self, *, tenant_id: str, to: str, message: str):
+            sent_messages.append({"tenant_id": tenant_id, "to": to, "message": message})
+            return {"ok": True}
+
+    monkeypatch.setattr(module, "_get_clubhx_tools_client", lambda: FakeToolsClient())
+
+    module.agent_service.update_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="56912345678",
+        workflow_stage="payment_selection",
+        selected_products=["Milo"],
+        channel="whatsapp",
+        reminder_recipient="56912345678",
+    )
+    summary = module.agent_service.get_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="56912345678",
+    )
+    summary.updated_at = (datetime.now(UTC) - timedelta(minutes=6)).isoformat()
+
+    module._process_workflow_reminders_once()  # type: ignore[attr-defined]
+
+    assert sent_messages == [
+        {
+            "tenant_id": "demo-company",
+            "to": "56912345678",
+            "message": "El proceso quedo pausado por inactividad. Si quieres retomarlo donde lo dejamos, responde 'si' dentro de 3 minutos. Si no, reinicio todo.",
+        }
+    ]
+    summary_after = module.agent_service.get_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="56912345678",
+    )
+    assert summary_after.workflow_reset_started_at
+    assert summary_after.workflow_timeout_sent_at
+
+
+def test_workflow_reminder_worker_ignores_non_whatsapp_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    sent_messages: list[dict[str, str]] = []
+
+    class FakeToolsClient:
+        def send_whatsapp_message(self, *, tenant_id: str, to: str, message: str):
+            sent_messages.append({"tenant_id": tenant_id, "to": to, "message": message})
+            return {"ok": True}
+
+    monkeypatch.setattr(module, "_get_clubhx_tools_client", lambda: FakeToolsClient())
+
+    module.agent_service.update_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="session-web",
+        workflow_stage="payment_selection",
+        selected_products=["Milo"],
+        channel="widget_public",
+    )
+    summary = module.agent_service.get_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="session-web",
+    )
+    summary.updated_at = (datetime.now(UTC) - timedelta(minutes=6)).isoformat()
+
+    module._process_workflow_reminders_once()  # type: ignore[attr-defined]
+
+    assert sent_messages == []
+
+
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

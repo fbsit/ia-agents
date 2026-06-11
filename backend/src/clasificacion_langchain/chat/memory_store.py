@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from clasificacion_langchain.chat.session_store import SessionSummary, SessionTurn
+from clasificacion_langchain.chat.session_store import SessionSummary, SessionTurn, StoredSessionSummary
 
 
 @dataclass
@@ -55,6 +55,16 @@ class InMemorySessionStore:
     def save_summary(self, company_id: str, session_id: str, summary: SessionSummary) -> None:
         context = self.get_context(company_id, session_id)
         context.summary = summary
+
+    def list_summaries(self) -> list[StoredSessionSummary]:
+        return [
+            StoredSessionSummary(
+                company_id=context.company_id,
+                session_id=context.session_id,
+                summary=context.summary,
+            )
+            for context in self._sessions.values()
+        ]
 
     def _truncate(self, context: SessionContext) -> None:
         if len(context.turns) > self.max_turns:
