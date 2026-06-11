@@ -2966,6 +2966,79 @@ def test_workflow_reminder_worker_ignores_non_whatsapp_sessions(monkeypatch: pyt
     assert sent_messages == []
 
 
+def test_product_lookup_followup_agregalo_uses_recent_product(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    module._remember_commerce_products(  # type: ignore[attr-defined]
+        "session-milo",
+        [
+            {
+                "id": "prod-1",
+                "checkout_product_id": "milo-1",
+                "variant_id": "prod-1",
+                "name": "Milo",
+                "price": "5490",
+                "stock": "200",
+            }
+        ],
+    )
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="user-1",
+        session_id="session-milo",
+        message="Agregalo al carrito",
+        channel="whatsapp",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={"stage": "product_lookup", "pending_next_step": "add_to_cart"},
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "add_to_cart"
+    assert payload["workflow_stage"] == "cart_building"
+    assert payload["pending_next_step"] == "shipping_selection"
+    assert payload["cart_action"]["item"]["name"] == "Milo"
+    assert payload["cart_action"]["item"]["quantity"] == 1
+
+
+def test_product_lookup_followup_product_name_uses_recent_product(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    module._remember_commerce_products(  # type: ignore[attr-defined]
+        "session-milo-name",
+        [
+            {
+                "id": "prod-1",
+                "checkout_product_id": "milo-1",
+                "variant_id": "prod-1",
+                "name": "Milo",
+                "price": "5490",
+                "stock": "200",
+            }
+        ],
+    )
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="user-1",
+        session_id="session-milo-name",
+        message="El milo",
+        channel="whatsapp",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={"stage": "product_lookup", "pending_next_step": "add_to_cart"},
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "add_to_cart"
+    assert payload["cart_action"]["item"]["name"] == "Milo"
+
+
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

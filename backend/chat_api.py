@@ -247,6 +247,87 @@ def _has_explicit_add_to_cart_intent(message: str) -> bool:
     )
 
 
+def _match_recent_product_from_message(message: str, session_id: str) -> dict[str, Any] | None:
+    normalized_message = _normalize_widget_text(message)
+    if not normalized_message:
+        return None
+
+    recent_products = _recent_commerce_products(session_id)
+    if not recent_products:
+        return None
+
+    stripped_message = re.sub(
+        r"\b(?:el|la|los|las|un|una|unos|unas|quiero|llevo|dame|me|porfa|por|favor)\b",
+        " ",
+        normalized_message,
+        flags=re.IGNORECASE,
+    )
+    stripped_message = re.sub(r"\s+", " ", stripped_message).strip()
+
+    for product in recent_products:
+        if not isinstance(product, dict):
+            continue
+        product_name = str(product.get("name") or "").strip()
+        normalized_name = _normalize_widget_text(product_name)
+        if not normalized_name:
+            continue
+        if normalized_message == normalized_name or stripped_message == normalized_name:
+            return product
+        if stripped_message and stripped_message in normalized_name:
+            return product
+    return None
+
+
+def _build_recent_product_add_to_cart_payload(
+    *,
+    message: str,
+    session_id: str,
+    workflow_state: dict[str, str] | None,
+) -> dict[str, Any] | None:
+    pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
+    workflow_stage = str((workflow_state or {}).get("stage") or "").strip().lower()
+    if pending_next_step != "add_to_cart" and workflow_stage != "product_lookup":
+        return None
+
+    selected_product = None
+    if _is_implicit_add_to_cart_message(message):
+        recent_products = _recent_commerce_products(session_id)
+        selected_product = recent_products[0] if recent_products else None
+    else:
+        selected_product = _match_recent_product_from_message(message, session_id)
+
+    if not isinstance(selected_product, dict):
+        return None
+
+    product_id = str(selected_product.get("id") or "").strip()
+    checkout_product_id = str(selected_product.get("checkout_product_id") or product_id).strip()
+    variant_id = str(selected_product.get("variant_id") or product_id).strip()
+    name = str(selected_product.get("name") or "Producto").strip() or "Producto"
+    if not product_id:
+        return None
+
+    quantity = _parse_widget_quantity(message)
+    cart_action = {
+        "type": "add_to_cart",
+        "item": {
+            "product_id": checkout_product_id or product_id,
+            "checkout_product_id": checkout_product_id or product_id,
+            "variant_id": variant_id or product_id,
+            "quantity": quantity,
+            "name": name,
+        },
+    }
+    return {
+        "answer": f"Listo, agregue {quantity} {name} al carrito. Si queres, seguimos con checkout cuando me digas \"quiero pagar\".",
+        "intent_label": "add_to_cart",
+        "workflow_stage": "cart_building",
+        "pending_next_step": "shipping_selection",
+        "cart_action": cart_action,
+        "cart_actions": [cart_action],
+        "products": [selected_product],
+    }
+
+
 def _has_explicit_cart_change_intent(message: str, mode: str) -> bool:
     normalized = _normalize_widget_text(message)
     if not normalized:
@@ -3312,6 +3393,26 @@ def _resolve_shared_commerce_payload(
         message,
         str((llm_commerce_intent or {}).get("intent") or ""),
     )
+
+    recent_product_add_payload = _build_recent_product_add_to_cart_payload(
+        message=message,
+        session_id=session_id,
+        workflow_state=workflow_state,
+    )
+    if recent_product_add_payload:
+        _trace_route(
+            "commerce.resolve_recent_product_add_to_cart",
+            session_id=session_id,
+            workflow_stage=str(recent_product_add_payload.get("workflow_stage") or ""),
+            pending_next_step=str(recent_product_add_payload.get("pending_next_step") or ""),
+        )
+        logger.warning(
+            "commerce_router_resolved kind=recent_product_add_to_cart session_id=%s product=%s quantity=%s",
+            session_id,
+            str((((recent_product_add_payload.get("cart_action") or {}).get("item") or {}).get("name") or "")),
+            str((((recent_product_add_payload.get("cart_action") or {}).get("item") or {}).get("quantity") or "")),
+        )
+        return recent_product_add_payload
 
     if _is_clear_cart_message(message):
         _trace_route("commerce.resolve_clear_cart", session_id=session_id)
