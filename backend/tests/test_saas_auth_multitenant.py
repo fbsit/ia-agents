@@ -3292,6 +3292,149 @@ def test_persisted_lookup_context_allows_quiero_2_followup(monkeypatch: pytest.M
     assert payload["cart_action"]["item"]["quantity"] == 2
 
 
+def test_extract_pickup_location_does_not_treat_tienda_as_location(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    assert module._extract_pickup_location("retiro en tienda") == ""  # type: ignore[attr-defined]
+
+
+def test_pickup_selection_offers_pickup_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            assert tool == "get_shipping_options"
+            return {
+                "ok": True,
+                "data": {
+                    "options": [
+                        {"name": "Retiro en tienda Centro"},
+                        {"name": "Retiro en sucursal Norte"},
+                    ]
+                },
+            }
+
+    payload = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="retiro en tienda",
+        session_id="56912345678",
+        workflow_state={"checkout_stage": "shipping_method_pending", "pending_next_step": "shipping_selection"},
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "pickup_selected"
+    assert "Retiro en tienda Centro" in payload["answer"]
+
+
+def test_pickup_location_selected_offers_payment_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            assert tool == "get_payment_options"
+            return {
+                "ok": True,
+                "data": {
+                    "options": [
+                        {"name": "Mercado Pago"},
+                        {"name": "Transferencia bancaria"},
+                    ]
+                },
+            }
+
+    payload = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="retiro en sucursal centro",
+        session_id="56912345678",
+        workflow_state={"checkout_stage": "shipping_method_pending", "pending_next_step": "shipping_selection"},
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "pickup_location_selected"
+    assert "Mercado Pago" in payload["answer"]
+    assert payload["awaiting_slot"] == "payment_method"
+
+
+def test_payment_followup_mercado_pago_creates_payment_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            if tool == "get_product_availability":
+                return {
+                    "ok": True,
+                    "data": {"items": [{"id": "prod-1", "code": "milo-1", "name": "Milo", "price": "5490", "available_units": "200"}]},
+                    "tool": tool,
+                }
+            assert tool == "create_payment_link"
+            return {
+                "ok": True,
+                "tool": tool,
+                "data": {"payment_url": "https://pay.test/link"},
+            }
+
+    payload = module._resolve_checkout_payment_followup(  # type: ignore[attr-defined]
+        message="Mercado Pago",
+        session_id="56912345678",
+        workflow_state={
+            "checkout_stage": "payment_method_pending",
+            "pending_next_step": "payment_selection",
+            "selected_products": "Milo",
+        },
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert payload["redirect_to"] == "https://pay.test/link"
+    assert payload["payment_preference"] == "mercado_pago"
+
+
+def test_payment_followup_transfer_creates_order_draft_without_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            if tool == "get_product_availability":
+                return {
+                    "ok": True,
+                    "data": {"items": [{"id": "prod-1", "code": "milo-1", "name": "Milo", "price": "5490", "available_units": "200"}]},
+                    "tool": tool,
+                }
+            assert tool == "create_order_draft"
+            return {
+                "ok": True,
+                "tool": tool,
+                "data": {"draft_id": "draft-123", "total": "$5490"},
+            }
+
+    payload = module._resolve_checkout_payment_followup(  # type: ignore[attr-defined]
+        message="Transferencia bancaria",
+        session_id="56912345678",
+        workflow_state={
+            "checkout_stage": "payment_method_pending",
+            "pending_next_step": "payment_selection",
+            "selected_products": "Milo",
+        },
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert "orden borrador" in payload["answer"].lower()
+    assert payload["payment_preference"] == "transferencia"
+
+
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

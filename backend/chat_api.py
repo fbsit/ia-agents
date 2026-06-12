@@ -1437,12 +1437,30 @@ def _resolve_checkout_workflow_followup(
 
     pickup_location = _extract_pickup_location(message)
     if pickup_location:
+        payment_names: list[str] = []
+        if clubhx_tools_client is not None:
+            try:
+                payment_result = clubhx_tools_client.execute_canonical(
+                    tenant_id=company_id or "",
+                    tool="get_payment_options",
+                    channel=channel or "",
+                    user_id=user_id,
+                    arguments={"session_id": session_id or ""},
+                )
+                payment_names = _option_names_from_result(payment_result)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("pickup_payment_options_failed session_id=%s detail=%s", session_id, exc)
         return {
-            "answer": f"Perfecto, dejo retiro en {pickup_location}. Si quieres, el siguiente paso es revisar pago.",
+            "answer": (
+                f"Perfecto, dejo retiro en {pickup_location}. {_build_payment_options_answer(payment_names)}"
+                if payment_names
+                else f"Perfecto, dejo retiro en {pickup_location}. Ahora dime que medio de pago prefieres."
+            ),
             "intent_label": "pickup_location_selected",
             "workflow_stage": "payment_selection",
             "checkout_stage": "pickup_location_selected",
             "pending_next_step": "payment_selection",
+            "awaiting_slot": "payment_method",
             "workflow_action": _workflow_action(
                 "pickup_location_selected",
                 pickup_location_label=pickup_location,
@@ -1450,8 +1468,25 @@ def _resolve_checkout_workflow_followup(
         }
 
     if _wants_pickup(message):
+        pickup_names: list[str] = []
+        if clubhx_tools_client is not None:
+            try:
+                shipping_result = clubhx_tools_client.execute_canonical(
+                    tenant_id=company_id or "",
+                    tool="get_shipping_options",
+                    channel=channel or "",
+                    user_id=user_id,
+                    arguments={"session_id": session_id or ""},
+                )
+                pickup_names = _pickup_option_names_from_result(shipping_result)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("pickup_shipping_options_failed session_id=%s detail=%s", session_id, exc)
         return {
-            "answer": "Perfecto, podemos seguir con retiro. Dime en que tienda o punto de retiro quieres retirar.",
+            "answer": (
+                f"Perfecto, podemos seguir con retiro. Opciones disponibles: {', '.join(pickup_names)}. Cual prefieres?"
+                if pickup_names
+                else "Perfecto, podemos seguir con retiro. Dime en que tienda o punto de retiro quieres retirar."
+            ),
             "intent_label": "pickup_selected",
             "workflow_stage": "shipping_selection",
             "checkout_stage": "pickup_location_pending",
@@ -1786,7 +1821,36 @@ def _extract_pickup_location(message: str) -> str:
     for pattern in patterns:
         match = re.search(pattern, normalized, flags=re.IGNORECASE)
         if match:
-            return str(match.group(1) or "").strip()
+            candidate = str(match.group(1) or "").strip()
+            if candidate in {"tienda", "sucursal", "local", "retiro", "pickup"}:
+                return ""
+            return candidate
+    return ""
+
+
+def _is_payment_options_question(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    return any(
+        token in normalized
+        for token in [
+            "que opciones",
+            "que medios",
+            "medios de pago",
+            "formas de pago",
+            "como pago",
+            "opciones de pago",
+        ]
+    )
+
+
+def _payment_preference_from_message(message: str) -> str:
+    normalized = _normalize_widget_text(message)
+    if any(token in normalized for token in ["mercado pago", "mercadopago", "mp", "tarjeta", "link de pago"]):
+        return "mercado_pago"
+    if any(token in normalized for token in ["transferencia", "transfer", "trasferencia"]):
+        return "transferencia"
     return ""
 
 
@@ -2606,6 +2670,124 @@ def _resolve_checkout_items(
             seen_products.add(row_id)
             products.append(_normalize_catalog_product(row))
     return items, products
+
+
+def _option_names_from_result(result: dict[str, Any]) -> list[str]:
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    options = data.get("options") if isinstance(data.get("options"), list) else []
+    names = [str((option or {}).get("name") or "").strip() for option in options if isinstance(option, dict)]
+    return [name for name in names if name]
+
+
+def _pickup_option_names_from_result(result: dict[str, Any]) -> list[str]:
+    names = _option_names_from_result(result)
+    pickup_names = [
+        name for name in names
+        if any(token in _normalize_widget_text(name) for token in ["retiro", "pickup", "tienda", "sucursal", "local"])
+    ]
+    return pickup_names or names
+
+
+def _build_payment_options_answer(names: list[str]) -> str:
+    if not names:
+        return "No hay medios de pago activos ahora."
+    return f"Medios de pago: {', '.join(names)}. Cual prefieres?"
+
+
+def _resolve_checkout_payment_followup(
+    *,
+    message: str,
+    session_id: str | None,
+    workflow_state: dict[str, str] | None,
+    company_id: str | None,
+    channel: str | None,
+    user_id: str | None,
+    clubhx_tools_client: Any | None,
+) -> dict[str, Any] | None:
+    current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip().lower()
+    current_pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
+    if current_pending_next_step != "payment_selection" and current_checkout_stage not in {
+        "payment_method_pending",
+        "pickup_location_selected",
+        "delivery_address_confirmed",
+        "order_summary_pending",
+    }:
+        return None
+    if clubhx_tools_client is None:
+        return None
+
+    preference = _payment_preference_from_message(message)
+    if _is_payment_options_question(message) or (not preference and _is_affirmative_followup_message(message)):
+        try:
+            result = clubhx_tools_client.execute_canonical(
+                tenant_id=company_id or "",
+                tool="get_payment_options",
+                channel=channel or "",
+                user_id=user_id,
+                arguments={"session_id": session_id or ""},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("checkout_payment_options_failed session_id=%s detail=%s", session_id, exc)
+            return None
+        return {
+            "answer": _build_payment_options_answer(_option_names_from_result(result)),
+            "intent_label": "payment_options",
+            "workflow_stage": "payment_selection",
+            "checkout_stage": "payment_method_pending",
+            "pending_next_step": "payment_selection",
+            "awaiting_slot": "payment_method",
+            "workflow_action": _workflow_action("choose_payment_method"),
+        }
+
+    if not preference:
+        return None
+
+    cart_requests = _checkout_requests_for_workflow(message, session_id or "", None, workflow_state)
+    if not cart_requests:
+        return {
+            "answer": "Primero necesito confirmar los productos del carrito antes de seguir con el pago.",
+            "intent_label": "payment_items_missing",
+            "workflow_stage": "cart_building",
+            "pending_next_step": "add_to_cart",
+            "awaiting_slot": "quantity_or_action",
+        }
+    checkout_items, checkout_products = _resolve_checkout_items(
+        company_id=company_id or "",
+        user_id=user_id or "",
+        channel=channel or "",
+        session_id=session_id or "",
+        cart_requests=cart_requests,
+        clubhx_tools_client=clubhx_tools_client,
+    )
+    if not checkout_items:
+        return {"answer": "No pude validar los productos del pedido. Dime el nombre exacto del producto y la cantidad."}
+
+    tool_name = "create_payment_link" if preference == "mercado_pago" else "create_order_draft"
+    try:
+        result = clubhx_tools_client.execute_canonical(
+            tenant_id=company_id or "",
+            tool=tool_name,
+            channel=channel or "",
+            user_id=user_id,
+            arguments={"items": checkout_items, "session_id": session_id or ""},
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("checkout_payment_execution_failed session_id=%s tool=%s detail=%s", session_id, tool_name, exc)
+        return None
+    payload = _format_public_widget_tool_payload(
+        result,
+        user_message=message,
+        intent_label=tool_name,
+        channel=channel,
+        session_id=session_id,
+    )
+    if isinstance(payload, dict):
+        if checkout_products and not payload.get("products"):
+            payload["products"] = checkout_products[:6]
+        payload["payment_preference"] = preference
+        payload["awaiting_slot"] = ""
+        return payload
+    return None
 
 
 def _tool_for_intent(intent_label: str, message: str, session_id: str) -> tuple[str, dict[str, Any]] | None:
@@ -3640,6 +3822,32 @@ def _resolve_shared_commerce_payload(
             str(checkout_followup_payload.get("checkout_stage") or ""),
         )
         return checkout_followup_payload
+
+    checkout_payment_payload = _resolve_checkout_payment_followup(
+        message=message,
+        session_id=session_id,
+        workflow_state=workflow_state,
+        company_id=company_id,
+        channel=channel,
+        user_id=user_id,
+        clubhx_tools_client=clubhx_tools_client,
+    )
+    if checkout_payment_payload:
+        _trace_route(
+            "commerce.resolve_checkout_payment_followup",
+            session_id=session_id,
+            intent=str(checkout_payment_payload.get("intent_label") or ""),
+            workflow_stage=str(checkout_payment_payload.get("workflow_stage") or ""),
+            checkout_stage=str(checkout_payment_payload.get("checkout_stage") or ""),
+        )
+        logger.warning(
+            "commerce_router_resolved kind=checkout_payment_followup session_id=%s payload_intent=%s workflow_stage=%s checkout_stage=%s",
+            session_id,
+            str(checkout_payment_payload.get("intent_label") or ""),
+            str(checkout_payment_payload.get("workflow_stage") or ""),
+            str(checkout_payment_payload.get("checkout_stage") or ""),
+        )
+        return checkout_payment_payload
     logger.info(
         "commerce_checkout_followup_miss session_id=%s checkout_stage=%s pending_next_step=%s message=%s llm_intent=%s",
         session_id,
