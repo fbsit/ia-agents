@@ -2628,14 +2628,18 @@ def _extract_invoice_data(
     if session_id:
         llm_result = _parse_invoice_data_with_openai(message, session_id=session_id)
         if isinstance(llm_result, dict):
+            extracted_any = False
             for key in ("invoice_type", "rut", "business_name", "invoice_address"):
                 val = llm_result.get(key)
                 if val and str(val).strip():
                     result[key] = str(val).strip()
+                    extracted_any = True
             use_delivery = llm_result.get("use_delivery_address")
             if isinstance(use_delivery, bool):
                 result["use_delivery_address"] = use_delivery
-            return result
+                extracted_any = extracted_any or use_delivery
+            if extracted_any:
+                return result
 
     result["invoice_type"] = _extract_invoice_type(message) or None
     result["rut"] = _extract_rut(message) or None

@@ -3503,6 +3503,30 @@ def test_document_type_boleta_moves_to_order_summary(monkeypatch: pytest.MonkeyP
     assert payload["checkout_stage"] == "order_summary_pending"
 
 
+def test_document_type_boleta_falls_back_when_invoice_llm_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(module, "_parse_invoice_data_with_openai", lambda *args, **kwargs: {"invoice_type": None})
+
+    payload = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="boleta",
+        session_id="56912345678",
+        workflow_state={
+            "checkout_stage": "document_type_pending",
+            "pending_next_step": "document_type",
+            "payment_preference": "transferencia",
+        },
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=object(),
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "invoice_summary_ready"
+    assert payload["checkout_stage"] == "order_summary_pending"
+
+
 def test_order_confirmation_creates_order_draft(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
