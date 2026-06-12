@@ -2235,7 +2235,7 @@ def test_payment_options_routes_to_cart_only_on_web(monkeypatch: pytest.MonkeyPa
     assert payload["checkout_stage"] == "web_checkout_redirect"
 
 
-def test_payment_options_routes_to_payment_link_on_whatsapp(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_payment_options_routes_to_order_draft_with_payment_url_on_whatsapp(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
     monkeypatch.setattr(
@@ -2264,10 +2264,10 @@ def test_payment_options_routes_to_payment_link_on_whatsapp(monkeypatch: pytest.
                         ]
                     },
                 }
-            if tool == "create_payment_link":
+            if tool == "create_order_draft":
                 return {
                     "ok": True,
-                    "tool": "create_payment_link",
+                    "tool": "create_order_draft",
                     "data": {"payment_url": "https://pay.example/link", "ok": True},
                 }
             raise AssertionError(f"Unexpected tool: {tool}")
@@ -2295,7 +2295,7 @@ def test_payment_options_routes_to_payment_link_on_whatsapp(monkeypatch: pytest.
     assert payload.get("redirect_to") == "https://pay.example/link"
     assert payload.get("checkout_stage") == "completed"
     assert calls[0][0] == "get_product_availability"
-    assert calls[1][0] == "create_payment_link"
+    assert calls[1][0] == "create_order_draft"
 
 
 def test_payment_options_routes_to_order_draft_on_whatsapp(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3388,7 +3388,7 @@ def test_pickup_location_selected_offers_payment_options(monkeypatch: pytest.Mon
     assert payload["awaiting_slot"] == "payment_method"
 
 
-def test_payment_followup_mercado_pago_creates_payment_link(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_payment_followup_mercado_pago_creates_order_and_uses_returned_url(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
     class FakeToolsClient:
@@ -3399,7 +3399,8 @@ def test_payment_followup_mercado_pago_creates_payment_link(monkeypatch: pytest.
                     "data": {"items": [{"id": "prod-1", "code": "milo-1", "name": "Milo", "price": "5490", "available_units": "200"}]},
                     "tool": tool,
                 }
-            assert tool == "create_payment_link"
+            assert tool == "create_order_draft"
+            assert arguments["payment_preference"] == "mercado_pago"
             return {
                 "ok": True,
                 "tool": tool,
@@ -3437,6 +3438,7 @@ def test_payment_followup_transfer_creates_order_draft_without_link(monkeypatch:
                     "tool": tool,
                 }
             assert tool == "create_order_draft"
+            assert arguments["payment_preference"] == "transferencia"
             return {
                 "ok": True,
                 "tool": tool,

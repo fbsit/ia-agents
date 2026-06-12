@@ -2892,14 +2892,18 @@ def _resolve_checkout_payment_followup(
     if not checkout_items:
         return {"answer": "No pude validar los productos del pedido. Dime el nombre exacto del producto y la cantidad."}
 
-    tool_name = "create_payment_link" if preference == "mercado_pago" else "create_order_draft"
+    tool_name = "create_order_draft"
     try:
         result = clubhx_tools_client.execute_canonical(
             tenant_id=company_id or "",
             tool=tool_name,
             channel=channel or "",
             user_id=user_id,
-            arguments={"items": checkout_items, "session_id": session_id or ""},
+            arguments={
+                "items": checkout_items,
+                "session_id": session_id or "",
+                "payment_preference": preference,
+            },
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("checkout_payment_execution_failed session_id=%s tool=%s detail=%s", session_id, tool_name, exc)
@@ -4097,9 +4101,9 @@ def _resolve_shared_commerce_payload(
             and llm_intent_name in {"payment_options", "create_payment_link", "create_order_draft"}
         ):
             if any(token in message_payment_text or token in payment_preference_text for token in ["mercado pago", "mercadopago", "mp", "link de pago", "pago con tarjeta", "tarjeta"]):
-                payment_tool_override = ("create_payment_link", {"session_id": session_id})
+                payment_tool_override = ("create_order_draft", {"session_id": session_id, "payment_preference": "mercado_pago"})
             elif any(token in message_payment_text or token in payment_preference_text for token in ["transferencia", "transfer", "trasferencia"]):
-                payment_tool_override = ("create_order_draft", {"session_id": session_id})
+                payment_tool_override = ("create_order_draft", {"session_id": session_id, "payment_preference": "transferencia"})
 
         if _is_checkout_redirect_channel(channel) and (
             llm_intent_name in {"create_payment_link", "payment_options"}
