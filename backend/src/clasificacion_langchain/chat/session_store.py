@@ -23,6 +23,7 @@ class SessionSummary:
     last_product_query: str = ""
     selected_products: str = ""
     focused_product: str = ""
+    cart_snapshot: str = ""
     shipping_preference: str = ""
     pickup_location_label: str = ""
     delivery_address: str = ""

@@ -3435,6 +3435,71 @@ def test_payment_followup_transfer_creates_order_draft_without_link(monkeypatch:
     assert payload["payment_preference"] == "transferencia"
 
 
+def test_cart_status_uses_persisted_cart_quantities(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    add_payload = {
+        "answer": "Listo, agregue 2 Milo al carrito.",
+        "intent_label": "add_to_cart",
+        "workflow_stage": "cart_building",
+        "pending_next_step": "shipping_selection",
+        "cart_action": {
+            "type": "add_to_cart",
+            "item": {
+                "product_id": "milo-1",
+                "checkout_product_id": "milo-1",
+                "variant_id": "prod-1",
+                "quantity": 2,
+                "name": "Milo",
+                "price": "5490",
+            },
+        },
+        "cart_actions": [
+            {
+                "type": "add_to_cart",
+                "item": {
+                    "product_id": "milo-1",
+                    "checkout_product_id": "milo-1",
+                    "variant_id": "prod-1",
+                    "quantity": 2,
+                    "name": "Milo",
+                    "price": "5490",
+                },
+            }
+        ],
+        "products": [{"id": "prod-1", "name": "Milo", "price": "5490", "stock": "200"}],
+    }
+
+    module._update_agent_memory_from_payload(  # type: ignore[attr-defined]
+        agent_id="demo-agent",
+        company_id="demo-company",
+        session_id="56912345678",
+        user_message="quiero 2",
+        answer="Listo, agregue 2 Milo al carrito.",
+        payload=add_payload,
+        channel="whatsapp",
+        reminder_recipient="56912345678",
+    )
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="56912345678",
+        session_id="56912345678",
+        message="como va mi carrito ?",
+        channel="whatsapp",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state=module._agent_workflow_state("demo-company", "demo-agent", "56912345678"),  # type: ignore[attr-defined]
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "cart_status"
+    assert "Milo x2" in payload["answer"]
+    assert "Subtotal: $10980" in payload["answer"]
+
+
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

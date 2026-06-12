@@ -73,6 +73,94 @@ SUPPORTED_OPERATIONAL_SECTIONS = {
     "feedback",
 }
 logger = logging.getLogger(__name__)
+
+
+def _load_cart_snapshot(raw: str | None) -> list[dict[str, object]]:
+    clean = str(raw or "").strip()
+    if not clean:
+        return []
+    try:
+        payload = json.loads(clean)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    rows: list[dict[str, object]] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        product_id = str(item.get("product_id") or "").strip()
+        name = str(item.get("name") or "").strip()
+        if not product_id or not name:
+            continue
+        try:
+            quantity = max(0, int(item.get("quantity") or 0))
+        except (TypeError, ValueError):
+            quantity = 0
+        rows.append(
+            {
+                "product_id": product_id,
+                "name": name,
+                "quantity": quantity,
+                "price": str(item.get("price") or "").strip(),
+            }
+        )
+    return rows
+
+
+def _dump_cart_snapshot(items: list[dict[str, object]]) -> str:
+    normalized = [item for item in items if int(item.get("quantity") or 0) > 0]
+    return json.dumps(normalized, ensure_ascii=False, separators=(",", ":")) if normalized else ""
+
+
+def _apply_cart_actions_to_snapshot(
+    current_snapshot: str | None,
+    cart_actions: list[dict[str, object]] | None,
+) -> str | None:
+    if not cart_actions:
+        return None
+    items = _load_cart_snapshot(current_snapshot)
+    by_product = {str(item.get("product_id") or ""): dict(item) for item in items}
+    for action in cart_actions:
+        if not isinstance(action, dict):
+            continue
+        action_type = str(action.get("type") or "").strip().lower()
+        if action_type == "clear_cart":
+            by_product = {}
+            continue
+        item = action.get("item") if isinstance(action.get("item"), dict) else {}
+        product_id = str(item.get("checkout_product_id") or item.get("product_id") or item.get("variant_id") or "").strip()
+        name = str(item.get("name") or "Producto").strip() or "Producto"
+        try:
+            quantity = max(0, int(item.get("quantity") or 0))
+        except (TypeError, ValueError):
+            quantity = 0
+        if not product_id:
+            continue
+        current = by_product.get(
+            product_id,
+            {
+                "product_id": product_id,
+                "name": name,
+                "quantity": 0,
+                "price": str(item.get("price") or "").strip(),
+            },
+        )
+        current["name"] = name
+        if str(item.get("price") or "").strip():
+            current["price"] = str(item.get("price") or "").strip()
+        current_quantity = max(0, int(current.get("quantity") or 0))
+        if action_type == "add_to_cart":
+            current["quantity"] = current_quantity + max(1, quantity)
+        elif action_type == "remove_from_cart":
+            current["quantity"] = max(0, current_quantity - max(1, quantity))
+        elif action_type == "set_cart_quantity":
+            current["quantity"] = quantity
+        if int(current.get("quantity") or 0) > 0:
+            by_product[product_id] = current
+        else:
+            by_product.pop(product_id, None)
+    return _dump_cart_snapshot(list(by_product.values()))
 logger.setLevel(logging.INFO)
 
 
@@ -1566,6 +1654,7 @@ class AgentService:
         awaiting_slot: str | None = None,
         checkout_stage: str | None = None,
         focused_product: str | None = None,
+        cart_actions: list[dict[str, object]] | None = None,
         reset_workflow: bool = False,
         otp_email: str | None = None,
         authenticated_at: str | None = None,
@@ -1588,6 +1677,7 @@ class AgentService:
             summary.last_product_query = ""
             summary.selected_products = ""
             summary.focused_product = ""
+            summary.cart_snapshot = ""
             summary.shipping_preference = ""
             summary.pickup_location_label = ""
             summary.delivery_address = ""
@@ -1606,6 +1696,7 @@ class AgentService:
         if (intent_label or "").strip().lower() == "clear_cart":
             summary.selected_products = ""
             summary.focused_product = ""
+            summary.cart_snapshot = ""
             summary.last_product_query = ""
             summary.pending_next_step = ""
         if tool_name and tool_name.strip():
@@ -1613,6 +1704,7 @@ class AgentService:
             if tool_name.strip() == "clear_cart":
                 summary.selected_products = ""
                 summary.focused_product = ""
+                summary.cart_snapshot = ""
                 summary.last_product_query = ""
                 summary.pending_next_step = ""
         if product_queries:
@@ -1627,6 +1719,9 @@ class AgentService:
                     summary.focused_product = _normalize_summary_value(clean_products[0], 160)
         if focused_product is not None:
             summary.focused_product = _normalize_summary_value(focused_product, 160) if focused_product.strip() else ""
+        next_cart_snapshot = _apply_cart_actions_to_snapshot(summary.cart_snapshot, cart_actions)
+        if next_cart_snapshot is not None:
+            summary.cart_snapshot = next_cart_snapshot
         if shipping_preference and shipping_preference.strip():
             summary.shipping_preference = _normalize_summary_value(shipping_preference, 120)
         if pickup_location_label and pickup_location_label.strip():

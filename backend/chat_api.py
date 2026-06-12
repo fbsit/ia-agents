@@ -608,6 +608,16 @@ def _payload_awaiting_slot(payload: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _payload_cart_actions(payload: dict[str, Any] | None) -> list[dict[str, object]]:
+    if not isinstance(payload, dict):
+        return []
+    actions = payload.get("cart_actions") if isinstance(payload.get("cart_actions"), list) else None
+    if actions:
+        return [action for action in actions if isinstance(action, dict)]
+    action = payload.get("cart_action") if isinstance(payload.get("cart_action"), dict) else None
+    return [action] if action else []
+
+
 def _update_agent_memory_from_payload(
     *,
     agent_id: str,
@@ -631,6 +641,7 @@ def _update_agent_memory_from_payload(
     selected_products = _payload_product_names(payload)
     focused_product = _payload_focused_product(payload)
     awaiting_slot = _payload_awaiting_slot(payload)
+    cart_actions = _payload_cart_actions(payload)
     shipping_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["envio", "despacho", "retiro", "comuna"]) else None
     payment_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else None
     pickup_location_label = _extract_pickup_location(user_message) or None
@@ -673,6 +684,7 @@ def _update_agent_memory_from_payload(
             awaiting_slot=awaiting_slot,
             checkout_stage=str((payload or {}).get("checkout_stage") or "").strip() or None,
             focused_product=focused_product,
+            cart_actions=cart_actions,
             otp_email=str((payload or {}).get("otp_email") or "").strip() or None,
             authenticated_at=str((payload or {}).get("authenticated_at") or "").strip() or None,
             reset_workflow=bool((payload or {}).get("reset_workflow")),
@@ -794,6 +806,7 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
             "awaiting_slot": summary.awaiting_slot,
             "selected_products": summary.selected_products,
             "focused_product": summary.focused_product,
+            "cart_snapshot": summary.cart_snapshot,
             "shipping_preference": summary.shipping_preference,
             "pickup_location_label": summary.pickup_location_label,
             "delivery_address": summary.delivery_address,
@@ -894,6 +907,46 @@ def _split_memory_session_id(memory_session_id: str) -> tuple[str, str] | None:
 
 def _workflow_timeout_message() -> str:
     return "El proceso quedo pausado por inactividad. Si quieres retomarlo donde lo dejamos, responde 'si' dentro de 3 minutos. Si no, reinicio todo."
+
+
+def _cart_snapshot_items(workflow_state: dict[str, str] | None) -> list[dict[str, object]]:
+    raw = str((workflow_state or {}).get("cart_snapshot") or "").strip()
+    if not raw:
+        return []
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def _build_cart_status_answer_from_snapshot(items: list[dict[str, object]]) -> str:
+    if not items:
+        return "Tu carrito esta vacio. Decime que producto queres llevar y te lo agrego."
+    lines: list[str] = []
+    subtotal = 0
+    for item in items:
+        name = str(item.get("name") or "Producto").strip() or "Producto"
+        try:
+            quantity = max(1, int(item.get("quantity") or 1))
+        except (TypeError, ValueError):
+            quantity = 1
+        price_text = str(item.get("price") or "").strip()
+        line = f"• {name} x{quantity}"
+        digits = re.sub(r"[^0-9]", "", price_text)
+        if digits:
+            unit_price = int(digits)
+            subtotal += unit_price * quantity
+            line += f" — ${unit_price} c/u"
+        elif price_text:
+            line += f" — {price_text}"
+        lines.append(line)
+    answer = "Resumen de tu carrito:\n" + "\n".join(lines)
+    if subtotal > 0:
+        answer += f"\nSubtotal: ${subtotal}"
+    return answer
 
 
 def _process_workflow_reminders_once() -> None:
@@ -3919,12 +3972,7 @@ def _resolve_shared_commerce_payload(
 
     if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "cart_status":
         _trace_route("commerce.resolve_cart_status", session_id=session_id)
-        recent = _recent_commerce_products(session_id)
-        if recent:
-            lines = [f"• {p.get('name', 'Producto')} — ${p.get('price', '?')}" for p in recent[:5]]
-            answer = "Resumen de tu carrito:\n" + "\n".join(lines)
-        else:
-            answer = "Tu carrito esta vacio. Decime que producto queres llevar y te lo agrego."
+        answer = _build_cart_status_answer_from_snapshot(_cart_snapshot_items(workflow_state))
         return {
             "answer": answer,
             "intent_label": "cart_status",

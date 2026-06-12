@@ -98,6 +98,7 @@ class RedisSessionStore:
             last_product_query=str(payload.get("last_product_query", "")),
             selected_products=str(payload.get("selected_products", "")),
             focused_product=str(payload.get("focused_product", "")),
+            cart_snapshot=str(payload.get("cart_snapshot", "")),
             shipping_preference=str(payload.get("shipping_preference", "")),
             pickup_location_label=str(payload.get("pickup_location_label", "")),
             delivery_address=str(payload.get("delivery_address", "")),
