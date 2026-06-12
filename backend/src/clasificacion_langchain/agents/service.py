@@ -1563,7 +1563,9 @@ class AgentService:
         notes: str | None = None,
         workflow_stage: str | None = None,
         pending_next_step: str | None = None,
+        awaiting_slot: str | None = None,
         checkout_stage: str | None = None,
+        focused_product: str | None = None,
         reset_workflow: bool = False,
         otp_email: str | None = None,
         authenticated_at: str | None = None,
@@ -1582,8 +1584,10 @@ class AgentService:
             summary.funnel_stage = "browsing"
             summary.checkout_stage = ""
             summary.pending_next_step = ""
+            summary.awaiting_slot = ""
             summary.last_product_query = ""
             summary.selected_products = ""
+            summary.focused_product = ""
             summary.shipping_preference = ""
             summary.pickup_location_label = ""
             summary.delivery_address = ""
@@ -1601,12 +1605,14 @@ class AgentService:
             summary.user_goal = _normalize_summary_value(user_message, 180)
         if (intent_label or "").strip().lower() == "clear_cart":
             summary.selected_products = ""
+            summary.focused_product = ""
             summary.last_product_query = ""
             summary.pending_next_step = ""
         if tool_name and tool_name.strip():
             summary.last_tool = tool_name.strip()
             if tool_name.strip() == "clear_cart":
                 summary.selected_products = ""
+                summary.focused_product = ""
                 summary.last_product_query = ""
                 summary.pending_next_step = ""
         if product_queries:
@@ -1617,6 +1623,10 @@ class AgentService:
             clean_products = [item.strip() for item in selected_products if item and item.strip()]
             if clean_products:
                 summary.selected_products = _normalize_summary_value(", ".join(clean_products), 220)
+                if not focused_product:
+                    summary.focused_product = _normalize_summary_value(clean_products[0], 160)
+        if focused_product is not None:
+            summary.focused_product = _normalize_summary_value(focused_product, 160) if focused_product.strip() else ""
         if shipping_preference and shipping_preference.strip():
             summary.shipping_preference = _normalize_summary_value(shipping_preference, 120)
         if pickup_location_label and pickup_location_label.strip():
@@ -1645,6 +1655,8 @@ class AgentService:
             summary.notes = _normalize_summary_value(notes, 180)
         if pending_next_step is not None:
             summary.pending_next_step = _normalize_summary_value(pending_next_step, 120) if pending_next_step.strip() else ""
+        if awaiting_slot is not None:
+            summary.awaiting_slot = _normalize_summary_value(awaiting_slot, 120) if awaiting_slot.strip() else ""
         if checkout_stage is not None:
             summary.checkout_stage = _normalize_summary_value(checkout_stage, 80) if checkout_stage.strip() else ""
         if otp_email is not None:

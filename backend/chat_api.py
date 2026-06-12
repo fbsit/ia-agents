@@ -278,6 +278,101 @@ def _match_recent_product_from_message(message: str, session_id: str) -> dict[st
     return None
 
 
+def _is_quantity_only_followup(message: str) -> bool:
+    normalized = _normalize_widget_text(message)
+    if not normalized:
+        return False
+    if normalized.isdigit() or normalized in _WIDGET_QUANTITY_WORDS:
+        return True
+    return bool(re.fullmatch(r"(?:si\s+)?(?:quiero\s+)?\d+", normalized))
+
+
+def _resolve_focused_product_context(message: str, workflow_state: dict[str, str] | None, session_id: str) -> tuple[str, str] | None:
+    focused_product = str((workflow_state or {}).get("focused_product") or "").strip()
+    if focused_product:
+        return focused_product, focused_product
+
+    selected_products = _selected_product_requests_from_workflow_state(workflow_state)
+    if selected_products:
+        selected_name = str(selected_products[0].get("product_query") or "").strip()
+        if selected_name:
+            return selected_name, selected_name
+
+    matched_product = _match_recent_product_from_message(message, session_id)
+    if isinstance(matched_product, dict):
+        product_name = str(matched_product.get("name") or "").strip()
+        if product_name:
+            return product_name, product_name
+    recent_products = _recent_commerce_products(session_id)
+    if recent_products:
+        first_name = str(recent_products[0].get("name") or "").strip()
+        if first_name:
+            return first_name, first_name
+    return None
+
+
+def _resolve_quantity_or_action_followup(
+    *,
+    company_id: str,
+    user_id: str,
+    channel: str,
+    message: str,
+    session_id: str,
+    workflow_state: dict[str, str] | None,
+    clubhx_tools_client: ClubHxToolsClient,
+) -> dict[str, Any] | None:
+    awaiting_slot = str((workflow_state or {}).get("awaiting_slot") or "").strip().lower()
+    pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
+    workflow_stage = str((workflow_state or {}).get("stage") or "").strip().lower()
+    if awaiting_slot != "quantity_or_action" and pending_next_step != "add_to_cart" and workflow_stage != "product_lookup":
+        return None
+
+    resolved = _resolve_focused_product_context(message, workflow_state, session_id)
+    if resolved is None:
+        return None
+    product_query, focused_product = resolved
+    normalized_message = _normalize_widget_text(message)
+    should_add = (
+        _is_implicit_add_to_cart_message(message)
+        or _is_quantity_only_followup(message)
+        or bool(_match_recent_product_from_message(message, session_id))
+        or normalized_message == _normalize_widget_text(focused_product)
+        or normalized_message == f"el {_normalize_widget_text(focused_product)}"
+        or normalized_message == f"la {_normalize_widget_text(focused_product)}"
+    )
+    if not should_add:
+        return None
+
+    quantity = _parse_widget_quantity(message)
+    cart_request = {"product_query": product_query, "quantity": quantity}
+    try:
+        canonical_result = clubhx_tools_client.execute_canonical(
+            tenant_id=company_id,
+            tool="get_product_availability",
+            channel=channel,
+            user_id=user_id,
+            arguments={
+                "query": product_query,
+                "limit": 5,
+                "session_id": session_id,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "commerce_quantity_followup_lookup_failed session_id=%s query=%s detail=%s",
+            session_id,
+            product_query,
+            exc,
+        )
+        return None
+
+    payload = _build_multi_cart_tool_payload([canonical_result], [cart_request])
+    if isinstance(payload, dict):
+        payload["focused_product"] = focused_product
+        payload["awaiting_slot"] = "shipping_method"
+    return payload
+
+
 def _build_recent_product_add_to_cart_payload(
     *,
     company_id: str,
@@ -457,6 +552,30 @@ def _payload_product_names(payload: dict[str, Any] | None) -> list[str]:
     return names
 
 
+def _payload_focused_product(payload: dict[str, Any] | None) -> str | None:
+    names = _payload_product_names(payload)
+    if names:
+        return names[0]
+    return None
+
+
+def _payload_awaiting_slot(payload: dict[str, Any] | None) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    explicit = str(payload.get("awaiting_slot") or "").strip()
+    if explicit:
+        return explicit
+    pending_next_step = str(payload.get("pending_next_step") or "").strip().lower()
+    workflow_stage = str(payload.get("workflow_stage") or "").strip().lower()
+    if pending_next_step == "add_to_cart" or workflow_stage == "product_lookup":
+        return "quantity_or_action"
+    if pending_next_step == "shipping_selection":
+        return "shipping_method"
+    if pending_next_step == "payment_selection":
+        return "payment_method"
+    return None
+
+
 def _update_agent_memory_from_payload(
     *,
     agent_id: str,
@@ -478,6 +597,8 @@ def _update_agent_memory_from_payload(
     tool_name = fallback_tool or ""
     product_queries = _product_lookup_queries_from_message(user_message)
     selected_products = _payload_product_names(payload)
+    focused_product = _payload_focused_product(payload)
+    awaiting_slot = _payload_awaiting_slot(payload)
     shipping_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["envio", "despacho", "retiro", "comuna"]) else None
     payment_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else None
     pickup_location_label = _extract_pickup_location(user_message) or None
@@ -517,7 +638,9 @@ def _update_agent_memory_from_payload(
             order_reference=None,
             workflow_stage=str((payload or {}).get("workflow_stage") or "").strip() or None,
             pending_next_step=str((payload or {}).get("pending_next_step") or "").strip() or None,
+            awaiting_slot=awaiting_slot,
             checkout_stage=str((payload or {}).get("checkout_stage") or "").strip() or None,
+            focused_product=focused_product,
             otp_email=str((payload or {}).get("otp_email") or "").strip() or None,
             authenticated_at=str((payload or {}).get("authenticated_at") or "").strip() or None,
             reset_workflow=bool((payload or {}).get("reset_workflow")),
@@ -572,7 +695,9 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
                 summary.funnel_stage,
                 summary.checkout_stage,
                 summary.pending_next_step,
+                summary.awaiting_slot,
                 summary.selected_products,
+                summary.focused_product,
                 summary.shipping_preference,
                 summary.pickup_location_label,
                 summary.delivery_address,
@@ -634,7 +759,9 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
             "stage": summary.funnel_stage,
             "checkout_stage": summary.checkout_stage,
             "pending_next_step": summary.pending_next_step,
+            "awaiting_slot": summary.awaiting_slot,
             "selected_products": summary.selected_products,
+            "focused_product": summary.focused_product,
             "shipping_preference": summary.shipping_preference,
             "pickup_location_label": summary.pickup_location_label,
             "delivery_address": summary.delivery_address,
@@ -697,7 +824,9 @@ def _summary_has_active_workflow(summary: SessionSummary) -> bool:
             summary.funnel_stage,
             summary.checkout_stage,
             summary.pending_next_step,
+            summary.awaiting_slot,
             summary.selected_products,
+            summary.focused_product,
             summary.shipping_preference,
             summary.pickup_location_label,
             summary.delivery_address,
@@ -2860,16 +2989,20 @@ def _format_public_widget_tool_payload(
             return {
                 "answer": answer,
                 "products": products[:3],
+                "focused_product": first["name"],
                 "workflow_stage": "product_lookup",
                 "pending_next_step": "add_to_cart",
+                "awaiting_slot": "quantity_or_action",
             }
 
         formatted = "\n".join(f"• {p['name']} — ${p['price']}" for p in products[:5] if p.get('name'))
         return {
             "answer": f"Te paso las opciones que tengo:\n{formatted}" if formatted else "No encontre productos.",
             "products": products,
+            "focused_product": products[0]["name"] if products else "",
             "workflow_stage": "product_lookup",
             "pending_next_step": "add_to_cart",
+            "awaiting_slot": "quantity_or_action",
         }
 
     if tool == "get_shipping_options":
@@ -3055,8 +3188,10 @@ def _build_multi_cart_tool_payload(
         "cart_action": cart_actions[0],
         "cart_actions": cart_actions,
         "products": products[:6],
+        "focused_product": str(((cart_actions[0].get("item") or {}).get("name") or "")).strip(),
         "workflow_stage": "cart_building",
         "pending_next_step": "shipping_selection",
+        "awaiting_slot": "shipping_method",
     }
 
 
@@ -3131,8 +3266,10 @@ def _build_multi_product_lookup_payload(
     return {
         "answer": answer,
         "products": products[:6],
+        "focused_product": products[0]["name"] if products else "",
         "workflow_stage": "product_lookup",
-        "pending_next_step": "cart_building",
+        "pending_next_step": "add_to_cart",
+        "awaiting_slot": "quantity_or_action",
     }
 
 
@@ -3401,6 +3538,30 @@ def _resolve_shared_commerce_payload(
         str((workflow_state or {}).get("selected_products") or ""),
         str((workflow_state or {}).get("shipping_preference") or ""),
     )
+
+    quantity_or_action_payload = _resolve_quantity_or_action_followup(
+        company_id=company_id,
+        user_id=user_id,
+        channel=channel,
+        message=message,
+        session_id=session_id,
+        workflow_state=workflow_state,
+        clubhx_tools_client=clubhx_tools_client,
+    )
+    if quantity_or_action_payload:
+        _trace_route(
+            "commerce.resolve_quantity_or_action_followup",
+            session_id=session_id,
+            workflow_stage=str(quantity_or_action_payload.get("workflow_stage") or ""),
+            pending_next_step=str(quantity_or_action_payload.get("pending_next_step") or ""),
+        )
+        logger.warning(
+            "commerce_router_resolved kind=quantity_or_action_followup session_id=%s product=%s quantity=%s",
+            session_id,
+            str((((quantity_or_action_payload.get("cart_action") or {}).get("item") or {}).get("name") or "")),
+            str((((quantity_or_action_payload.get("cart_action") or {}).get("item") or {}).get("quantity") or "")),
+        )
+        return quantity_or_action_payload
 
     followup_payload = _resolve_affirmative_workflow_followup(
         message=message,
