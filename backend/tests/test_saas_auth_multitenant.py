@@ -3576,6 +3576,35 @@ def test_persisted_payment_method_allows_boleta_followup(monkeypatch: pytest.Mon
     assert payload["checkout_stage"] == "order_summary_pending"
 
 
+def test_document_type_pending_with_persisted_boleta_skips_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(module, "_parse_commerce_intent_with_openai", lambda *args, **kwargs: {"intent": "create_order_draft", "tool": "create_order_draft", "query": "boleta", "needs_clarification": False})
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="56912345678",
+        session_id="56912345678",
+        message="boleta",
+        channel="whatsapp",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "stage": "payment_selection",
+            "checkout_stage": "document_type_pending",
+            "pending_next_step": "document_type",
+            "invoice_type": "boleta",
+            "payment_preference": "Transferencia bancaria",
+        },
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "invoice_summary_ready"
+    assert payload["checkout_stage"] == "order_summary_pending"
+
+
 def test_order_confirmation_creates_order_draft(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

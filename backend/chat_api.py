@@ -670,6 +670,24 @@ def _update_agent_memory_from_payload(
         if intent in {"checkout_auth_confirmed", "checkout_otp_sent", "checkout_otp_invalid"}:
             customer_authenticated = intent == "checkout_auth_confirmed"
     try:
+        _trace_route(
+            "memory.update_request",
+            agent_id=agent_id,
+            company_id=company_id,
+            session_id=session_id,
+            intent_label=intent_label,
+            workflow_stage=str((payload or {}).get("workflow_stage") or ""),
+            checkout_stage=str((payload or {}).get("checkout_stage") or ""),
+            pending_next_step=str((payload or {}).get("pending_next_step") or ""),
+            awaiting_slot=awaiting_slot or "",
+            selected_products=selected_products,
+            focused_product=focused_product or "",
+            shipping_preference=shipping_preference or "",
+            payment_preference=payment_preference or "",
+            invoice_type=invoice_type or "",
+            invoice_address=invoice_address or "",
+            saved_addresses=saved_addresses or "",
+        )
         agent_service.update_session_summary(
             company_id=company_id,
             agent_id=agent_id,
@@ -813,6 +831,24 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
                     customer_authenticated = False
             except (ValueError, TypeError):
                 pass
+        _trace_route(
+            "workflow_state.read",
+            company_id=company_id,
+            agent_id=agent_id,
+            session_id=session_id,
+            stage=summary.funnel_stage,
+            checkout_stage=summary.checkout_stage,
+            pending_next_step=summary.pending_next_step,
+            awaiting_slot=summary.awaiting_slot,
+            selected_products=summary.selected_products,
+            focused_product=summary.focused_product,
+            shipping_preference=summary.shipping_preference,
+            payment_preference=summary.payment_preference,
+            invoice_type=summary.invoice_type,
+            invoice_address=summary.invoice_address,
+            saved_addresses=summary.saved_addresses,
+            authenticated=customer_authenticated,
+        )
         return {
             "stage": summary.funnel_stage,
             "checkout_stage": summary.checkout_stage,
@@ -1782,6 +1818,68 @@ def _resolve_checkout_workflow_followup(
     current_rut = str((workflow_state or {}).get("invoice_rut") or "").strip()
     current_business_name = str((workflow_state or {}).get("invoice_business_name") or "").strip()
     current_invoice_address = str((workflow_state or {}).get("invoice_address") or "").strip()
+
+    if current_checkout_stage == "document_type_pending" and current_invoice_type == "boleta":
+        _trace_route(
+            "checkout_followup.document_type_resolved",
+            session_id=session_id,
+            document_type="boleta",
+            source="workflow_state",
+            next_checkout_stage="order_summary_pending",
+        )
+        return {
+            "answer": "Perfecto, se emite boleta. Si esta correcto, confirmamelo y te genero el siguiente paso.",
+            "intent_label": "invoice_summary_ready",
+            "workflow_stage": "payment_selection",
+            "checkout_stage": "order_summary_pending",
+            "pending_next_step": "order_confirmation",
+            "workflow_action": _workflow_action("invoice_summary_ready", invoice_type="boleta"),
+        }
+
+    if current_checkout_stage == "document_type_pending" and current_invoice_type == "factura":
+        delivery_addr = str((workflow_state or {}).get("delivery_address") or "").strip()
+        saved_addresses = _fetch_saved_addresses_for_user(
+            clubhx_tools_client=clubhx_tools_client,
+            company_id=company_id,
+            user_id=user_id,
+            channel=channel,
+        )
+        _trace_route(
+            "checkout_followup.document_type_resolved",
+            session_id=session_id,
+            document_type="factura",
+            source="workflow_state",
+            saved_addresses_count=len(saved_addresses),
+            has_delivery_address=bool(delivery_addr),
+            next_checkout_stage="invoice_address_pending",
+        )
+        if saved_addresses:
+            return {
+                "answer": _saved_addresses_prompt(saved_addresses),
+                "intent_label": "invoice_address_pending",
+                "workflow_stage": "payment_selection",
+                "checkout_stage": "invoice_address_pending",
+                "pending_next_step": "invoice_address",
+                "saved_addresses": saved_addresses,
+                "workflow_action": _workflow_action("request_invoice_address"),
+            }
+        if delivery_addr:
+            return {
+                "answer": f"La direccion de facturacion es la misma de despacho?\n{delivery_addr}",
+                "intent_label": "invoice_address_pending",
+                "workflow_stage": "payment_selection",
+                "checkout_stage": "invoice_address_pending",
+                "pending_next_step": "invoice_address",
+                "workflow_action": _workflow_action("request_invoice_address", delivery_address=delivery_addr),
+            }
+        return {
+            "answer": "Dime la direccion de facturacion (calle, numero, comuna).",
+            "intent_label": "invoice_address_pending",
+            "workflow_stage": "payment_selection",
+            "checkout_stage": "invoice_address_pending",
+            "pending_next_step": "invoice_address",
+            "workflow_action": _workflow_action("request_invoice_address"),
+        }
 
     if past_shipping and not current_invoice_type:
         invoice_data = _extract_invoice_data(message, session_id=session_id)
