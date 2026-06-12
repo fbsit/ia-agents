@@ -33,6 +33,7 @@ class SessionSummary:
     invoice_business_name: str = ""
     invoice_address: str = ""
     payment_preference: str = ""
+    saved_addresses: str = ""
     customer_authenticated: bool = False
     order_reference: str = ""
     otp_email: str = ""

@@ -3544,6 +3544,83 @@ def test_order_confirmation_creates_order_draft(monkeypatch: pytest.MonkeyPatch)
     assert payload["redirect_to"] == "https://pay.test/link"
 
 
+def test_factura_offers_saved_addresses(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            assert tool == "get_addresses"
+            return {
+                "ok": True,
+                "data": {
+                    "addresses": [
+                        {"name": "Casa", "street": "Av Siempre Viva 742", "city": "Springfield"},
+                        {"name": "Oficina", "street": "Calle Falsa 123", "city": "Santiago"},
+                    ]
+                },
+            }
+
+    payload = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="factura",
+        session_id="56912345678",
+        workflow_state={
+            "checkout_stage": "document_type_pending",
+            "pending_next_step": "document_type",
+            "payment_preference": "mercado_pago",
+            "delivery_address": "Mi despacho 123, Santiago",
+        },
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert payload["checkout_stage"] == "invoice_data_pending"
+
+    payload2 = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="RUT 76.123.456-7, Razon social: Empresa SAC",
+        session_id="56912345678",
+        workflow_state={
+            "checkout_stage": "invoice_data_pending",
+            "pending_next_step": "invoice_data",
+            "invoice_type": "factura",
+            "delivery_address": "Mi despacho 123, Santiago",
+        },
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload2 is not None
+    assert payload2["checkout_stage"] == "invoice_address_pending"
+    assert "Casa" in payload2["answer"]
+    assert isinstance(payload2.get("saved_addresses"), list)
+
+
+def test_invoice_address_pending_accepts_saved_address_number(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    payload = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="2",
+        session_id="56912345678",
+        workflow_state={
+            "checkout_stage": "invoice_address_pending",
+            "pending_next_step": "invoice_address",
+            "saved_addresses": '[{"label":"Casa","address":"Av Siempre Viva 742, Springfield"},{"label":"Oficina","address":"Calle Falsa 123, Santiago"}]',
+        },
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=object(),
+    )
+
+    assert payload is not None
+    assert payload["checkout_stage"] == "order_summary_pending"
+    assert "Calle Falsa 123, Santiago" in payload["answer"]
+
+
 def test_cart_status_uses_persisted_cart_quantities(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

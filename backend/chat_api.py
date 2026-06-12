@@ -618,6 +618,16 @@ def _payload_cart_actions(payload: dict[str, Any] | None) -> list[dict[str, obje
     return [action] if action else []
 
 
+def _payload_saved_addresses(payload: dict[str, Any] | None) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    addresses = payload.get("saved_addresses") if isinstance(payload.get("saved_addresses"), list) else None
+    if addresses is None:
+        return None
+    safe_addresses = [address for address in addresses if isinstance(address, dict)]
+    return json.dumps(safe_addresses, ensure_ascii=False, separators=(",", ":")) if safe_addresses else ""
+
+
 def _update_agent_memory_from_payload(
     *,
     agent_id: str,
@@ -643,6 +653,7 @@ def _update_agent_memory_from_payload(
     awaiting_slot = _payload_awaiting_slot(payload)
     cart_actions = _payload_cart_actions(payload)
     cart_products = [product for product in ((payload or {}).get("products") if isinstance((payload or {}).get("products"), list) else []) if isinstance(product, dict)]
+    saved_addresses = _payload_saved_addresses(payload)
     shipping_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["envio", "despacho", "retiro", "comuna"]) else None
     payment_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else None
     pickup_location_label = _extract_pickup_location(user_message) or None
@@ -678,6 +689,7 @@ def _update_agent_memory_from_payload(
             invoice_business_name=invoice_business_name,
             invoice_address=invoice_address,
             payment_preference=payment_preference,
+            saved_addresses=saved_addresses,
             customer_authenticated=customer_authenticated,
             order_reference=None,
             workflow_stage=str((payload or {}).get("workflow_stage") or "").strip() or None,
@@ -818,6 +830,7 @@ def _agent_workflow_state(company_id: str, agent_id: str, session_id: str) -> di
             "invoice_business_name": summary.invoice_business_name,
             "invoice_address": summary.invoice_address,
             "payment_preference": summary.payment_preference,
+            "saved_addresses": summary.saved_addresses,
             "customer_authenticated": "true" if customer_authenticated else "",
             "order_reference": summary.order_reference,
             "otp_email": summary.otp_email,
@@ -949,6 +962,85 @@ def _build_cart_status_answer_from_snapshot(items: list[dict[str, object]]) -> s
     if subtotal > 0:
         answer += f"\nSubtotal: ${subtotal}"
     return answer
+
+
+def _saved_addresses_from_workflow_state(workflow_state: dict[str, str] | None) -> list[dict[str, str]]:
+    raw = str((workflow_state or {}).get("saved_addresses") or "").strip()
+    if not raw:
+        return []
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    rows: list[dict[str, str]] = []
+    for index, item in enumerate(payload, start=1):
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or item.get("name") or f"Direccion {index}").strip() or f"Direccion {index}"
+        address = str(item.get("address") or item.get("full_address") or item.get("street") or "").strip()
+        if not address:
+            continue
+        rows.append({"label": label, "address": address})
+    return rows
+
+
+def _fetch_saved_addresses_for_user(
+    *,
+    clubhx_tools_client: Any | None,
+    company_id: str | None,
+    user_id: str | None,
+    channel: str | None,
+) -> list[dict[str, str]]:
+    if clubhx_tools_client is None or not user_id:
+        return []
+    try:
+        result = clubhx_tools_client.execute_canonical(
+            tenant_id=company_id or "",
+            tool="get_addresses",
+            channel=channel or "",
+            user_id=user_id,
+            arguments={},
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.info("saved_addresses_unavailable user_id=%s detail=%s", user_id, exc)
+        return []
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    rows = data.get("items") if isinstance(data.get("items"), list) else data.get("addresses") if isinstance(data.get("addresses"), list) else []
+    addresses: list[dict[str, str]] = []
+    for index, item in enumerate(rows, start=1):
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or item.get("name") or f"Direccion {index}").strip() or f"Direccion {index}"
+        street = str(item.get("street") or item.get("address") or item.get("full_address") or "").strip()
+        city = str(item.get("city") or item.get("commune") or "").strip()
+        address = ", ".join(part for part in [street, city] if part)
+        if not address:
+            continue
+        addresses.append({"label": label, "address": address})
+    return addresses
+
+
+def _saved_addresses_prompt(addresses: list[dict[str, str]]) -> str:
+    lines = [f"{index}. {row['label']}: {row['address']}" for index, row in enumerate(addresses, start=1)]
+    return "Puedo usar una de tus direcciones guardadas para la factura:\n" + "\n".join(lines) + "\nDime el numero, el nombre o escribeme una direccion nueva."
+
+
+def _match_saved_address_choice(message: str, addresses: list[dict[str, str]]) -> str:
+    normalized = _normalize_widget_text(message)
+    if not normalized or not addresses:
+        return ""
+    if normalized.isdigit():
+        index = int(normalized)
+        if 1 <= index <= len(addresses):
+            return addresses[index - 1]["address"]
+    for row in addresses:
+        label = _normalize_widget_text(row.get("label") or "")
+        address = _normalize_widget_text(row.get("address") or "")
+        if normalized == label or normalized == address or normalized in label:
+            return row["address"]
+    return ""
 
 
 def _enrich_cart_snapshot_prices(
@@ -1654,7 +1746,8 @@ def _resolve_checkout_workflow_followup(
         }
 
     address = _extract_address(message)
-    if address:
+    fiscal_checkout_stage = current_checkout_stage.lower() in {"document_type_pending", "invoice_data_pending", "invoice_address_pending"}
+    if address and not fiscal_checkout_stage:
         return {
             "answer": f"Encontre esta direccion de despacho:\n{address}\n\nEsta correcta?",
             "intent_label": "delivery_address_proposed",
@@ -1707,6 +1800,22 @@ def _resolve_checkout_workflow_followup(
                     "checkout_stage": "invoice_data_pending",
                     "pending_next_step": "invoice_data",
                     "workflow_action": _workflow_action("request_invoice_data"),
+                }
+            saved_addresses = _fetch_saved_addresses_for_user(
+                clubhx_tools_client=clubhx_tools_client,
+                company_id=company_id,
+                user_id=user_id,
+                channel=channel,
+            )
+            if saved_addresses:
+                return {
+                    "answer": _saved_addresses_prompt(saved_addresses),
+                    "intent_label": "invoice_address_pending",
+                    "workflow_stage": "payment_selection",
+                    "checkout_stage": "invoice_address_pending",
+                    "pending_next_step": "invoice_address",
+                    "saved_addresses": saved_addresses,
+                    "workflow_action": _workflow_action("request_invoice_address"),
                 }
             if not invoice_addr and delivery_addr:
                 return {
@@ -1767,6 +1876,22 @@ def _resolve_checkout_workflow_followup(
                 return {"answer": "Falta el RUT para la factura. Ej: 76.123.456-7"}
             if not business_name:
                 return {"answer": f"Falta la razon social. RUT: {rut}. Cual es el nombre de la empresa?"}
+            saved_addresses = _fetch_saved_addresses_for_user(
+                clubhx_tools_client=clubhx_tools_client,
+                company_id=company_id,
+                user_id=user_id,
+                channel=channel,
+            )
+            if saved_addresses:
+                return {
+                    "answer": _saved_addresses_prompt(saved_addresses),
+                    "intent_label": "invoice_address_pending",
+                    "workflow_stage": "payment_selection",
+                    "checkout_stage": "invoice_address_pending",
+                    "pending_next_step": "invoice_address",
+                    "saved_addresses": saved_addresses,
+                    "workflow_action": _workflow_action("request_invoice_address"),
+                }
             if not invoice_addr and delivery_addr:
                 return {
                     "answer": f"La direccion de facturacion es la misma de despacho?\n{delivery_addr}",
@@ -1794,6 +1919,23 @@ def _resolve_checkout_workflow_followup(
 
     if current_checkout_stage == "invoice_address_pending":
         delivery_addr = str((workflow_state or {}).get("delivery_address") or "").strip()
+        saved_addresses = _saved_addresses_from_workflow_state(workflow_state)
+        selected_saved_address = _match_saved_address_choice(message, saved_addresses)
+        if selected_saved_address:
+            return {
+                "answer": (
+                    f"Direccion de facturacion: {selected_saved_address}.\n"
+                    "Si esta correcto, confirmamelo y te genero el siguiente paso."
+                ),
+                "intent_label": "invoice_address_confirmed",
+                "workflow_stage": "payment_selection",
+                "checkout_stage": "order_summary_pending",
+                "pending_next_step": "order_confirmation",
+                "saved_addresses": saved_addresses,
+                "workflow_action": _workflow_action(
+                    "invoice_address_confirmed", invoice_address=selected_saved_address,
+                ),
+            }
         if _is_address_confirmation(message) and delivery_addr:
             return {
                 "answer": (

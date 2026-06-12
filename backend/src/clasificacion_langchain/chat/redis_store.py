@@ -108,6 +108,7 @@ class RedisSessionStore:
             invoice_business_name=str(payload.get("invoice_business_name", "")),
             invoice_address=str(payload.get("invoice_address", "")),
             payment_preference=str(payload.get("payment_preference", "")),
+            saved_addresses=str(payload.get("saved_addresses", "")),
             customer_authenticated=bool(payload.get("customer_authenticated", False)),
             order_reference=str(payload.get("order_reference", "")),
             otp_email=str(payload.get("otp_email", "")),

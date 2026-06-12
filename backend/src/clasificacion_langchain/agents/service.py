@@ -1660,6 +1660,7 @@ class AgentService:
         invoice_business_name: str | None = None,
         invoice_address: str | None = None,
         customer_authenticated: bool | None = None,
+        saved_addresses: str | None = None,
         order_reference: str | None = None,
         notes: str | None = None,
         workflow_stage: str | None = None,
@@ -1697,6 +1698,7 @@ class AgentService:
             summary.delivery_address = ""
             summary.delivery_address_confirmed = False
             summary.payment_preference = ""
+            summary.saved_addresses = ""
             summary.customer_authenticated = False
             summary.order_reference = ""
             summary.otp_email = ""
@@ -1754,6 +1756,8 @@ class AgentService:
             summary.invoice_address = _normalize_summary_value(invoice_address, 200)
         if payment_preference and payment_preference.strip():
             summary.payment_preference = _normalize_summary_value(payment_preference, 120)
+        if saved_addresses is not None:
+            summary.saved_addresses = saved_addresses.strip() if saved_addresses.strip() else ""
         if customer_authenticated is not None:
             summary.customer_authenticated = bool(customer_authenticated)
         if order_reference and order_reference.strip():
