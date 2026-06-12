@@ -3600,27 +3600,9 @@ def test_factura_offers_saved_addresses(monkeypatch: pytest.MonkeyPatch) -> None
     )
 
     assert payload is not None
-    assert payload["checkout_stage"] == "invoice_data_pending"
-
-    payload2 = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
-        message="RUT 76.123.456-7, Razon social: Empresa SAC",
-        session_id="56912345678",
-        workflow_state={
-            "checkout_stage": "invoice_data_pending",
-            "pending_next_step": "invoice_data",
-            "invoice_type": "factura",
-            "delivery_address": "Mi despacho 123, Santiago",
-        },
-        company_id="demo-company",
-        channel="whatsapp",
-        user_id="user-1",
-        clubhx_tools_client=FakeToolsClient(),
-    )
-
-    assert payload2 is not None
-    assert payload2["checkout_stage"] == "invoice_address_pending"
-    assert "Casa" in payload2["answer"]
-    assert isinstance(payload2.get("saved_addresses"), list)
+    assert payload["checkout_stage"] == "invoice_address_pending"
+    assert "Casa" in payload["answer"]
+    assert isinstance(payload.get("saved_addresses"), list)
 
 
 def test_invoice_address_pending_accepts_saved_address_number(monkeypatch: pytest.MonkeyPatch) -> None:

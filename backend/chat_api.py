@@ -1788,19 +1788,8 @@ def _resolve_checkout_workflow_followup(
         factura_match = invoice_data.get("invoice_type") == "factura"
         boleta_match = invoice_data.get("invoice_type") == "boleta"
         if factura_match:
-            rut = invoice_data.get("rut") or current_rut
-            business_name = invoice_data.get("business_name") or current_business_name
             invoice_addr = invoice_data.get("invoice_address") or current_invoice_address
             delivery_addr = str((workflow_state or {}).get("delivery_address") or "").strip()
-            if not rut or not business_name:
-                return {
-                    "answer": "Perfecto. Necesito tu RUT y razon social para la factura. Ej: RUT 76.123.456-7, Razon social: Empresa SAC",
-                    "intent_label": "invoice_data_pending",
-                    "workflow_stage": "payment_selection",
-                    "checkout_stage": "invoice_data_pending",
-                    "pending_next_step": "invoice_data",
-                    "workflow_action": _workflow_action("request_invoice_data"),
-                }
             saved_addresses = _fetch_saved_addresses_for_user(
                 clubhx_tools_client=clubhx_tools_client,
                 company_id=company_id,
@@ -1840,7 +1829,7 @@ def _resolve_checkout_workflow_followup(
                 }
             return {
                 "answer": (
-                    f"Perfecto, tengo factura a nombre de {business_name}, RUT {rut} y direccion {invoice_addr}.\n"
+                    f"Perfecto, usare direccion de factura: {invoice_addr}.\n"
                     "Si esta correcto, confirmamelo y te genero el siguiente paso."
                 ),
                 "intent_label": "invoice_summary_ready",
@@ -1849,8 +1838,7 @@ def _resolve_checkout_workflow_followup(
                 "pending_next_step": "order_confirmation",
                 "workflow_action": _workflow_action(
                     "invoice_summary_ready",
-                    rut=rut,
-                    business_name=business_name,
+                    invoice_type="factura",
                     invoice_address=invoice_addr,
                 ),
             }
@@ -1866,16 +1854,10 @@ def _resolve_checkout_workflow_followup(
 
     if current_invoice_type == "factura" and current_checkout_stage in {"invoice_data_pending", "delivery_address_confirmed", "pickup_location_selected"}:
         invoice_data = _extract_invoice_data(message, session_id=session_id)
-        rut = invoice_data.get("rut") or current_rut
-        business_name = invoice_data.get("business_name") or current_business_name
         invoice_addr = invoice_data.get("invoice_address") or current_invoice_address
         delivery_addr = str((workflow_state or {}).get("delivery_address") or "").strip()
-        has_new_data = bool(rut) or bool(business_name) or bool(invoice_addr)
+        has_new_data = bool(invoice_addr)
         if has_new_data:
-            if not rut:
-                return {"answer": "Falta el RUT para la factura. Ej: 76.123.456-7"}
-            if not business_name:
-                return {"answer": f"Falta la razon social. RUT: {rut}. Cual es el nombre de la empresa?"}
             saved_addresses = _fetch_saved_addresses_for_user(
                 clubhx_tools_client=clubhx_tools_client,
                 company_id=company_id,
@@ -1905,7 +1887,7 @@ def _resolve_checkout_workflow_followup(
                 return {"answer": "Dime la direccion de facturacion (calle, numero, comuna)."}
             return {
                 "answer": (
-                    f"Perfecto, tengo factura a nombre de {business_name}, RUT {rut} y direccion {invoice_addr}.\n"
+                    f"Perfecto, usare direccion de factura: {invoice_addr}.\n"
                     "Si esta correcto, confirmamelo y te genero el siguiente paso."
                 ),
                 "intent_label": "invoice_summary_ready",
@@ -1913,7 +1895,7 @@ def _resolve_checkout_workflow_followup(
                 "checkout_stage": "order_summary_pending",
                 "pending_next_step": "order_confirmation",
                 "workflow_action": _workflow_action(
-                    "invoice_summary_ready", rut=rut, business_name=business_name, invoice_address=invoice_addr,
+                    "invoice_summary_ready", invoice_type="factura", invoice_address=invoice_addr,
                 ),
             }
 
