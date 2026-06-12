@@ -951,6 +951,51 @@ def _build_cart_status_answer_from_snapshot(items: list[dict[str, object]]) -> s
     return answer
 
 
+def _enrich_cart_snapshot_prices(
+    *,
+    items: list[dict[str, object]],
+    company_id: str,
+    user_id: str,
+    channel: str,
+    session_id: str,
+    clubhx_tools_client: ClubHxToolsClient | None,
+) -> list[dict[str, object]]:
+    if clubhx_tools_client is None:
+        return items
+    enriched: list[dict[str, object]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("price") or "").strip():
+            enriched.append(item)
+            continue
+        product_name = str(item.get("name") or "").strip()
+        if not product_name:
+            enriched.append(item)
+            continue
+        try:
+            result = clubhx_tools_client.execute_canonical(
+                tenant_id=company_id,
+                tool="get_product_availability",
+                channel=channel,
+                user_id=user_id,
+                arguments={"query": product_name, "limit": 1, "session_id": session_id},
+            )
+            data = result.get("data") if isinstance(result.get("data"), dict) else {}
+            rows = data.get("items") if isinstance(data.get("items"), list) else []
+            first = rows[0] if rows and isinstance(rows[0], dict) else {}
+            price = str(first.get("price") or "").strip()
+            if price:
+                updated = dict(item)
+                updated["price"] = price
+                enriched.append(updated)
+                continue
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("cart_status_price_enrichment_failed session_id=%s product=%s detail=%s", session_id, product_name, exc)
+        enriched.append(item)
+    return enriched
+
+
 def _process_workflow_reminders_once() -> None:
     if agent_service is None:
         return
@@ -2802,7 +2847,7 @@ def _resolve_checkout_payment_followup(
         return None
 
     preference = _payment_preference_from_message(message)
-    if _is_payment_options_question(message) or (not preference and _is_affirmative_followup_message(message)):
+    if _is_payment_options_question(message) or _is_checkout_request_message(message) or (not preference and _is_affirmative_followup_message(message)):
         try:
             result = clubhx_tools_client.execute_canonical(
                 tenant_id=company_id or "",
@@ -4004,7 +4049,15 @@ def _resolve_shared_commerce_payload(
 
     if str((llm_commerce_intent or {}).get("intent") or "").strip().lower() == "cart_status":
         _trace_route("commerce.resolve_cart_status", session_id=session_id)
-        answer = _build_cart_status_answer_from_snapshot(_cart_snapshot_items(workflow_state))
+        cart_items = _enrich_cart_snapshot_prices(
+            items=_cart_snapshot_items(workflow_state),
+            company_id=company_id,
+            user_id=user_id,
+            channel=channel,
+            session_id=session_id,
+            clubhx_tools_client=clubhx_tools_client,
+        )
+        answer = _build_cart_status_answer_from_snapshot(cart_items)
         return {
             "answer": answer,
             "intent_label": "cart_status",

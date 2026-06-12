@@ -3462,6 +3462,43 @@ def test_payment_followup_transfer_creates_order_draft_without_link(monkeypatch:
     assert payload["payment_preference"] == "transferencia"
 
 
+def test_payment_followup_checkout_request_offers_payment_options_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            assert tool == "get_payment_options"
+            return {
+                "ok": True,
+                "data": {
+                    "options": [
+                        {"name": "Mercado Pago"},
+                        {"name": "Transferencia bancaria"},
+                    ]
+                },
+            }
+
+    payload = module._resolve_checkout_payment_followup(  # type: ignore[attr-defined]
+        message="quiero pagar",
+        session_id="56912345678",
+        workflow_state={
+            "checkout_stage": "pickup_location_selected",
+            "pending_next_step": "payment_selection",
+            "selected_products": "Milo",
+            "customer_authenticated": "true",
+        },
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "payment_options"
+    assert payload["checkout_stage"] == "payment_method_pending"
+    assert "Mercado Pago" in payload["answer"]
+
+
 def test_cart_status_uses_persisted_cart_quantities(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
@@ -3579,6 +3616,51 @@ def test_cart_status_uses_product_price_when_cart_action_has_no_price(monkeypatc
         message="como va mi carrito ?",
         channel="whatsapp",
         clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state=module._agent_workflow_state("demo-company", "demo-agent", "56912345678"),  # type: ignore[attr-defined]
+    )
+
+    assert payload is not None
+    assert "Milo x2 — $5490 c/u" in payload["answer"]
+    assert "Subtotal: $10980" in payload["answer"]
+
+
+def test_cart_status_backfills_price_for_legacy_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    module.agent_service.update_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="56912345678",
+        workflow_stage="cart_building",
+        pending_next_step="shipping_selection",
+    )
+    summary = module.agent_service.get_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="56912345678",
+    )
+    summary.cart_snapshot = '[{"product_id":"milo-1","name":"Milo","quantity":2,"price":""}]'
+    module.agent_service.session_store.save_summary("demo-company", "demo-agent:56912345678", summary)  # type: ignore[attr-defined]
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            assert tool == "get_product_availability"
+            assert arguments["query"] == "Milo"
+            return {
+                "ok": True,
+                "data": {"items": [{"id": "prod-1", "name": "Milo", "price": "5490", "available_units": "200"}]},
+            }
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="56912345678",
+        session_id="56912345678",
+        message="como va mi carrito ?",
+        channel="whatsapp",
+        clubhx_tools_client=FakeToolsClient(),
         intent_label=None,
         response_style_context="",
         workflow_state=module._agent_workflow_state("demo-company", "demo-agent", "56912345678"),  # type: ignore[attr-defined]
