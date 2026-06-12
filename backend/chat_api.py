@@ -3051,12 +3051,44 @@ def _build_multi_cart_tool_payload(
     )
     return {
         "answer": f"Listo, agregue {summary} al carrito. Si queres, seguimos con checkout cuando me digas \"quiero pagar\".",
+        "intent_label": "add_to_cart",
         "cart_action": cart_actions[0],
         "cart_actions": cart_actions,
         "products": products[:6],
         "workflow_stage": "cart_building",
         "pending_next_step": "shipping_selection",
     }
+
+
+def _resolve_direct_cart_payload(
+    *,
+    company_id: str,
+    user_id: str,
+    channel: str,
+    session_id: str,
+    message: str,
+    clubhx_tools_client: ClubHxToolsClient,
+) -> dict[str, Any] | None:
+    cart_requests = _extract_widget_cart_requests(message)
+    if not cart_requests:
+        return None
+
+    canonical_results = [
+        clubhx_tools_client.execute_canonical(
+            tenant_id=company_id,
+            tool="get_product_availability",
+            channel=channel,
+            user_id=user_id,
+            arguments={
+                "query": str(cart_request.get("product_query") or "").strip(),
+                "limit": 5,
+                "session_id": session_id,
+            },
+        )
+        for cart_request in cart_requests
+        if str(cart_request.get("product_query") or "").strip()
+    ]
+    return _build_multi_cart_tool_payload(canonical_results, cart_requests)
 
 
 def _build_multi_product_lookup_payload(
@@ -3447,6 +3479,28 @@ def _resolve_shared_commerce_payload(
             str((((recent_product_add_payload.get("cart_action") or {}).get("item") or {}).get("quantity") or "")),
         )
         return recent_product_add_payload
+
+    direct_cart_payload = _resolve_direct_cart_payload(
+        company_id=company_id,
+        user_id=user_id,
+        channel=channel,
+        session_id=session_id,
+        message=message,
+        clubhx_tools_client=clubhx_tools_client,
+    )
+    if direct_cart_payload:
+        _trace_route(
+            "commerce.resolve_direct_cart_payload",
+            session_id=session_id,
+            workflow_stage=str(direct_cart_payload.get("workflow_stage") or ""),
+            pending_next_step=str(direct_cart_payload.get("pending_next_step") or ""),
+        )
+        logger.warning(
+            "commerce_router_resolved kind=direct_cart_payload session_id=%s summary=%s",
+            session_id,
+            str(direct_cart_payload.get("answer") or "")[:180],
+        )
+        return direct_cart_payload
 
     if _is_clear_cart_message(message):
         _trace_route("commerce.resolve_clear_cart", session_id=session_id)

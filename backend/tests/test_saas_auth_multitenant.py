@@ -3080,6 +3080,47 @@ def test_product_lookup_followup_uses_persisted_selected_product_when_recent_cac
     assert payload["cart_action"]["item"]["quantity"] == 1
 
 
+def test_direct_cart_message_quiero_2_milo_builds_cart_without_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            assert tool == "get_product_availability"
+            assert arguments["query"] == "milo"
+            return {
+                "ok": True,
+                "data": {
+                    "items": [
+                        {
+                            "id": "prod-1",
+                            "code": "milo-1",
+                            "name": "Milo",
+                            "price": "5490",
+                            "available_units": "200",
+                        }
+                    ]
+                },
+            }
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="user-1",
+        session_id="session-direct-cart",
+        message="Osea quiero 2 milo",
+        channel="whatsapp",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={},
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "add_to_cart"
+    assert payload["cart_action"]["item"]["name"] == "Milo"
+    assert payload["cart_action"]["item"]["quantity"] == 2
+
+
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
