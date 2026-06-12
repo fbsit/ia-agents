@@ -3527,6 +3527,55 @@ def test_document_type_boleta_falls_back_when_invoice_llm_returns_empty(monkeypa
     assert payload["checkout_stage"] == "order_summary_pending"
 
 
+def test_persisted_payment_method_allows_boleta_followup(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    payment_payload = {
+        "answer": "Perfecto, dejo transferencia bancaria como medio de pago. Ahora dime si necesitas boleta o factura.",
+        "intent_label": "payment_method_selected",
+        "workflow_stage": "payment_selection",
+        "checkout_stage": "document_type_pending",
+        "pending_next_step": "document_type",
+        "awaiting_slot": "document_type",
+        "payment_preference": "transferencia",
+    }
+
+    module._update_agent_memory_from_payload(  # type: ignore[attr-defined]
+        agent_id="demo-agent",
+        company_id="demo-company",
+        session_id="56912345678",
+        user_message="Transferencia bancaria",
+        answer=payment_payload["answer"],
+        payload=payment_payload,
+        channel="whatsapp",
+        reminder_recipient="56912345678",
+    )
+
+    workflow_state = module._agent_workflow_state("demo-company", "demo-agent", "56912345678")  # type: ignore[attr-defined]
+    assert workflow_state["checkout_stage"] == "document_type_pending"
+    assert workflow_state["pending_next_step"] == "document_type"
+    assert workflow_state["payment_preference"] == "Transferencia bancaria"
+
+    monkeypatch.setattr(module, "_parse_invoice_data_with_openai", lambda *args, **kwargs: {"invoice_type": None})
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="56912345678",
+        session_id="56912345678",
+        message="boleta",
+        channel="whatsapp",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state=workflow_state,
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "invoice_summary_ready"
+    assert payload["checkout_stage"] == "order_summary_pending"
+
+
 def test_order_confirmation_creates_order_draft(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

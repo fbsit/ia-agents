@@ -1787,6 +1787,16 @@ def _resolve_checkout_workflow_followup(
         invoice_data = _extract_invoice_data(message, session_id=session_id)
         factura_match = invoice_data.get("invoice_type") == "factura"
         boleta_match = invoice_data.get("invoice_type") == "boleta"
+        _trace_route(
+            "checkout_followup.document_type_eval",
+            session_id=session_id,
+            checkout_stage=current_checkout_stage,
+            pending_next_step=current_pending_next_step,
+            current_invoice_type=current_invoice_type,
+            extracted_invoice_type=str(invoice_data.get("invoice_type") or ""),
+            factura_match=factura_match,
+            boleta_match=boleta_match,
+        )
         if factura_match:
             invoice_addr = invoice_data.get("invoice_address") or current_invoice_address
             delivery_addr = str((workflow_state or {}).get("delivery_address") or "").strip()
@@ -1843,6 +1853,12 @@ def _resolve_checkout_workflow_followup(
                 ),
             }
         if boleta_match:
+            _trace_route(
+                "checkout_followup.document_type_resolved",
+                session_id=session_id,
+                document_type="boleta",
+                next_checkout_stage="order_summary_pending",
+            )
             return {
                 "answer": "Perfecto, se emite boleta. Si esta correcto, confirmamelo y te genero el siguiente paso.",
                 "intent_label": "invoice_summary_ready",
@@ -1857,6 +1873,16 @@ def _resolve_checkout_workflow_followup(
         invoice_addr = invoice_data.get("invoice_address") or current_invoice_address
         delivery_addr = str((workflow_state or {}).get("delivery_address") or "").strip()
         has_new_data = bool(invoice_addr)
+        _trace_route(
+            "checkout_followup.factura_address_eval",
+            session_id=session_id,
+            checkout_stage=current_checkout_stage,
+            pending_next_step=current_pending_next_step,
+            invoice_addr=str(invoice_addr or ""),
+            has_new_data=has_new_data,
+            saved_addresses_count=len(_saved_addresses_from_workflow_state(workflow_state)),
+            has_delivery_address=bool(delivery_addr),
+        )
         if has_new_data:
             saved_addresses = _fetch_saved_addresses_for_user(
                 clubhx_tools_client=clubhx_tools_client,
@@ -1903,6 +1929,15 @@ def _resolve_checkout_workflow_followup(
         delivery_addr = str((workflow_state or {}).get("delivery_address") or "").strip()
         saved_addresses = _saved_addresses_from_workflow_state(workflow_state)
         selected_saved_address = _match_saved_address_choice(message, saved_addresses)
+        _trace_route(
+            "checkout_followup.invoice_address_pending_eval",
+            session_id=session_id,
+            saved_addresses_count=len(saved_addresses),
+            selected_saved_address=selected_saved_address,
+            has_delivery_address=bool(delivery_addr),
+            is_address_confirmation=_is_address_confirmation(message),
+            wants_delivery=_wants_delivery(message),
+        )
         if selected_saved_address:
             return {
                 "answer": (
@@ -1963,6 +1998,15 @@ def _resolve_checkout_workflow_followup(
                 ),
             }
 
+    _trace_route(
+        "checkout_followup.no_match",
+        session_id=session_id,
+        checkout_stage=current_checkout_stage,
+        pending_next_step=current_pending_next_step,
+        customer_authenticated=current_customer_authenticated,
+        has_delivery_address=bool(str((workflow_state or {}).get("delivery_address") or "").strip()),
+        invoice_type=current_invoice_type,
+    )
     return None
 
 
@@ -4425,6 +4469,10 @@ def _resolve_shared_commerce_payload(
                 "commerce.checkout_tool",
                 session_id=session_id,
                 tool=planned_tool[0],
+                checkout_stage=str(getattr(current_workflow, "checkout_stage", "") or ""),
+                pending_next_step=str((workflow_state or {}).get("pending_next_step") or ""),
+                payment_preference=str((workflow_state or {}).get("payment_preference") or ""),
+                invoice_type=str((workflow_state or {}).get("invoice_type") or ""),
             )
             logger.warning(
                 "commerce_router_checkout_tool session_id=%s tool=%s",
