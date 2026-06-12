@@ -116,11 +116,19 @@ def _dump_cart_snapshot(items: list[dict[str, object]]) -> str:
 def _apply_cart_actions_to_snapshot(
     current_snapshot: str | None,
     cart_actions: list[dict[str, object]] | None,
+    product_catalog: list[dict[str, object]] | None = None,
 ) -> str | None:
     if not cart_actions:
         return None
     items = _load_cart_snapshot(current_snapshot)
     by_product = {str(item.get("product_id") or ""): dict(item) for item in items}
+    catalog_by_product: dict[str, dict[str, object]] = {}
+    for product in product_catalog or []:
+        if not isinstance(product, dict):
+            continue
+        product_id = str(product.get("checkout_product_id") or product.get("id") or product.get("variant_id") or "").strip()
+        if product_id:
+            catalog_by_product[product_id] = product
     for action in cart_actions:
         if not isinstance(action, dict):
             continue
@@ -146,9 +154,14 @@ def _apply_cart_actions_to_snapshot(
                 "price": str(item.get("price") or "").strip(),
             },
         )
+        catalog_product = catalog_by_product.get(product_id, {})
         current["name"] = name
-        if str(item.get("price") or "").strip():
-            current["price"] = str(item.get("price") or "").strip()
+        action_price = str(item.get("price") or "").strip()
+        catalog_price = str(catalog_product.get("price") or "").strip() if isinstance(catalog_product, dict) else ""
+        if action_price:
+            current["price"] = action_price
+        elif catalog_price:
+            current["price"] = catalog_price
         current_quantity = max(0, int(current.get("quantity") or 0))
         if action_type == "add_to_cart":
             current["quantity"] = current_quantity + max(1, quantity)
@@ -1655,6 +1668,7 @@ class AgentService:
         checkout_stage: str | None = None,
         focused_product: str | None = None,
         cart_actions: list[dict[str, object]] | None = None,
+        cart_products: list[dict[str, object]] | None = None,
         reset_workflow: bool = False,
         otp_email: str | None = None,
         authenticated_at: str | None = None,
@@ -1719,7 +1733,7 @@ class AgentService:
                     summary.focused_product = _normalize_summary_value(clean_products[0], 160)
         if focused_product is not None:
             summary.focused_product = _normalize_summary_value(focused_product, 160) if focused_product.strip() else ""
-        next_cart_snapshot = _apply_cart_actions_to_snapshot(summary.cart_snapshot, cart_actions)
+        next_cart_snapshot = _apply_cart_actions_to_snapshot(summary.cart_snapshot, cart_actions, cart_products)
         if next_cart_snapshot is not None:
             summary.cart_snapshot = next_cart_snapshot
         if shipping_preference and shipping_preference.strip():

@@ -3329,6 +3329,33 @@ def test_pickup_selection_offers_pickup_options(monkeypatch: pytest.MonkeyPatch)
     assert "Retiro en tienda Centro" in payload["answer"]
 
 
+def test_generic_pickup_option_advances_to_payment_instead_of_looping(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            if tool == "get_shipping_options":
+                return {"ok": True, "data": {"options": [{"name": "Retiro en tienda"}]}}
+            assert tool == "get_payment_options"
+            return {"ok": True, "data": {"options": [{"name": "Mercado Pago"}, {"name": "Transferencia bancaria"}]}}
+
+    payload = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="retiro en tienda",
+        session_id="56912345678",
+        workflow_state={"checkout_stage": "shipping_method_pending", "pending_next_step": "shipping_selection"},
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert payload["workflow_stage"] == "payment_selection"
+    assert payload["checkout_stage"] == "pickup_location_selected"
+    assert payload["awaiting_slot"] == "payment_method"
+    assert "Mercado Pago" in payload["answer"]
+
+
 def test_pickup_location_selected_offers_payment_options(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
@@ -3497,6 +3524,68 @@ def test_cart_status_uses_persisted_cart_quantities(monkeypatch: pytest.MonkeyPa
     assert payload is not None
     assert payload["intent_label"] == "cart_status"
     assert "Milo x2" in payload["answer"]
+    assert "Subtotal: $10980" in payload["answer"]
+
+
+def test_cart_status_uses_product_price_when_cart_action_has_no_price(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    add_payload = {
+        "answer": "Listo, agregue 2 Milo al carrito.",
+        "intent_label": "add_to_cart",
+        "workflow_stage": "cart_building",
+        "pending_next_step": "shipping_selection",
+        "cart_action": {
+            "type": "add_to_cart",
+            "item": {
+                "product_id": "milo-1",
+                "checkout_product_id": "milo-1",
+                "variant_id": "prod-1",
+                "quantity": 2,
+                "name": "Milo",
+            },
+        },
+        "cart_actions": [
+            {
+                "type": "add_to_cart",
+                "item": {
+                    "product_id": "milo-1",
+                    "checkout_product_id": "milo-1",
+                    "variant_id": "prod-1",
+                    "quantity": 2,
+                    "name": "Milo",
+                },
+            }
+        ],
+        "products": [{"id": "prod-1", "checkout_product_id": "milo-1", "name": "Milo", "price": "5490", "stock": "200"}],
+    }
+
+    module._update_agent_memory_from_payload(  # type: ignore[attr-defined]
+        agent_id="demo-agent",
+        company_id="demo-company",
+        session_id="56912345678",
+        user_message="quiero 2",
+        answer="Listo, agregue 2 Milo al carrito.",
+        payload=add_payload,
+        channel="whatsapp",
+        reminder_recipient="56912345678",
+    )
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="56912345678",
+        session_id="56912345678",
+        message="como va mi carrito ?",
+        channel="whatsapp",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state=module._agent_workflow_state("demo-company", "demo-agent", "56912345678"),  # type: ignore[attr-defined]
+    )
+
+    assert payload is not None
+    assert "Milo x2 — $5490 c/u" in payload["answer"]
     assert "Subtotal: $10980" in payload["answer"]
 
 

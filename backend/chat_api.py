@@ -642,6 +642,7 @@ def _update_agent_memory_from_payload(
     focused_product = _payload_focused_product(payload)
     awaiting_slot = _payload_awaiting_slot(payload)
     cart_actions = _payload_cart_actions(payload)
+    cart_products = [product for product in ((payload or {}).get("products") if isinstance((payload or {}).get("products"), list) else []) if isinstance(product, dict)]
     shipping_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["envio", "despacho", "retiro", "comuna"]) else None
     payment_preference = user_message if any(token in _normalize_widget_text(user_message) for token in ["pago", "tarjeta", "transferencia", "link de pago"]) else None
     pickup_location_label = _extract_pickup_location(user_message) or None
@@ -685,6 +686,7 @@ def _update_agent_memory_from_payload(
             checkout_stage=str((payload or {}).get("checkout_stage") or "").strip() or None,
             focused_product=focused_product,
             cart_actions=cart_actions,
+            cart_products=cart_products,
             otp_email=str((payload or {}).get("otp_email") or "").strip() or None,
             authenticated_at=str((payload or {}).get("authenticated_at") or "").strip() or None,
             reset_workflow=bool((payload or {}).get("reset_workflow")),
@@ -1522,6 +1524,7 @@ def _resolve_checkout_workflow_followup(
 
     if _wants_pickup(message):
         pickup_names: list[str] = []
+        payment_names: list[str] = []
         if clubhx_tools_client is not None:
             try:
                 shipping_result = clubhx_tools_client.execute_canonical(
@@ -1534,6 +1537,31 @@ def _resolve_checkout_workflow_followup(
                 pickup_names = _pickup_option_names_from_result(shipping_result)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("pickup_shipping_options_failed session_id=%s detail=%s", session_id, exc)
+            try:
+                payment_result = clubhx_tools_client.execute_canonical(
+                    tenant_id=company_id or "",
+                    tool="get_payment_options",
+                    channel=channel or "",
+                    user_id=user_id,
+                    arguments={"session_id": session_id or ""},
+                )
+                payment_names = _option_names_from_result(payment_result)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("pickup_payment_options_failed session_id=%s detail=%s", session_id, exc)
+        if not pickup_names:
+            return {
+                "answer": (
+                    f"Perfecto, dejo retiro en tienda. {_build_payment_options_answer(payment_names)}"
+                    if payment_names
+                    else "Perfecto, dejo retiro en tienda. Ahora dime que medio de pago prefieres."
+                ),
+                "intent_label": "pickup_selected",
+                "workflow_stage": "payment_selection",
+                "checkout_stage": "pickup_location_selected",
+                "pending_next_step": "payment_selection",
+                "awaiting_slot": "payment_method",
+                "workflow_action": _workflow_action("pickup_location_selected", pickup_location_label="retiro en tienda"),
+            }
         return {
             "answer": (
                 f"Perfecto, podemos seguir con retiro. Opciones disponibles: {', '.join(pickup_names)}. Cual prefieres?"
@@ -2738,7 +2766,11 @@ def _pickup_option_names_from_result(result: dict[str, Any]) -> list[str]:
         name for name in names
         if any(token in _normalize_widget_text(name) for token in ["retiro", "pickup", "tienda", "sucursal", "local"])
     ]
-    return pickup_names or names
+    concrete_pickup_names = [
+        name for name in pickup_names
+        if _normalize_widget_text(name) not in {"retiro en tienda", "retiro tienda", "pickup", "retiro", "tienda"}
+    ]
+    return concrete_pickup_names
 
 
 def _build_payment_options_answer(names: list[str]) -> str:
