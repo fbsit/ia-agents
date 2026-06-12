@@ -3214,6 +3214,84 @@ def test_named_followup_el_milo_uses_quantity_or_action_slot(monkeypatch: pytest
     assert payload["cart_action"]["item"]["quantity"] == 1
 
 
+def test_persisted_lookup_context_allows_quiero_2_followup(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    availability_payload = {
+        "answer": "Si, Milo esta disponible. Precio: $5490. Stock: 200.",
+        "products": [
+            {
+                "id": "prod-1",
+                "checkout_product_id": "milo-1",
+                "variant_id": "prod-1",
+                "name": "Milo",
+                "price": "5490",
+                "stock": "200",
+            }
+        ],
+        "workflow_stage": "product_lookup",
+        "pending_next_step": "add_to_cart",
+        "awaiting_slot": "quantity_or_action",
+        "focused_product": "Milo",
+    }
+
+    module._update_agent_memory_from_payload(  # type: ignore[attr-defined]
+        agent_id="demo-agent",
+        company_id="demo-company",
+        session_id="56912345678",
+        user_message="Tienes Milo ?",
+        answer="Si, Milo esta disponible. Precio: $5490. Stock: 200.",
+        payload=availability_payload,
+        channel="whatsapp",
+        reminder_recipient="56912345678",
+    )
+
+    workflow_state = module._agent_workflow_state("demo-company", "demo-agent", "56912345678")  # type: ignore[attr-defined]
+
+    assert workflow_state["stage"] == "product_lookup"
+    assert workflow_state["pending_next_step"] == "add_to_cart"
+    assert workflow_state["awaiting_slot"] == "quantity_or_action"
+    assert workflow_state["focused_product"] == "Milo"
+    assert workflow_state["selected_products"] == "Milo"
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            assert tool == "get_product_availability"
+            assert arguments["query"] == "Milo"
+            return {
+                "ok": True,
+                "data": {
+                    "items": [
+                        {
+                            "id": "prod-1",
+                            "code": "milo-1",
+                            "name": "Milo",
+                            "price": "5490",
+                            "available_units": "200",
+                        }
+                    ]
+                },
+            }
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="56912345678",
+        session_id="56912345678",
+        message="quiero 2",
+        channel="whatsapp",
+        clubhx_tools_client=FakeToolsClient(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state=workflow_state,
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "add_to_cart"
+    assert payload["cart_action"]["item"]["name"] == "Milo"
+    assert payload["cart_action"]["item"]["quantity"] == 2
+
+
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

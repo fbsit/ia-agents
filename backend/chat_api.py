@@ -172,6 +172,38 @@ def _trace_route(event: str, **payload: Any) -> None:
     print(f"[TRACE_ROUTE] {event} {json.dumps(safe_payload, ensure_ascii=False, default=str)}", flush=True)
 
 
+def _log_generated_response(
+    *,
+    source: str,
+    request_id: str | None,
+    agent_id: str,
+    company_id: str,
+    session_id: str,
+    channel: str,
+    answer: str,
+    intent_label: str | None = None,
+    route: str | None = None,
+    response_mode: str | None = None,
+) -> None:
+    clean_answer = re.sub(r"\s+", " ", str(answer or "")).strip()
+    logger.info(
+        (
+            "generated_response source=%s request_id=%s agent_id=%s company_id=%s "
+            "session_id=%s channel=%s intent=%s route=%s response_mode=%s answer=%s"
+        ),
+        source,
+        request_id or "",
+        agent_id,
+        company_id,
+        session_id,
+        channel,
+        str(intent_label or ""),
+        str(route or ""),
+        str(response_mode or ""),
+        clean_answer[:500],
+    )
+
+
 def _remember_commerce_products(session_id: str, products: list[dict[str, Any]]) -> None:
     clean_session_id = str(session_id or "").strip()
     if not clean_session_id or not products:
@@ -8066,6 +8098,18 @@ def internal_chat_with_agent(
                 channel=chat_channel,
             )
             if shared_answer:
+                _log_generated_response(
+                    source="internal_shared_commerce",
+                    request_id=request_id,
+                    agent_id=agent.agent_id,
+                    company_id=agent.company_id,
+                    session_id=effective_session_id,
+                    channel=chat_channel,
+                    answer=shared_answer,
+                    intent_label=str((shared_commerce_payload.get("intent_label") or "commerce")).strip() or "commerce",
+                    route="tool",
+                    response_mode="tool_only",
+                )
                 _update_agent_memory_from_payload(
                     agent_id=agent.agent_id,
                     company_id=agent.company_id,
@@ -8143,6 +8187,18 @@ def internal_chat_with_agent(
                     channel=chat_channel,
                 )
                 if tool_answer:
+                    _log_generated_response(
+                        source="internal_canonical_tool",
+                        request_id=request_id,
+                        agent_id=agent.agent_id,
+                        company_id=agent.company_id,
+                        session_id=effective_session_id,
+                        channel=chat_channel,
+                        answer=tool_answer,
+                        intent_label=rag_result.intent_label,
+                        route="tool",
+                        response_mode="tool_only",
+                    )
                     _update_agent_memory_from_payload(
                         agent_id=agent.agent_id,
                         company_id=agent.company_id,
@@ -8259,6 +8315,19 @@ def internal_chat_with_agent(
             latency_ms=response_latency_ms,
             rag_backend=agent.rag_backend,
         )
+    )
+
+    _log_generated_response(
+        source="internal_final",
+        request_id=request_id,
+        agent_id=agent.agent_id,
+        company_id=agent.company_id,
+        session_id=effective_session_id,
+        channel=chat_channel,
+        answer=tuned_answer,
+        intent_label=rag_result.intent_label,
+        route=rag_result.route,
+        response_mode=rag_result.response_mode,
     )
 
     return AgentChatResponsePayload(
@@ -8397,6 +8466,18 @@ def chat_with_agent(
                 channel=chat_channel,
             )
             if shared_answer:
+                _log_generated_response(
+                    source="api_shared_commerce",
+                    request_id=None,
+                    agent_id=agent.agent_id,
+                    company_id=agent.company_id,
+                    session_id=effective_session_id,
+                    channel=chat_channel,
+                    answer=shared_answer,
+                    intent_label=str((shared_commerce_payload.get("intent_label") or "commerce")).strip() or "commerce",
+                    route="tool",
+                    response_mode="tool_only",
+                )
                 _update_agent_memory_from_payload(
                     agent_id=agent.agent_id,
                     company_id=agent.company_id,
@@ -8474,6 +8555,18 @@ def chat_with_agent(
                     channel=chat_channel,
                 )
                 if tool_answer:
+                    _log_generated_response(
+                        source="api_canonical_tool",
+                        request_id=None,
+                        agent_id=agent.agent_id,
+                        company_id=agent.company_id,
+                        session_id=effective_session_id,
+                        channel=chat_channel,
+                        answer=tool_answer,
+                        intent_label=rag_result.intent_label,
+                        route="tool",
+                        response_mode="tool_only",
+                    )
                     _update_agent_memory_from_payload(
                         agent_id=agent.agent_id,
                         company_id=agent.company_id,
@@ -8596,6 +8689,18 @@ def chat_with_agent(
             latency_ms=response_latency_ms,
             rag_backend=agent.rag_backend,
         )
+    )
+    _log_generated_response(
+        source="api_final",
+        request_id=None,
+        agent_id=agent.agent_id,
+        company_id=agent.company_id,
+        session_id=effective_session_id,
+        channel=chat_channel,
+        answer=tuned_answer,
+        intent_label=rag_result.intent_label,
+        route=rag_result.route,
+        response_mode=rag_result.response_mode,
     )
     return AgentChatResponsePayload(
         agent_id=agent.agent_id,
