@@ -1677,7 +1677,14 @@ def _resolve_checkout_workflow_followup(
             "workflow_action": _workflow_action("choose_delivery_address"),
         }
 
-    past_shipping = current_checkout_stage in {"delivery_address_confirmed", "pickup_location_selected", "delivery_address_proposed", "delivery_address_confirmation"}
+    past_shipping = current_checkout_stage in {
+        "delivery_address_confirmed",
+        "pickup_location_selected",
+        "delivery_address_proposed",
+        "delivery_address_confirmation",
+        "document_type_pending",
+        "payment_method_pending",
+    }
     current_invoice_type = str((workflow_state or {}).get("invoice_type") or "").strip().lower()
     current_rut = str((workflow_state or {}).get("invoice_rut") or "").strip()
     current_business_name = str((workflow_state or {}).get("invoice_business_name") or "").strip()
@@ -2871,11 +2878,40 @@ def _resolve_checkout_payment_followup(
 
     if not preference:
         return None
+    return {
+        "answer": f"Perfecto, dejo {message.strip()} como medio de pago. Ahora dime si necesitas boleta o factura.",
+        "intent_label": "payment_method_selected",
+        "workflow_stage": "payment_selection",
+        "checkout_stage": "document_type_pending",
+        "pending_next_step": "document_type",
+        "awaiting_slot": "document_type",
+        "payment_preference": preference,
+        "workflow_action": _workflow_action("choose_document_type", payment_preference=preference),
+    }
 
+
+def _resolve_checkout_order_confirmation_followup(
+    *,
+    message: str,
+    session_id: str | None,
+    workflow_state: dict[str, str] | None,
+    company_id: str | None,
+    channel: str | None,
+    user_id: str | None,
+    clubhx_tools_client: Any | None,
+) -> dict[str, Any] | None:
+    current_checkout_stage = str((workflow_state or {}).get("checkout_stage") or "").strip().lower()
+    current_pending_next_step = str((workflow_state or {}).get("pending_next_step") or "").strip().lower()
+    if current_checkout_stage != "order_summary_pending" and current_pending_next_step != "order_confirmation":
+        return None
+    if not _is_affirmative_followup_message(message) or clubhx_tools_client is None:
+        return None
+
+    payment_preference = _payment_preference_from_message(str((workflow_state or {}).get("payment_preference") or "")) or str((workflow_state or {}).get("payment_preference") or "").strip()
     cart_requests = _checkout_requests_for_workflow(message, session_id or "", None, workflow_state)
     if not cart_requests:
         return {
-            "answer": "Primero necesito confirmar los productos del carrito antes de seguir con el pago.",
+            "answer": "Primero necesito confirmar los productos del carrito antes de crear la orden.",
             "intent_label": "payment_items_missing",
             "workflow_stage": "cart_building",
             "pending_next_step": "add_to_cart",
@@ -2892,33 +2928,38 @@ def _resolve_checkout_payment_followup(
     if not checkout_items:
         return {"answer": "No pude validar los productos del pedido. Dime el nombre exacto del producto y la cantidad."}
 
-    tool_name = "create_order_draft"
     try:
         result = clubhx_tools_client.execute_canonical(
             tenant_id=company_id or "",
-            tool=tool_name,
+            tool="create_order_draft",
             channel=channel or "",
             user_id=user_id,
             arguments={
                 "items": checkout_items,
                 "session_id": session_id or "",
-                "payment_preference": preference,
+                "payment_preference": payment_preference,
+                "invoice_type": str((workflow_state or {}).get("invoice_type") or "").strip(),
+                "invoice_rut": str((workflow_state or {}).get("invoice_rut") or "").strip(),
+                "invoice_business_name": str((workflow_state or {}).get("invoice_business_name") or "").strip(),
+                "invoice_address": str((workflow_state or {}).get("invoice_address") or "").strip(),
+                "delivery_address": str((workflow_state or {}).get("delivery_address") or "").strip(),
+                "pickup_location_label": str((workflow_state or {}).get("pickup_location_label") or "").strip(),
             },
         )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("checkout_payment_execution_failed session_id=%s tool=%s detail=%s", session_id, tool_name, exc)
+        logger.warning("checkout_order_confirmation_failed session_id=%s detail=%s", session_id, exc)
         return None
     payload = _format_public_widget_tool_payload(
         result,
         user_message=message,
-        intent_label=tool_name,
+        intent_label="create_order_draft",
         channel=channel,
         session_id=session_id,
     )
     if isinstance(payload, dict):
         if checkout_products and not payload.get("products"):
             payload["products"] = checkout_products[:6]
-        payload["payment_preference"] = preference
+        payload["payment_preference"] = payment_preference
         payload["awaiting_slot"] = ""
         return payload
     return None
@@ -3982,6 +4023,32 @@ def _resolve_shared_commerce_payload(
             str(checkout_payment_payload.get("checkout_stage") or ""),
         )
         return checkout_payment_payload
+
+    checkout_order_confirmation_payload = _resolve_checkout_order_confirmation_followup(
+        message=message,
+        session_id=session_id,
+        workflow_state=workflow_state,
+        company_id=company_id,
+        channel=channel,
+        user_id=user_id,
+        clubhx_tools_client=clubhx_tools_client,
+    )
+    if checkout_order_confirmation_payload:
+        _trace_route(
+            "commerce.resolve_checkout_order_confirmation",
+            session_id=session_id,
+            intent=str(checkout_order_confirmation_payload.get("intent_label") or ""),
+            workflow_stage=str(checkout_order_confirmation_payload.get("workflow_stage") or ""),
+            checkout_stage=str(checkout_order_confirmation_payload.get("checkout_stage") or ""),
+        )
+        logger.warning(
+            "commerce_router_resolved kind=checkout_order_confirmation session_id=%s payload_intent=%s workflow_stage=%s checkout_stage=%s",
+            session_id,
+            str(checkout_order_confirmation_payload.get("intent_label") or ""),
+            str(checkout_order_confirmation_payload.get("workflow_stage") or ""),
+            str(checkout_order_confirmation_payload.get("checkout_stage") or ""),
+        )
+        return checkout_order_confirmation_payload
     logger.info(
         "commerce_checkout_followup_miss session_id=%s checkout_stage=%s pending_next_step=%s message=%s llm_intent=%s",
         session_id,

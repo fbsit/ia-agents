@@ -3388,24 +3388,12 @@ def test_pickup_location_selected_offers_payment_options(monkeypatch: pytest.Mon
     assert payload["awaiting_slot"] == "payment_method"
 
 
-def test_payment_followup_mercado_pago_creates_order_and_uses_returned_url(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_payment_followup_mercado_pago_requests_document_type(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
     class FakeToolsClient:
         def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
-            if tool == "get_product_availability":
-                return {
-                    "ok": True,
-                    "data": {"items": [{"id": "prod-1", "code": "milo-1", "name": "Milo", "price": "5490", "available_units": "200"}]},
-                    "tool": tool,
-                }
-            assert tool == "create_order_draft"
-            assert arguments["payment_preference"] == "mercado_pago"
-            return {
-                "ok": True,
-                "tool": tool,
-                "data": {"payment_url": "https://pay.test/link"},
-            }
+            raise AssertionError("Selecting payment method should not create order yet")
 
     payload = module._resolve_checkout_payment_followup(  # type: ignore[attr-defined]
         message="Mercado Pago",
@@ -3422,28 +3410,18 @@ def test_payment_followup_mercado_pago_creates_order_and_uses_returned_url(monke
     )
 
     assert payload is not None
-    assert payload["redirect_to"] == "https://pay.test/link"
+    assert payload["intent_label"] == "payment_method_selected"
+    assert payload["checkout_stage"] == "document_type_pending"
     assert payload["payment_preference"] == "mercado_pago"
+    assert "boleta o factura" in payload["answer"].lower()
 
 
-def test_payment_followup_transfer_creates_order_draft_without_link(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_payment_followup_transfer_requests_document_type(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
     class FakeToolsClient:
         def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
-            if tool == "get_product_availability":
-                return {
-                    "ok": True,
-                    "data": {"items": [{"id": "prod-1", "code": "milo-1", "name": "Milo", "price": "5490", "available_units": "200"}]},
-                    "tool": tool,
-                }
-            assert tool == "create_order_draft"
-            assert arguments["payment_preference"] == "transferencia"
-            return {
-                "ok": True,
-                "tool": tool,
-                "data": {"draft_id": "draft-123", "total": "$5490"},
-            }
+            raise AssertionError("Selecting payment method should not create order yet")
 
     payload = module._resolve_checkout_payment_followup(  # type: ignore[attr-defined]
         message="Transferencia bancaria",
@@ -3460,8 +3438,10 @@ def test_payment_followup_transfer_creates_order_draft_without_link(monkeypatch:
     )
 
     assert payload is not None
-    assert "orden borrador" in payload["answer"].lower()
+    assert payload["intent_label"] == "payment_method_selected"
+    assert payload["checkout_stage"] == "document_type_pending"
     assert payload["payment_preference"] == "transferencia"
+    assert "boleta o factura" in payload["answer"].lower()
 
 
 def test_payment_followup_checkout_request_offers_payment_options_first(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3499,6 +3479,69 @@ def test_payment_followup_checkout_request_offers_payment_options_first(monkeypa
     assert payload["intent_label"] == "payment_options"
     assert payload["checkout_stage"] == "payment_method_pending"
     assert "Mercado Pago" in payload["answer"]
+
+
+def test_document_type_boleta_moves_to_order_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    payload = module._resolve_checkout_workflow_followup(  # type: ignore[attr-defined]
+        message="boleta",
+        session_id="56912345678",
+        workflow_state={
+            "checkout_stage": "document_type_pending",
+            "pending_next_step": "document_type",
+            "payment_preference": "mercado_pago",
+        },
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=object(),
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "invoice_summary_ready"
+    assert payload["checkout_stage"] == "order_summary_pending"
+
+
+def test_order_confirmation_creates_order_draft(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    class FakeToolsClient:
+        def execute_canonical(self, *, tenant_id: str, tool: str, channel: str, user_id: str, arguments: dict[str, str]):
+            if tool == "get_product_availability":
+                return {
+                    "ok": True,
+                    "data": {"items": [{"id": "prod-1", "code": "milo-1", "name": "Milo", "price": "5490", "available_units": "200"}]},
+                    "tool": tool,
+                }
+            assert tool == "create_order_draft"
+            assert arguments["payment_preference"] == "mercado_pago"
+            assert arguments["invoice_type"] == "boleta"
+            return {
+                "ok": True,
+                "tool": tool,
+                "data": {"draft_id": "draft-123", "payment_url": "https://pay.test/link", "total": "$10980"},
+            }
+
+    payload = module._resolve_checkout_order_confirmation_followup(  # type: ignore[attr-defined]
+        message="si",
+        session_id="56912345678",
+        workflow_state={
+            "checkout_stage": "order_summary_pending",
+            "pending_next_step": "order_confirmation",
+            "selected_products": "Milo",
+            "payment_preference": "mercado_pago",
+            "invoice_type": "boleta",
+        },
+        company_id="demo-company",
+        channel="whatsapp",
+        user_id="user-1",
+        clubhx_tools_client=FakeToolsClient(),
+    )
+
+    assert payload is not None
+    assert payload["checkout_stage"] == "completed"
+    assert payload["redirect_to"] == "https://pay.test/link"
 
 
 def test_cart_status_uses_persisted_cart_quantities(monkeypatch: pytest.MonkeyPatch) -> None:
