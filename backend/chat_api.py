@@ -3107,6 +3107,48 @@ def _build_payment_options_answer(names: list[str]) -> str:
     return f"Medios de pago: {', '.join(names)}. Cual prefieres?"
 
 
+def _build_order_created_answer(
+    *,
+    workflow_state: dict[str, str] | None,
+    checkout_items: list[dict[str, Any]],
+    result_data: dict[str, Any],
+) -> str:
+    order_reference = _first_present_string(result_data, ["draft_id", "order_id", "order_reference", "id", "number"])
+    payment_url = _first_present_string(result_data, ["payment_url", "payment_link", "checkout_url", "url", "link"])
+    total = _first_present_string(result_data, ["total", "amount", "grand_total"])
+    payment_preference = str((workflow_state or {}).get("payment_preference") or "").strip()
+    invoice_type = str((workflow_state or {}).get("invoice_type") or "").strip()
+    pickup_location = str((workflow_state or {}).get("pickup_location_label") or "").strip()
+    delivery_address = str((workflow_state or {}).get("delivery_address") or "").strip()
+
+    lines = ["Perfecto, ya deje registrada tu compra."]
+    if order_reference:
+        lines.append(f"Orden: {order_reference}")
+    if checkout_items:
+        product_lines = []
+        for item in checkout_items:
+            name = str(item.get("name") or item.get("product_name") or "Producto").strip() or "Producto"
+            quantity = int(item.get("quantity") or 1)
+            product_lines.append(f"• {name} x{quantity}")
+        if product_lines:
+            lines.append("Detalle:")
+            lines.extend(product_lines[:8])
+    if pickup_location:
+        lines.append(f"Retiro: {pickup_location}")
+    elif delivery_address:
+        lines.append(f"Despacho: {delivery_address}")
+    if payment_preference:
+        lines.append(f"Pago: {payment_preference}")
+    if invoice_type:
+        lines.append(f"Documento: {invoice_type}")
+    if total:
+        lines.append(f"Total referencial: {total}")
+    if payment_url:
+        lines.append("Tambien deje listo el siguiente paso de pago.")
+    lines.append("Gracias por tu compra.")
+    return "\n".join(lines)
+
+
 def _resolve_checkout_payment_followup(
     *,
     message: str,
@@ -3237,6 +3279,12 @@ def _resolve_checkout_order_confirmation_followup(
             payload["products"] = checkout_products[:6]
         payload["payment_preference"] = payment_preference
         payload["awaiting_slot"] = ""
+        result_data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        payload["answer"] = _build_order_created_answer(
+            workflow_state=workflow_state,
+            checkout_items=checkout_items,
+            result_data=result_data,
+        )
         return payload
     return None
 

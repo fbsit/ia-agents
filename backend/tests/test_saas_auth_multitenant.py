@@ -3700,6 +3700,12 @@ def test_order_confirmation_creates_order_draft(monkeypatch: pytest.MonkeyPatch)
     assert payload is not None
     assert payload["checkout_stage"] == "completed"
     assert payload["redirect_to"] == "https://pay.test/link"
+    assert "Orden: draft-123" in payload["answer"]
+    assert "Detalle:" in payload["answer"]
+    assert "• Milo x1" in payload["answer"]
+    assert "Pago: mercado_pago" in payload["answer"]
+    assert "Documento: boleta" in payload["answer"]
+    assert "Gracias por tu compra." in payload["answer"]
 
 
 def test_factura_offers_saved_addresses(monkeypatch: pytest.MonkeyPatch) -> None:
