@@ -3708,6 +3708,20 @@ def test_order_confirmation_creates_order_draft(monkeypatch: pytest.MonkeyPatch)
     assert "Gracias por tu compra." in payload["answer"]
 
 
+def test_affirmative_followup_does_not_intercept_order_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    payload = module._resolve_affirmative_workflow_followup(  # type: ignore[attr-defined]
+        message="si confirmo",
+        workflow_state={
+            "pending_next_step": "order_confirmation",
+            "checkout_stage": "order_summary_pending",
+        },
+    )
+
+    assert payload is None
+
+
 def test_factura_offers_saved_addresses(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 

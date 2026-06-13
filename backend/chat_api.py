@@ -1368,44 +1368,7 @@ def _resolve_affirmative_workflow_followup(
             "workflow_action": _workflow_action("choose_payment_method"),
         }
     if effective_next in {"order_confirmation", "checkout_confirmation", "review_order"}:
-        selected_products = str((workflow_state or {}).get("selected_products") or "").strip()
-        shipping_preference = str((workflow_state or {}).get("shipping_preference") or "").strip()
-        pickup_location = str((workflow_state or {}).get("pickup_location_label") or "").strip()
-        delivery_address = str((workflow_state or {}).get("delivery_address") or "").strip()
-        invoice_type = str((workflow_state or {}).get("invoice_type") or "").strip()
-        invoice_rut = str((workflow_state or {}).get("invoice_rut") or "").strip()
-        invoice_business_name = str((workflow_state or {}).get("invoice_business_name") or "").strip()
-        invoice_address = str((workflow_state or {}).get("invoice_address") or "").strip()
-        payment_preference = str((workflow_state or {}).get("payment_preference") or "").strip()
-        lines = ["Perfecto, te dejo el resumen para confirmar:"]
-        if selected_products:
-            lines.append(f"Productos: {selected_products}.")
-        if shipping_preference:
-            lines.append(f"Despacho/retiro: {shipping_preference}.")
-        if pickup_location:
-            lines.append(f"Sucursal/retiro: {pickup_location}.")
-        if delivery_address:
-            lines.append(f"Direccion de despacho: {delivery_address}.")
-        if invoice_type:
-            lines.append(f"Documento: {invoice_type}.")
-        if invoice_type == "factura":
-            if invoice_business_name:
-                lines.append(f"Razon social: {invoice_business_name}.")
-            if invoice_rut:
-                lines.append(f"RUT: {invoice_rut}.")
-            if invoice_address:
-                lines.append(f"Direccion de factura: {invoice_address}.")
-        if payment_preference:
-            lines.append(f"Pago: {payment_preference}.")
-        lines.append("Si esta correcto, te genero el siguiente paso.")
-        return {
-            "answer": "\n".join(lines),
-            "intent_label": "order_summary_confirmation",
-            "workflow_stage": "payment_selection",
-            "pending_next_step": "payment_selection",
-            "checkout_stage": "order_summary_pending",
-            "workflow_action": _workflow_action("confirm_order_summary"),
-        }
+        return None
     return None
 
 
