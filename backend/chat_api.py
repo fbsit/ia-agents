@@ -669,6 +669,10 @@ def _update_agent_memory_from_payload(
         intent = str(payload.get("intent_label") or "").strip()
         if intent in {"checkout_auth_confirmed", "checkout_otp_sent", "checkout_otp_invalid"}:
             customer_authenticated = intent == "checkout_auth_confirmed"
+    payload_workflow_stage = str((payload or {}).get("workflow_stage") or "").strip()
+    payload_pending_next_step = str((payload or {}).get("pending_next_step") or "").strip()
+    payload_checkout_stage = str((payload or {}).get("checkout_stage") or "").strip()
+
     try:
         _trace_route(
             "memory.update_request",
@@ -676,9 +680,9 @@ def _update_agent_memory_from_payload(
             company_id=company_id,
             session_id=session_id,
             intent_label=intent_label,
-            workflow_stage=str((payload or {}).get("workflow_stage") or ""),
-            checkout_stage=str((payload or {}).get("checkout_stage") or ""),
-            pending_next_step=str((payload or {}).get("pending_next_step") or ""),
+            workflow_stage=payload_workflow_stage,
+            checkout_stage=payload_checkout_stage,
+            pending_next_step=payload_pending_next_step,
             awaiting_slot=awaiting_slot or "",
             selected_products=selected_products,
             focused_product=focused_product or "",
@@ -710,10 +714,10 @@ def _update_agent_memory_from_payload(
             saved_addresses=saved_addresses,
             customer_authenticated=customer_authenticated,
             order_reference=None,
-            workflow_stage=str((payload or {}).get("workflow_stage") or "").strip() or None,
-            pending_next_step=str((payload or {}).get("pending_next_step") or "").strip() or None,
+            workflow_stage=payload_workflow_stage or None,
+            pending_next_step=payload_pending_next_step or None,
             awaiting_slot=awaiting_slot,
-            checkout_stage=str((payload or {}).get("checkout_stage") or "").strip() or None,
+            checkout_stage=payload_checkout_stage or None,
             focused_product=focused_product,
             cart_actions=cart_actions,
             cart_products=cart_products,
@@ -1819,7 +1823,9 @@ def _resolve_checkout_workflow_followup(
     current_business_name = str((workflow_state or {}).get("invoice_business_name") or "").strip()
     current_invoice_address = str((workflow_state or {}).get("invoice_address") or "").strip()
 
-    if current_checkout_stage == "document_type_pending" and current_invoice_type == "boleta":
+    document_type_pending_state = current_checkout_stage == "document_type_pending" or current_pending_next_step == "document_type"
+
+    if document_type_pending_state and current_invoice_type == "boleta":
         _trace_route(
             "checkout_followup.document_type_resolved",
             session_id=session_id,
@@ -1836,7 +1842,7 @@ def _resolve_checkout_workflow_followup(
             "workflow_action": _workflow_action("invoice_summary_ready", invoice_type="boleta"),
         }
 
-    if current_checkout_stage == "document_type_pending" and current_invoice_type == "factura":
+    if document_type_pending_state and current_invoice_type == "factura":
         delivery_addr = str((workflow_state or {}).get("delivery_address") or "").strip()
         saved_addresses = _fetch_saved_addresses_for_user(
             clubhx_tools_client=clubhx_tools_client,

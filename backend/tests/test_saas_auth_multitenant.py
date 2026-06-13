@@ -3605,6 +3605,62 @@ def test_document_type_pending_with_persisted_boleta_skips_llm(monkeypatch: pyte
     assert payload["checkout_stage"] == "order_summary_pending"
 
 
+def test_payment_method_pending_with_document_type_next_and_boleta_resolves_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="56912345678",
+        session_id="56912345678",
+        message="boleta",
+        channel="whatsapp",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "stage": "payment_selection",
+            "checkout_stage": "payment_method_pending",
+            "pending_next_step": "document_type",
+            "invoice_type": "boleta",
+            "payment_preference": "Transferencia bancaria",
+        },
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "invoice_summary_ready"
+    assert payload["checkout_stage"] == "order_summary_pending"
+
+
+def test_clarification_payload_does_not_clear_checkout_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    module.agent_service.update_session_summary(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        session_id="56912345678",
+        workflow_stage="payment_selection",
+        checkout_stage="payment_method_pending",
+        pending_next_step="document_type",
+        invoice_type="boleta",
+    )
+
+    module._update_agent_memory_from_payload(  # type: ignore[attr-defined]
+        agent_id="demo-agent",
+        company_id="demo-company",
+        session_id="56912345678",
+        user_message="boleta",
+        answer="¿Qué tipo de boleta necesitas?",
+        payload={},
+        channel="whatsapp",
+        reminder_recipient="56912345678",
+    )
+
+    workflow_state = module._agent_workflow_state("demo-company", "demo-agent", "56912345678")  # type: ignore[attr-defined]
+    assert workflow_state["checkout_stage"] == "payment_method_pending"
+    assert workflow_state["pending_next_step"] == "document_type"
+
+
 def test_order_confirmation_creates_order_draft(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
