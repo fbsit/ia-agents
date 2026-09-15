@@ -275,7 +275,7 @@ def is_question_message(message: str) -> bool:
         return False
     if raw.endswith("?") or raw.startswith("¿"):
         return True
-    return bool(re.match(r"^(cuanto|cuánto|cuanta|cuánta|que|qué|cual|cuál|como|cómo|donde|dónde|cuando|cuándo|hay|tienen|puedo|se puede)", _normalize_basic(raw)))
+    return bool(re.match(r"^(cuanto|cuánto|cuanta|cuánta|que|qué|cual|cuál|como|cómo|donde|dónde|cuando|cuándo|hay|tienen|puedo|se puede)\b", _normalize_basic(raw)))
 
 
 def extract_address(message: str) -> str:
@@ -293,9 +293,28 @@ def extract_address(message: str) -> str:
         match = re.search(pattern, raw, flags=re.IGNORECASE)
         if match:
             candidate = str(match.group(1) or "").strip().rstrip(".,;")
-            if len(candidate) >= 8:
+            # "despacho a domicilio" no es una direccion: "domicilio" describe el metodo de
+            # envio, no la calle/numero real. wants_delivery() maneja ese caso por separado.
+            if len(candidate) >= 8 and not _is_generic_shipping_word(candidate):
                 return candidate
     return ""
+
+
+_GENERIC_SHIPPING_WORDS = {
+    "domicilio", "mi domicilio", "casa", "mi casa", "aqui", "aca", "ahi",
+    "domicilio por favor", "a domicilio",
+}
+
+
+def _is_generic_shipping_word(candidate: str) -> bool:
+    normalized = normalize_text(candidate)
+    if normalized in _GENERIC_SHIPPING_WORDS:
+        return True
+    # Sin numero ni palabras de calle, y una sola palabra ("domicilio", "casa"): no es una
+    # direccion real todavia, es apenas la eleccion del metodo de despacho.
+    has_digit = bool(re.search(r"\d", candidate))
+    has_street_word = bool(re.search(r"\b(?:calle|av|avda|pje|pasaje|block|depto|villa|poblacion)\b", normalized))
+    return not has_digit and not has_street_word and len(normalized.split()) <= 1
 
 
 def extract_order_lines_from_result_data(data: dict[str, Any]) -> list[dict[str, Any]]:

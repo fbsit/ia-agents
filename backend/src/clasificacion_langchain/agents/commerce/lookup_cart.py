@@ -76,7 +76,7 @@ def _looks_like_product_question(message: str) -> bool:
         return False
     if message.strip().endswith("?") or message.strip().startswith("¿"):
         return True
-    return bool(re.match(r"^(tienen|tenes|tiene|hay|venden|vende|manejan|trabajan|cuanto|cuánto|que|qué|cual|cuál)", normalized))
+    return bool(re.match(r"^(tienen|tenes|tiene|hay|venden|vende|manejan|trabajan|cuanto|cuánto|que|qué|cual|cuál)\b", normalized))
 
 
 def _singularize_query(query: str) -> str:
