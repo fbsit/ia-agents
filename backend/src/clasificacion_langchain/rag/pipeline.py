@@ -96,9 +96,14 @@ class RAGPipeline:
         generation_provider: str | None = None,
         generation_model: str | None = None,
         use_openai_generation: bool | None = None,
+        retrieval_query: str | None = None,
     ) -> RAGAnswer:
+        # `query` puede ser el prompt contextual completo (rol + historial + consulta) que
+        # necesita el generador. Para buscar en el indice hay que usar solo la consulta del
+        # usuario: con TF-IDF el bloque de contexto domina el vector y devuelve chunks
+        # irrelevantes (siempre el mismo) sin importar la pregunta.
         chunks = self.index.search(
-            query=query,
+            query=(retrieval_query or query),
             company_id=company_id,
             top_k=top_k,
             min_score=min_score,

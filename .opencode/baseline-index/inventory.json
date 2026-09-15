@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-04-02T22:54:51.230Z",
+  "generated_at": "2026-06-17T20:20:45.683Z",
   "workspace_root": "C:\\Users\\Felipe\\Desktop\\clasificacion-langchain-demo",
   "items": [
     {
-      "name": "__pycache__",
-      "path": "__pycache__",
+      "name": ".agents",
+      "path": ".agents",
       "status": "excluded",
-      "reason": "no-project-marker"
+      "reason": "hidden-directory"
     },
     {
-      "name": ".env.example",
-      "path": ".env.example",
+      "name": ".git",
+      "path": ".git",
       "status": "excluded",
       "reason": "hidden-directory"
     },
@@ -21,34 +21,40 @@
       "reason": "hidden-directory"
     },
     {
+      "name": ".opencode",
+      "path": ".opencode",
+      "status": "excluded",
+      "reason": "hidden-directory"
+    },
+    {
+      "name": ".pytest_cache",
+      "path": ".pytest_cache",
+      "status": "excluded",
+      "reason": "hidden-directory"
+    },
+    {
+      "name": "0e673e82d93c480181b2864f4a777448",
+      "path": "0e673e82d93c480181b2864f4a777448",
+      "status": "excluded",
+      "reason": "no-project-marker"
+    },
+    {
       "name": "AGENTS.md",
       "path": "AGENTS.md",
       "status": "excluded",
       "reason": "not-a-directory"
     },
     {
-      "name": "app.py",
-      "path": "app.py",
+      "name": "archive",
+      "path": "archive",
       "status": "excluded",
-      "reason": "not-a-directory"
+      "reason": "no-project-marker"
     },
     {
-      "name": "ask_hybrid_agent.py",
-      "path": "ask_hybrid_agent.py",
+      "name": "backend",
+      "path": "backend",
       "status": "excluded",
-      "reason": "not-a-directory"
-    },
-    {
-      "name": "build_rag_index.py",
-      "path": "build_rag_index.py",
-      "status": "excluded",
-      "reason": "not-a-directory"
-    },
-    {
-      "name": "chat_api.py",
-      "path": "chat_api.py",
-      "status": "excluded",
-      "reason": "not-a-directory"
+      "reason": "no-project-marker"
     },
     {
       "name": "data",
@@ -57,32 +63,64 @@
       "reason": "no-project-marker"
     },
     {
+      "name": "ebf574842c8a441fa08bb497615a8955",
+      "path": "ebf574842c8a441fa08bb497615a8955",
+      "status": "excluded",
+      "reason": "no-project-marker"
+    },
+    {
+      "name": "frontend",
+      "path": "frontend",
+      "status": "included",
+      "reason": "project-marker-detected",
+      "kind": "frontend"
+    },
+    {
+      "name": "hs_err_pid153180.log",
+      "path": "hs_err_pid153180.log",
+      "status": "excluded",
+      "reason": "not-a-directory"
+    },
+    {
+      "name": "knowledge_base",
+      "path": "knowledge_base",
+      "status": "excluded",
+      "reason": "no-project-marker"
+    },
+    {
+      "name": "logs",
+      "path": "logs",
+      "status": "excluded",
+      "reason": "no-project-marker"
+    },
+    {
+      "name": "models",
+      "path": "models",
+      "status": "excluded",
+      "reason": "no-project-marker"
+    },
+    {
+      "name": "platform-api",
+      "path": "platform-api",
+      "status": "included",
+      "reason": "project-marker-detected",
+      "kind": "unknown"
+    },
+    {
       "name": "README.md",
       "path": "README.md",
       "status": "excluded",
       "reason": "not-a-directory"
     },
     {
-      "name": "requirements.txt",
-      "path": "requirements.txt",
+      "name": "replay_pid153180.log",
+      "path": "replay_pid153180.log",
       "status": "excluded",
       "reason": "not-a-directory"
     },
     {
-      "name": "SAAS_PLAN.md",
-      "path": "SAAS_PLAN.md",
-      "status": "excluded",
-      "reason": "not-a-directory"
-    },
-    {
-      "name": "src",
-      "path": "src",
-      "status": "excluded",
-      "reason": "no-project-marker"
-    },
-    {
-      "name": "train_model.py",
-      "path": "train_model.py",
+      "name": "skills-lock.json",
+      "path": "skills-lock.json",
       "status": "excluded",
       "reason": "not-a-directory"
     }

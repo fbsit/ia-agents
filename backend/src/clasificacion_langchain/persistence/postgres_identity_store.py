@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from clasificacion_langchain.auth.repository import RefreshTokenRecord, UserRecord
 from clasificacion_langchain.tenancy.repository import MembershipRecord, OrganizationRecord
+from clasificacion_langchain.persistence.pg_connections import pooled_connection
 
 
 def _to_epoch_seconds(value: datetime) -> int:
@@ -30,7 +31,7 @@ class PostgresIdentityStore:
         self._ensure_schema()
 
     def _connect(self):
-        return self._psycopg.connect(self.dsn)
+        return pooled_connection(self._psycopg, self.dsn)
 
     def _ensure_schema(self) -> None:
         with self._connect() as conn:

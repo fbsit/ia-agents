@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from clasificacion_langchain.persistence.pg_connections import pooled_connection
+
 import logging
 import os
 from dataclasses import dataclass
@@ -168,7 +170,7 @@ class PostgresChatAuditStore:
         self._ensure_schema()
 
     def _connect(self):
-        return self._psycopg.connect(self.dsn)
+        return pooled_connection(self._psycopg, self.dsn)
 
     def _ensure_schema(self) -> None:
         with self._connect() as conn:

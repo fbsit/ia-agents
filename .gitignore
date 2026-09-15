@@ -19,3 +19,15 @@ frontend/.env.local
 # Legacy frontend archive
 archive/apps-web-legacy/node_modules/
 archive/apps-web-legacy/.next/
+
+# Secretos y artefactos locales (nunca versionar)
+platform-api/.env
+/logs/
+/*.log
+*.db
+/models/
+/data/
+# Directorios de conocimiento de agentes creados al correr desde la raiz (knowledge_dir relativo)
+/474cf61f3b8842c69a2a0a07d0d11331/
+/83a371f2d2f94b4a8ebcfd17b317205a/
+/b1b08b67e3fe422c9ffe8681e583a857/

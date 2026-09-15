@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from uuid import uuid4
 
-from clasificacion_langchain.agent_tools import AgentToolset
+from clasificacion_langchain.shared.ml.agent_tools import AgentToolset
 from clasificacion_langchain.chat.config import ChatServiceConfig
 from clasificacion_langchain.chat.memory_store import InMemorySessionStore
 from clasificacion_langchain.chat.session_store import SessionStore
 from clasificacion_langchain.chat.schemas import ChatRequest, ChatResponse
-from clasificacion_langchain.hybrid_agent_graph import build_hybrid_agent_graph
-from clasificacion_langchain.intent_router import IntentRouter
+from clasificacion_langchain.shared.ml.hybrid_agent_graph import build_hybrid_agent_graph
+from clasificacion_langchain.shared.ml.intent_router import IntentRouter
 from clasificacion_langchain.rag.pipeline import RAGPipeline
+
+
+logger = logging.getLogger(__name__)
 
 
 def _format_history_for_query(history: list[tuple[str, str]]) -> str:
@@ -34,22 +38,27 @@ class ChatService:
         self.memory = session_store or InMemorySessionStore(
             max_turns=config.max_session_turns
         )
+        self.graph = None
+        self.startup_issue: str | None = None
 
-        rag_pipeline = RAGPipeline.from_artifact(
-            index_path=config.rag_index_path,
-            use_openai=config.use_openai,
-            openai_model=config.openai_model,
-            generation_provider=config.generation_provider,
-            anthropic_model=config.anthropic_model,
-        )
-        intent_router = self._load_router_if_available(config.intent_model_path)
-        toolset = AgentToolset(rag_pipeline=rag_pipeline, intent_router=intent_router)
-
-        self.graph = build_hybrid_agent_graph(
-            toolset=toolset,
-            rag_intents=config.rag_intents,
-            confidence_threshold=config.confidence_threshold,
-        )
+        try:
+            rag_pipeline = RAGPipeline.from_artifact(
+                index_path=config.rag_index_path,
+                use_openai=config.use_openai,
+                openai_model=config.openai_model,
+                generation_provider=config.generation_provider,
+                anthropic_model=config.anthropic_model,
+            )
+            intent_router = self._load_router_if_available(config.intent_model_path)
+            toolset = AgentToolset(rag_pipeline=rag_pipeline, intent_router=intent_router)
+            self.graph = build_hybrid_agent_graph(
+                toolset=toolset,
+                rag_intents=config.rag_intents,
+                confidence_threshold=config.confidence_threshold,
+            )
+        except FileNotFoundError as exc:
+            self.startup_issue = str(exc)
+            logger.warning("chat_service_degraded detail=%s", exc)
 
     def _load_router_if_available(self, model_path: str) -> IntentRouter | None:
         path = Path(model_path)
@@ -76,6 +85,34 @@ class ChatService:
         trace_id = uuid4().hex[:12]
         history = self._session_history(request.company_id, request.session_id)
         query = self._build_query(request.message, history)
+
+        if self.graph is None:
+            answer = (
+                "El motor de conocimiento todavia no esta listo. Falta construir el indice RAG "
+                "o cargar conocimiento operativo para este entorno."
+            )
+            self.memory.append_user_message(
+                company_id=request.company_id,
+                session_id=request.session_id,
+                text=request.message,
+            )
+            self.memory.append_assistant_message(
+                company_id=request.company_id,
+                session_id=request.session_id,
+                text=answer,
+            )
+            return ChatResponse(
+                trace_id=trace_id,
+                company_id=request.company_id,
+                session_id=request.session_id,
+                answer=answer,
+                route="fallback",
+                route_reason="rag_not_ready",
+                intent_label="sin_router",
+                intent_confidence=0.0,
+                sources=[],
+                escalation_required=True,
+            )
 
         graph_result = self.graph.invoke(
             {

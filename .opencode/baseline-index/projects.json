@@ -1,4 +1,23 @@
 {
-  "generated_at": "2026-04-02T22:54:51.230Z",
-  "items": []
+  "generated_at": "2026-06-17T20:20:45.683Z",
+  "items": [
+    {
+      "name": "frontend",
+      "path": "frontend",
+      "kind": "frontend",
+      "markers": [
+        "package.json"
+      ],
+      "cache": "hit"
+    },
+    {
+      "name": "platform-api",
+      "path": "platform-api",
+      "kind": "unknown",
+      "markers": [
+        "pom.xml"
+      ],
+      "cache": "hit"
+    }
+  ]
 }

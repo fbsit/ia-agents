@@ -46,6 +46,7 @@ Default local ports:
 
 - `server.port=8081` (Spring)
 - `app.ai-engine.base-url=http://localhost:8080` (Python AI Engine)
+- `app.ai-engine.path-prefix=/api` (Python monta `/internal/ai/*` bajo `/api`)
 
 ## Config
 

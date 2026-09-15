@@ -29,11 +29,19 @@ def _read_csv_text(raw_text: str) -> str:
         series = df["text"].astype(str)
         return "\n".join(series.tolist()).strip()
 
+    # Cada fila conserva el nombre de su columna ("precio_clp: 34990 | stock: 0"). Sin el
+    # encabezado, un catalogo pierde el significado de cada valor y ni el retrieval ni el
+    # LLM pueden responder "tienen stock?" o "cuanto cuesta?".
+    columns = [str(column).strip() for column in df.columns]
     records: list[str] = []
     for row in df.fillna("").astype(str).itertuples(index=False):
-        row_text = " | ".join(value for value in row if value)
-        if row_text:
-            records.append(row_text)
+        cells = [
+            f"{column}: {value.strip()}"
+            for column, value in zip(columns, row)
+            if value and value.strip()
+        ]
+        if cells:
+            records.append(" | ".join(cells))
     return "\n".join(records).strip()
 
 
@@ -144,7 +152,9 @@ def load_company_documents(base_dir: str | Path) -> list[KnowledgeDocument]:
             if not text:
                 continue
 
-            source = str(path.relative_to(root))
+            # Siempre con "/" para que el source sea estable entre Windows y Linux
+            # (formato contractual: "<company_id>/<ruta relativa>").
+            source = path.relative_to(root).as_posix()
             metadata = {
                 "extension": path.suffix.lower(),
                 "filename": path.name,

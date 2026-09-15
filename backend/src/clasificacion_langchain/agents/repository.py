@@ -67,7 +67,16 @@ class AgentRepository(Protocol):
     def list_agents(self, org_ids: set[str], company_id: str | None = None) -> list[AgentRecord]:
         ...
 
+    def list_agents_with_document_counts(
+        self, org_ids: set[str], company_id: str | None = None
+    ) -> list[tuple[AgentRecord, int]]:
+        """Listado + cantidad de documentos en una sola consulta (evita N+1 contra bases remotas)."""
+        ...
+
     def get_agent(self, agent_id: str) -> AgentRecord | None:
+        ...
+
+    def list_all_agents(self) -> list[AgentRecord]:
         ...
 
     def update_agent(self, agent: AgentRecord) -> AgentRecord:
@@ -157,8 +166,21 @@ class InMemoryAgentRepository:
         result.sort(key=lambda item: item.created_at)
         return result
 
+    def list_agents_with_document_counts(
+        self, org_ids: set[str], company_id: str | None = None
+    ) -> list[tuple[AgentRecord, int]]:
+        return [
+            (agent, len(self.documents_by_agent.get(agent.agent_id, [])))
+            for agent in self.list_agents(org_ids, company_id=company_id)
+        ]
+
     def get_agent(self, agent_id: str) -> AgentRecord | None:
         return self.agents_by_id.get(agent_id)
+
+    def list_all_agents(self) -> list[AgentRecord]:
+        result = list(self.agents_by_id.values())
+        result.sort(key=lambda item: item.created_at)
+        return result
 
     def update_agent(self, agent: AgentRecord) -> AgentRecord:
         agent.updated_at = datetime.now(UTC)

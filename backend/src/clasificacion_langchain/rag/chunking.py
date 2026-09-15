@@ -125,10 +125,13 @@ def chunk_documents(
         else:
             raw_chunks = _chunk_text(document.text, chunk_size=chunk_size, overlap=overlap)
 
-        for position, chunk in enumerate(raw_chunks):
-            if len(chunk) < min_length:
-                continue
+        # min_length descarta fragmentos residuales, pero nunca debe vaciar un
+        # documento entero: si todos sus chunks son cortos se conserva el primero.
+        selected = [(position, chunk) for position, chunk in enumerate(raw_chunks) if len(chunk) >= min_length]
+        if not selected and raw_chunks:
+            selected = [(0, raw_chunks[0])]
 
+        for position, chunk in selected:
             digest = hashlib.sha1(
                 f"{document.company_id}|{document.source}|{position}|{chunk}".encode(
                     "utf-8"

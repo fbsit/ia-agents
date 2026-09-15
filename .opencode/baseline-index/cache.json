@@ -1,3 +1,12 @@
 {
-  "projects": {}
+  "projects": {
+    "C:\\Users\\Felipe\\Desktop\\clasificacion-langchain-demo\\frontend": {
+      "mtime": 1775589161,
+      "kind": "frontend"
+    },
+    "C:\\Users\\Felipe\\Desktop\\clasificacion-langchain-demo\\platform-api": {
+      "mtime": 1780265193,
+      "kind": "unknown"
+    }
+  }
 }

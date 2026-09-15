@@ -23,12 +23,12 @@ Este proyecto reconstruye tu notebook de 2014 en una arquitectura mantenible y d
 ```text
 clasificacion-langchain-demo/
   backend/
-    app.py
-    train_model.py
+    chat_api.py
     requirements.txt
     .env.example
     data/sample_tweets.csv
     src/clasificacion_langchain/
+      cli/
       data_sources.py
       text_cleaning.py
       training.py
@@ -79,7 +79,7 @@ Dashboard principal:
 ### Flujo local recomendado (backend + frontend)
 
 1. Levanta backend:
-   - `uvicorn chat_api:app --host 0.0.0.0 --port 8080`
+    - `uvicorn backend.chat_api:app --host 0.0.0.0 --port 8080`
 2. En otra terminal levanta frontend:
    - `cd ../frontend && npm run dev`
 
@@ -88,7 +88,7 @@ Dashboard principal:
 ### Opcion 1: dataset de ejemplo (rapido)
 
 ```bash
-python train_model.py --source csv --csv-path data/sample_tweets.csv
+python -m clasificacion_langchain.cli.train_model --source csv --csv-path backend/data/sample_tweets.csv
 ```
 
 ### Opcion 2: desde MySQL (como tu flujo original)
@@ -97,13 +97,13 @@ python train_model.py --source csv --csv-path data/sample_tweets.csv
 2. Ejecuta:
 
 ```bash
-python train_model.py --source mysql
+python -m clasificacion_langchain.cli.train_model --source mysql
 ```
 
 ## Demo
 
 ```bash
-streamlit run app.py
+streamlit run backend/src/clasificacion_langchain/cli/streamlit_demo.py
 ```
 
 ## Nota tecnica
@@ -139,7 +139,7 @@ knowledge_base/
 ### Construir indice RAG
 
 ```bash
-python build_rag_index.py --knowledge-dir knowledge_base --index-path models/rag_index.joblib
+python -m clasificacion_langchain.cli.build_rag_index --knowledge-dir backend/knowledge_base --index-path backend/models/rag_index.joblib
 ```
 
 Backends disponibles:
@@ -152,19 +152,19 @@ Backends disponibles:
 Ejemplo productivo recomendado (embeddings):
 
 ```bash
-python build_rag_index.py --knowledge-dir knowledge_base --backend dense_openai --embedding-model text-embedding-3-small
+python -m clasificacion_langchain.cli.build_rag_index --knowledge-dir backend/knowledge_base --backend dense_openai --embedding-model text-embedding-3-small
 ```
 
 ### Entrenar router de intencion
 
 ```bash
-python train_model.py --task intent --source csv --csv-path data/intent_router_dataset_template.csv --model-path models/intent_router.joblib
+python -m clasificacion_langchain.cli.train_model --task intent --source csv --csv-path backend/data/intent_router_dataset_template.csv --model-path backend/models/intent_router.joblib
 ```
 
 ### Probar agente hibrido por CLI
 
 ```bash
-python ask_hybrid_agent.py --question "Cual es el horario de soporte?" --company-id empresa_a --index-path models/rag_index.joblib
+python -m clasificacion_langchain.cli.ask_hybrid_agent --question "Cual es el horario de soporte?" --company-id empresa_a --index-path backend/models/rag_index.joblib
 ```
 
 ## API `/chat` multiempresa
@@ -187,7 +187,7 @@ Servicios:
 
 - API: `http://localhost:8080`
 - Redis: `localhost:6379`
-- Worker dedicado: `evaluation_worker.py` dentro de `clasi-eval-worker`
+- Worker dedicado: `python -m clasificacion_langchain.cli.evaluation_worker` dentro de `clasi-eval-worker`
 
 Para apagar:
 
@@ -198,7 +198,7 @@ docker compose down
 ### Levantar worker dedicado de evaluacion (opcional recomendado)
 
 ```bash
-python evaluation_worker.py
+python -m clasificacion_langchain.cli.evaluation_worker
 ```
 
 Si corres worker dedicado, puedes desactivar el worker embebido del API:
@@ -358,13 +358,13 @@ Notas de comportamiento en `POST /agents/{agent_id}/index/rebuild`:
 Migracion de documentos locales a object storage:
 
 ```bash
-python migrate_agent_documents_to_storage.py --backend s3 --db-path data/local_api.db
+python -m clasificacion_langchain.cli.migrate_agent_documents --backend s3 --db-path data/local_api.db
 ```
 
 Modo simulacion sin cambios:
 
 ```bash
-python migrate_agent_documents_to_storage.py --backend s3 --db-path data/local_api.db --dry-run
+python -m clasificacion_langchain.cli.migrate_agent_documents --backend s3 --db-path data/local_api.db --dry-run
 ```
 
 Variables de entorno para auth:

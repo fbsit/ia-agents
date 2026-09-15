@@ -218,7 +218,7 @@ Type reference in Spring: `AiErrorResponse`.
 ## Spring configuration keys
 
 - `app.ai-engine.base-url`
-- `app.ai-engine.path-prefix`
+- `app.ai-engine.path-prefix` (default `/api`; the Python app mounts every router, including `/internal/ai/*`, under that prefix)
 - `app.ai-engine.connect-timeout`
 - `app.ai-engine.read-timeout`
 - `app.ai-engine.shared-secret`

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from clasificacion_langchain.agents.commerce.state import normalize_stage as normalize_checkout_stage
+
 
 WORKFLOW_STAGES = {
     "browsing",
@@ -12,6 +14,21 @@ WORKFLOW_STAGES = {
     "checkout_ready",
     "post_sale_support",
     "human_handoff",
+}
+
+_CANONICAL_TO_LEGACY_STAGE = {
+    "browsing": "browsing",
+    "product_discovery": "product_lookup",
+    "cart_management": "cart_building",
+    "checkout_auth": "checkout_ready",
+    "shipping_selection": "shipping_selection",
+    "payment_selection": "payment_selection",
+    "document_selection": "payment_selection",
+    "order_review": "checkout_ready",
+    "payment_execution": "checkout_ready",
+    "completed": "checkout_ready",
+    "post_sale_support": "post_sale_support",
+    "human_handoff": "human_handoff",
 }
 
 
@@ -40,10 +57,8 @@ class CommerceTransitionDecision:
 
 
 def normalize_stage(stage: str | None) -> str:
-    candidate = (stage or "").strip().lower()
-    if candidate in WORKFLOW_STAGES:
-        return candidate
-    return "browsing"
+    candidate = normalize_checkout_stage(stage)
+    return _CANONICAL_TO_LEGACY_STAGE.get(candidate, "browsing")
 
 
 def build_state(

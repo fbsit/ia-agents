@@ -32,6 +32,10 @@ from clasificacion_langchain.agents.commerce_workflow import (
     normalize_stage,
     resolve_transition,
 )
+from clasificacion_langchain.agents.commerce.persistence import (
+    CheckoutSessionSummaryAdapter,
+)
+from clasificacion_langchain.agents.commerce.state import WhatsAppCheckoutState
 from clasificacion_langchain.agents.conversation_policy import (
     ConversationKey,
     ConversationPolicyEngine,
@@ -60,6 +64,7 @@ from clasificacion_langchain.rag.pipeline import (
 from clasificacion_langchain.rag.schemas import KnowledgeDocument, RAGAnswer
 from clasificacion_langchain.rag.vector_index import TfidfVectorIndex
 from clasificacion_langchain.settings.service import TenantLlmSettingsService
+from clasificacion_langchain.persistence.pg_connections import pooled_connection
 
 
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".pdf", ".docx"}
@@ -352,7 +357,7 @@ class AgentService:
     def _eval_pg_connect(self):
         if self._eval_psycopg is None:
             raise AgentValidationError("Eval Postgres no disponible")
-        return self._eval_psycopg.connect(self.eval_postgres_dsn)
+        return pooled_connection(self._eval_psycopg, self.eval_postgres_dsn)
 
     def _ensure_eval_postgres_schema(self) -> None:
         if self.eval_storage_backend != "postgres":
@@ -444,6 +449,11 @@ class AgentService:
 
     def list_agents(self, allowed_org_ids: set[str], company_id: str | None = None) -> list[AgentRecord]:
         return self.repository.list_agents(org_ids=allowed_org_ids, company_id=company_id)
+
+    def list_agents_with_document_counts(
+        self, allowed_org_ids: set[str], company_id: str | None = None
+    ) -> list[tuple[AgentRecord, int]]:
+        return self.repository.list_agents_with_document_counts(org_ids=allowed_org_ids, company_id=company_id)
 
     def get_accessible_agent(self, agent_id: str, allowed_org_ids: set[str]) -> AgentRecord:
         agent = self.repository.get_agent(agent_id)
@@ -1633,6 +1643,38 @@ class AgentService:
     def get_session_summary(self, company_id: str, agent_id: str, session_id: str) -> SessionSummary:
         return self._session_summary(company_id=company_id, agent_id=agent_id, session_id=session_id)
 
+    def get_checkout_workflow_state(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+        channel: str,
+    ) -> WhatsAppCheckoutState:
+        return CheckoutSessionSummaryAdapter.from_summary(
+            company_id=company_id,
+            agent_id=agent_id,
+            session_id=session_id,
+            channel=channel,
+            summary=self._session_summary(company_id=company_id, agent_id=agent_id, session_id=session_id),
+        )
+
+    def project_checkout_workflow_state(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+        channel: str,
+    ) -> dict[str, str]:
+        state = self.get_checkout_workflow_state(
+            company_id=company_id,
+            agent_id=agent_id,
+            session_id=session_id,
+            channel=channel,
+        )
+        return CheckoutSessionSummaryAdapter.to_workflow_state_dict(state)
+
     def get_session_summary_text(self, company_id: str, agent_id: str, session_id: str) -> str:
         return _format_session_summary(
             self._session_summary(company_id=company_id, agent_id=agent_id, session_id=session_id)
@@ -1983,6 +2025,7 @@ class AgentService:
             )
             primary = pipeline.answer(
                 query=contextual_query,
+                retrieval_query=message,
                 company_id=company_id,
                 top_k=top_k,
                 min_score=min_score,

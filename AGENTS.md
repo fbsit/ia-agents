@@ -11,11 +11,13 @@ Operational guide for coding agents in this repository.
 - Do not add tooling/framework complexity unless requested.
 
 ## 2) Repository map
-- `backend/app.py`: Streamlit app entrypoint.
-- `backend/train_model.py`: CLI training entrypoint.
-- `backend/build_rag_index.py`: CLI for building RAG index artifacts.
-- `backend/ask_hybrid_agent.py`: CLI for local hybrid-agent queries.
-- `backend/chat_api.py`: FastAPI service exposing `/chat` and WhatsApp webhook endpoints.
+- `backend/chat_api.py`: FastAPI service entrypoint. Imports the official modular app from `backend/src/clasificacion_langchain/api/app.py`.
+- `backend/src/clasificacion_langchain/cli/train_model.py`: CLI training entrypoint.
+- `backend/src/clasificacion_langchain/cli/build_rag_index.py`: CLI for building RAG index artifacts.
+- `backend/src/clasificacion_langchain/cli/ask_hybrid_agent.py`: CLI for local hybrid-agent queries.
+- `backend/src/clasificacion_langchain/cli/migrate_agent_documents.py`: CLI for storage migration of agent documents.
+- `backend/src/clasificacion_langchain/cli/evaluation_worker.py`: Dedicated evaluation worker CLI.
+- `backend/src/clasificacion_langchain/cli/streamlit_demo.py`: Legacy Streamlit demo module.
 - `frontend/`: Next.js frontend project.
 - `platform-api/`: Spring Boot API Gateway/BFF (Option A).
 - `backend/src/clasificacion_langchain/text_cleaning.py`: normalization + NLTK resources.
@@ -57,15 +59,15 @@ Use these commands as the default execution contract for agents.
 ### 5.1 Build/run commands
 - Train from sample CSV (fast local path):
 ```bash
-python backend/train_model.py --source csv --csv-path backend/data/sample_tweets.csv
+python -m clasificacion_langchain.cli.train_model --source csv --csv-path backend/data/sample_tweets.csv
 ```
 - Train intent router from template dataset:
 ```bash
-python backend/train_model.py --task intent --source csv --csv-path backend/data/intent_router_dataset_template.csv --model-path backend/models/intent_router.joblib
+python -m clasificacion_langchain.cli.train_model --task intent --source csv --csv-path backend/data/intent_router_dataset_template.csv --model-path backend/models/intent_router.joblib
 ```
 - Build RAG index (auto backend selection):
 ```bash
-python backend/build_rag_index.py --knowledge-dir backend/knowledge_base --backend auto --index-path backend/models/rag_index.joblib
+python -m clasificacion_langchain.cli.build_rag_index --knowledge-dir backend/knowledge_base --backend auto --index-path backend/models/rag_index.joblib
 ```
 - Run FastAPI backend:
 ```bash
@@ -81,17 +83,17 @@ npm run dev
 ```
 - Train from MySQL (`.env` required):
 ```bash
-python backend/train_model.py --source mysql
+python -m clasificacion_langchain.cli.train_model --source mysql
 ```
 - Run Streamlit demo:
 ```bash
-streamlit run backend/app.py
+streamlit run backend/src/clasificacion_langchain/cli/streamlit_demo.py
 ```
 
 ### 5.2 Lint/static checks
 - Syntax check all project Python files:
 ```bash
-python -m compileall backend/app.py backend/train_model.py backend/build_rag_index.py backend/ask_hybrid_agent.py backend/chat_api.py backend/src
+python -m compileall backend/chat_api.py backend/src
 ```
 - If available in your environment, run Ruff:
 ```bash
@@ -200,7 +202,7 @@ npm run test
 - If a command cannot be run locally, state exactly what was not verified.
 
 ## 9) Pre-handoff checklist
-- Touched path executes (`train_model.py` and/or `app.py` as relevant).
+- Touched path executes (`python -m clasificacion_langchain.cli.*` and/or `chat_api.py` as relevant).
 - Syntax check passes (`python -m compileall ...`).
 - Tests pass, or clearly document why they were not run.
 - Documentation reflects any command/argument/behavior changes.

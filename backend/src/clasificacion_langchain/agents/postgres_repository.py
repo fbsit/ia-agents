@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from clasificacion_langchain.agents.repository import AgentDocumentRecord, AgentRecord
+from clasificacion_langchain.persistence.pg_connections import pooled_connection
 
 
 def _utcnow() -> datetime:
@@ -31,7 +32,7 @@ class PostgresAgentRepository:
         self._ensure_schema()
 
     def _connect(self):
-        return self._psycopg.connect(self.dsn)
+        return pooled_connection(self._psycopg, self.dsn)
 
     def _ensure_schema(self) -> None:
         with self._connect() as conn:
@@ -245,6 +246,28 @@ class PostgresAgentRepository:
                 rows = cur.fetchall()
         return [self._row_to_agent(row) for row in rows]
 
+    def list_agents_with_document_counts(
+        self, org_ids: set[str], company_id: str | None = None
+    ) -> list[tuple[AgentRecord, int]]:
+        if not org_ids:
+            return []
+        # a.* conserva el orden de columnas que espera _row_to_agent; el COUNT va al final.
+        query = (
+            "SELECT a.*, COUNT(d.document_id) AS documents_count "
+            "FROM agents a LEFT JOIN agent_documents d ON d.agent_id = a.agent_id "
+            "WHERE a.org_id = ANY(%s)"
+        )
+        params: list[object] = [list(org_ids)]
+        if company_id is not None:
+            query += " AND a.company_id = %s"
+            params.append(company_id)
+        query += " GROUP BY a.agent_id ORDER BY a.created_at ASC"
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, tuple(params))
+                rows = cur.fetchall()
+        return [(self._row_to_agent(row), int(row[-1] or 0)) for row in rows]
+
     def get_agent(self, agent_id: str) -> AgentRecord | None:
         with self._connect() as conn:
             with conn.cursor() as cur:
@@ -253,6 +276,21 @@ class PostgresAgentRepository:
         if row is None:
             return None
         return self._row_to_agent(row)
+
+    def list_all_agents(self) -> list[AgentRecord]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT agent_id, org_id, company_id, name, objective, tone, description,
+                           rag_backend, generation_provider, use_openai_generation, openai_model,
+                           knowledge_dir, index_path, created_at::text, updated_at::text, indexed_at::text
+                    FROM {self.schema}.agents
+                    ORDER BY created_at ASC
+                    """
+                )
+                rows = cur.fetchall()
+        return [self._row_to_agent(row) for row in rows]
 
     def update_agent(self, agent: AgentRecord) -> AgentRecord:
         agent.updated_at = _utcnow()

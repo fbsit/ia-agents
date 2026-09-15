@@ -44,8 +44,9 @@ services:
     depends_on:
       - redis
       - api
-    command: ["python", "evaluation_worker.py"]
+    command: ["python", "-m", "clasificacion_langchain.cli.evaluation_worker"]
     environment:
+      PYTHONPATH: /app/src
       REDIS_URL: redis://redis:6379/0
       EVAL_JOB_QUEUE_BACKEND: redis
       EVAL_JOB_QUEUE_REDIS_URL: redis://redis:6379/0

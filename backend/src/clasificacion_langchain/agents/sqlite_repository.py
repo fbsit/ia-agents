@@ -266,6 +266,26 @@ class SQLiteAgentRepository:
             rows = conn.execute(query, params).fetchall()
         return [self._row_to_agent(row) for row in rows]
 
+    def list_agents_with_document_counts(
+        self, org_ids: set[str], company_id: str | None = None
+    ) -> list[tuple[AgentRecord, int]]:
+        if not org_ids:
+            return []
+        placeholders = ",".join("?" for _ in org_ids)
+        params: list[str] = list(org_ids)
+        query = (
+            "SELECT a.*, COUNT(d.document_id) AS documents_count "
+            "FROM agents a LEFT JOIN agent_documents d ON d.agent_id = a.agent_id "
+            f"WHERE a.org_id IN ({placeholders})"
+        )
+        if company_id is not None:
+            query += " AND a.company_id = ?"
+            params.append(company_id)
+        query += " GROUP BY a.agent_id ORDER BY a.created_at ASC"
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [(self._row_to_agent(row), int(row["documents_count"] or 0)) for row in rows]
+
     def get_agent(self, agent_id: str) -> AgentRecord | None:
         with self._connect() as conn:
             row = conn.execute(
@@ -275,6 +295,19 @@ class SQLiteAgentRepository:
         if row is None:
             return None
         return self._row_to_agent(row)
+
+    def list_all_agents(self) -> list[AgentRecord]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT agent_id, org_id, company_id, name, objective, tone, description,
+                       rag_backend, generation_provider, use_openai_generation, openai_model,
+                       knowledge_dir, index_path, created_at, updated_at, indexed_at
+                FROM agents
+                ORDER BY created_at ASC
+                """
+            ).fetchall()
+        return [self._row_to_agent(row) for row in rows]
 
     def update_agent(self, agent: AgentRecord) -> AgentRecord:
         agent.updated_at = datetime.now(UTC)

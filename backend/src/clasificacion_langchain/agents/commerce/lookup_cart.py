@@ -1,0 +1,382 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import re
+from typing import Any, Callable
+
+from clasificacion_langchain.agents.commerce.cart_snapshot import (
+    build_cart_status_answer_from_snapshot,
+    cart_snapshot_items,
+    enrich_cart_snapshot_prices,
+)
+from clasificacion_langchain.agents.commerce.commands import CheckoutCommand
+from clasificacion_langchain.agents.commerce.recent_products import (
+    has_explicit_add_to_cart_intent,
+    is_implicit_add_to_cart_message,
+    is_quantity_only_followup,
+    match_recent_product_from_message,
+    normalize_text,
+    parse_quantity,
+)
+from clasificacion_langchain.agents.commerce.state import WhatsAppCheckoutState
+from clasificacion_langchain.agents.commerce.tool_ports import CommerceToolExecutor
+
+
+RecentProductsProvider = Callable[[str], list[dict[str, Any]]]
+
+
+@dataclass
+class LookupCartResolution:
+    payload: dict[str, Any] | None
+    handled: bool
+
+
+def _is_clear_cart_message(message: str) -> bool:
+    normalized = normalize_text(message)
+    if not normalized:
+        return False
+    return any(
+        phrase in normalized
+        for phrase in [
+            "reseteame el carrito",
+            "resetea el carrito",
+            "limpia el carrito",
+            "vacia el carrito",
+            "vacia carrito",
+            "vaciame el carrito",
+            "borra el carrito",
+            "deja el carrito vacio",
+            "deja el carrito vacia",
+        ]
+    )
+
+
+def _is_cart_status_message(message: str) -> bool:
+    normalized = normalize_text(message)
+    if not normalized:
+        return False
+    return "carrito" in normalized and any(token in normalized for token in ["como va", "resumen", "estado", "mi carrito", "carrito actual", "va el carrito"])
+
+
+def _extract_widget_cart_requests(message: str) -> list[dict[str, Any]]:
+    normalized = normalize_text(message)
+    if not normalized or not has_explicit_add_to_cart_intent(message):
+        return []
+    segments = [part.strip() for part in re.split(r"\s+(?:y|e|ademas|tambien)\s+", normalized) if part.strip()]
+    requests: list[dict[str, Any]] = []
+    for segment in segments:
+        cleaned = re.sub(
+            r"\b(?:agrega|agregame|agregar|suma|sumame|sumar|pon|poneme|poner|mete|meteme|anade|llevo|quiero|porfa|por favor|al|carrito|el|la|los|las)\b",
+            " ",
+            segment,
+            flags=re.IGNORECASE,
+        )
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if not cleaned:
+            continue
+        quantity = parse_quantity(segment)
+        product_query = re.sub(r"^\d+\s+", "", cleaned).strip()
+        product_query = re.sub(r"^(un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+", "", product_query).strip()
+        if product_query:
+            requests.append({"quantity": quantity, "product_query": product_query})
+    return requests
+
+
+def _selected_product_requests_from_workflow_state(workflow_state: dict[str, str] | None) -> list[dict[str, Any]]:
+    raw = str((workflow_state or {}).get("selected_products") or "").strip()
+    if not raw:
+        return []
+    if raw.startswith("[") and raw.endswith("]"):
+        raw = raw[1:-1]
+    candidates: list[str] = []
+    for chunk in re.split(r"[,\n;•]+", raw):
+        cleaned = chunk.strip().strip("'\"")
+        if cleaned:
+            candidates.append(cleaned)
+    unique: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = normalize_text(candidate)
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(candidate)
+    return [{"product_query": name, "quantity": 1} for name in unique[:6]]
+
+
+def _normalize_catalog_product(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(item.get("id") or "").strip(),
+        "checkout_product_id": str(item.get("code") or item.get("id") or "").strip(),
+        "variant_id": str(item.get("id") or "").strip(),
+        "name": str(item.get("name") or "Producto").strip() or "Producto",
+        "price": str(item.get("price") or "N/D").strip(),
+        "stock": str(item.get("available_units") or item.get("stock") or "0").strip(),
+        "image_url": str(item.get("image_url") or "").strip() or None,
+    }
+
+
+def _build_multi_cart_tool_payload(canonical_results: list[dict[str, Any]], cart_requests: list[dict[str, Any]]) -> dict[str, Any] | None:
+    cart_actions: list[dict[str, Any]] = []
+    products: list[dict[str, Any]] = []
+    seen_products: set[str] = set()
+    for cart_request, result in zip(cart_requests, canonical_results):
+        if not isinstance(result, dict) or not result.get("ok"):
+            continue
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        items = data.get("items") if isinstance(data.get("items"), list) else []
+        safe_items = [item for item in items if isinstance(item, dict)]
+        if not safe_items:
+            continue
+        first = safe_items[0]
+        product_id = str(first.get("id") or "").strip()
+        if not product_id:
+            continue
+        checkout_product_id = str(first.get("code") or first.get("id") or "").strip()
+        variant_id = str(first.get("id") or "").strip()
+        name = str(first.get("name") or "Producto").strip() or "Producto"
+        cart_action_item = {
+            "product_id": checkout_product_id or product_id,
+            "checkout_product_id": checkout_product_id or product_id,
+            "variant_id": variant_id or product_id,
+            "quantity": int(cart_request.get("quantity") or 1),
+            "name": name,
+        }
+        cart_actions.append({"type": "add_to_cart", "item": cart_action_item})
+        for item in safe_items[:3]:
+            current_id = str(item.get("id") or "").strip()
+            if not current_id or current_id in seen_products:
+                continue
+            seen_products.add(current_id)
+            products.append(_normalize_catalog_product(item))
+    if not cart_actions:
+        return None
+    summary = " y ".join(
+        f"{action['item']['quantity']} {action['item']['name']}" for action in cart_actions if isinstance(action, dict)
+    )
+    return {
+        "answer": f'Listo, agregue {summary} al carrito. Si queres, seguimos con checkout cuando me digas "quiero pagar".',
+        "intent_label": "add_to_cart",
+        "cart_action": cart_actions[0],
+        "cart_actions": cart_actions,
+        "products": products[:6],
+        "focused_product": str(((cart_actions[0].get("item") or {}).get("name") or "")).strip(),
+        "workflow_stage": "cart_building",
+        "pending_next_step": "shipping_selection",
+        "awaiting_slot": "shipping_method",
+    }
+
+
+def _build_multi_product_lookup_payload(canonical_results: list[dict[str, Any]], queries: list[str], user_message: str) -> dict[str, Any] | None:
+    products: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for query, result in zip(queries, canonical_results):
+        if not isinstance(result, dict) or not result.get("ok"):
+            continue
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        items = data.get("items") if isinstance(data.get("items"), list) else []
+        safe_items = [item for item in items if isinstance(item, dict)]
+        for item in safe_items[:3]:
+            product_id = str(item.get("id") or "").strip()
+            if not product_id or product_id in seen:
+                continue
+            seen.add(product_id)
+            normalized_product = _normalize_catalog_product(item)
+            normalized_product["query"] = query
+            products.append(normalized_product)
+    if not products:
+        return None
+    normalized_message = normalize_text(user_message)
+    answer = "Si, encontre estas opciones:" if any(token in normalized_message for token in ["stock", "disponible", "precio", "cuesta", "tienen", "tiene", "hay"]) else "Te paso las opciones:"
+    formatted = "\n".join(f"• {p['name']} — ${p['price']}" for p in products[:5] if p.get("name"))
+    if formatted:
+        answer = f"{answer}\n{formatted}"
+    return {
+        "answer": answer,
+        "products": products[:6],
+        "focused_product": products[0]["name"] if products else "",
+        "workflow_stage": "product_lookup",
+        "pending_next_step": "add_to_cart",
+        "awaiting_slot": "quantity_or_action",
+    }
+
+
+@dataclass
+class LookupCartResolver:
+    executor: CommerceToolExecutor
+    recent_products_provider: RecentProductsProvider
+
+    def resolve(self, state: WhatsAppCheckoutState, command: CheckoutCommand | None) -> LookupCartResolution:
+        # Migration boundary: discovery/cart behaviors resolve here so `chat_api.py`
+        # stops being the primary owner of WhatsApp commerce lookup/cart semantics.
+        payload = self._resolve_recent_or_focused_followup(state, command)
+        if payload is not None:
+            return LookupCartResolution(payload=payload, handled=True)
+        payload = self._resolve_direct_cart(state, command)
+        if payload is not None:
+            return LookupCartResolution(payload=payload, handled=True)
+        payload = self._resolve_clear_cart(state)
+        if payload is not None:
+            return LookupCartResolution(payload=payload, handled=True)
+        payload = self._resolve_cart_status(state, command)
+        if payload is not None:
+            return LookupCartResolution(payload=payload, handled=True)
+        payload = self._resolve_product_lookup(state, command)
+        if payload is not None:
+            return LookupCartResolution(payload=payload, handled=True)
+        return LookupCartResolution(payload=None, handled=False)
+
+    def _resolve_product_lookup(self, state: WhatsAppCheckoutState, command: CheckoutCommand | None) -> dict[str, Any] | None:
+        if command is None:
+            return None
+        if command.intent != "product_lookup" and command.requested_tool != "get_product_availability":
+            return None
+        queries = [query for query in command.product_queries if query]
+        if not queries and command.query:
+            queries = [command.query]
+        if not queries:
+            return None
+        canonical_results = [
+            self.executor.execute(
+                tenant_id=state.company_id,
+                tool="get_product_availability",
+                channel=state.channel,
+                user_id=state.user_id,
+                arguments={"query": query, "limit": 5, "session_id": state.session_id},
+            )
+            for query in queries
+        ]
+        return _build_multi_product_lookup_payload(canonical_results, queries, state.user_goal)
+
+    def _resolve_recent_or_focused_followup(self, state: WhatsAppCheckoutState, command: CheckoutCommand | None) -> dict[str, Any] | None:
+        workflow_state = state.to_workflow_state_dict()
+        pending_next_step = str(workflow_state.get("pending_next_step") or "").strip().lower()
+        workflow_stage = str(workflow_state.get("stage") or "").strip().lower()
+        awaiting_slot = str(workflow_state.get("awaiting_slot") or "").strip().lower()
+        if pending_next_step != "add_to_cart" and workflow_stage != "product_lookup":
+            return None
+        recent_products = self.recent_products_provider(state.session_id)
+        selected_product = None
+        recent_query = ""
+        if command is not None and command.product_queries:
+            recent_query = str(command.product_queries[0] or "").strip()
+        if is_implicit_add_to_cart_message(state.user_goal):
+            selected_product = recent_products[0] if recent_products else None
+        elif recent_query:
+            selected_product = match_recent_product_from_message(recent_query, recent_products)
+        else:
+            selected_product = match_recent_product_from_message(state.user_goal, recent_products)
+        if isinstance(selected_product, dict):
+            product_id = str(selected_product.get("id") or "").strip()
+            if not product_id:
+                return None
+            checkout_product_id = str(selected_product.get("checkout_product_id") or product_id).strip()
+            variant_id = str(selected_product.get("variant_id") or product_id).strip()
+            name = str(selected_product.get("name") or "Producto").strip() or "Producto"
+            quantity = command.quantity if command is not None and command.quantity else parse_quantity(state.user_goal)
+            cart_action = {
+                "type": "add_to_cart",
+                "item": {
+                    "product_id": checkout_product_id or product_id,
+                    "checkout_product_id": checkout_product_id or product_id,
+                    "variant_id": variant_id or product_id,
+                    "quantity": quantity,
+                    "name": name,
+                },
+            }
+            return {
+                "answer": f'Listo, agregue {quantity} {name} al carrito. Si queres, seguimos con checkout cuando me digas "quiero pagar".',
+                "intent_label": "add_to_cart",
+                "workflow_stage": "cart_building",
+                "pending_next_step": "shipping_selection",
+                "cart_action": cart_action,
+                "cart_actions": [cart_action],
+                "products": [selected_product],
+            }
+        implicit_add = is_implicit_add_to_cart_message(state.user_goal)
+        if awaiting_slot != "quantity_or_action" and not is_quantity_only_followup(state.user_goal) and not implicit_add:
+            return None
+        workflow_requests = _selected_product_requests_from_workflow_state(workflow_state)
+        if not workflow_requests:
+            return None
+        quantity = command.quantity if command is not None and command.quantity else parse_quantity(state.user_goal)
+        cart_request = dict(workflow_requests[0])
+        cart_request["quantity"] = quantity
+        canonical_result = self.executor.execute(
+            tenant_id=state.company_id,
+            tool="get_product_availability",
+            channel=state.channel,
+            user_id=state.user_id,
+            arguments={
+                "query": str(cart_request.get("product_query") or "").strip(),
+                "limit": 5,
+                "session_id": state.session_id,
+            },
+        )
+        payload = _build_multi_cart_tool_payload([canonical_result], [cart_request])
+        if isinstance(payload, dict):
+            payload["focused_product"] = str(workflow_state.get("focused_product") or cart_request.get("product_query") or "").strip()
+            payload["awaiting_slot"] = "shipping_method"
+        return payload
+
+    def _resolve_direct_cart(self, state: WhatsAppCheckoutState, command: CheckoutCommand | None) -> dict[str, Any] | None:
+        workflow_state = state.to_workflow_state_dict()
+        if str(workflow_state.get("pending_next_step") or "").strip().lower() == "add_to_cart" or str(workflow_state.get("stage") or "").strip().lower() == "product_lookup":
+            return None
+        cart_requests: list[dict[str, Any]] = []
+        if command is not None and command.intent == "add_to_cart" and command.product_queries:
+            cart_requests = [
+                {"quantity": command.quantity or 1, "product_query": query}
+                for query in command.product_queries
+                if query
+            ]
+        if not cart_requests:
+            cart_requests = _extract_widget_cart_requests(state.user_goal)
+        if not cart_requests:
+            return None
+        canonical_results = [
+            self.executor.execute(
+                tenant_id=state.company_id,
+                tool="get_product_availability",
+                channel=state.channel,
+                user_id=state.user_id,
+                arguments={
+                    "query": str(cart_request.get("product_query") or "").strip(),
+                    "limit": 5,
+                    "session_id": state.session_id,
+                },
+            )
+            for cart_request in cart_requests
+            if str(cart_request.get("product_query") or "").strip()
+        ]
+        return _build_multi_cart_tool_payload(canonical_results, cart_requests)
+
+    def _resolve_clear_cart(self, state: WhatsAppCheckoutState) -> dict[str, Any] | None:
+        if not _is_clear_cart_message(state.user_goal):
+            return None
+        return {
+            "answer": "Listo, vacie el carrito.",
+            "intent_label": "clear_cart",
+            "workflow_stage": "browsing",
+            "pending_next_step": "",
+            "cart_action": {"type": "clear_cart"},
+        }
+
+    def _resolve_cart_status(self, state: WhatsAppCheckoutState, command: CheckoutCommand | None) -> dict[str, Any] | None:
+        if not ((_is_cart_status_message(state.user_goal)) or (command is not None and command.intent == "cart_status")):
+            return None
+        items = enrich_cart_snapshot_prices(
+            items=cart_snapshot_items(state.to_workflow_state_dict()),
+            company_id=state.company_id,
+            user_id=state.user_id,
+            channel=state.channel,
+            session_id=state.session_id,
+            executor=self.executor,
+        )
+        answer = build_cart_status_answer_from_snapshot(items)
+        return {
+            "answer": answer,
+            "intent_label": "cart_status",
+            "workflow_stage": state.stage or "cart_building",
+            "pending_next_step": state.pending_next_step or "cart_building",
+            "workflow_action": {"type": "show_cart"},
+        }

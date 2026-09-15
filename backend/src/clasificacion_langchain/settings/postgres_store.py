@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from clasificacion_langchain.settings.service import TenantLlmSettings
+from clasificacion_langchain.persistence.pg_connections import pooled_connection
 
 
 def _utcnow() -> datetime:
@@ -22,7 +23,7 @@ class PostgresTenantLlmSettingsStore:
         self._ensure_schema()
 
     def _connect(self):
-        return self._psycopg.connect(self.dsn)
+        return pooled_connection(self._psycopg, self.dsn)
 
     def _ensure_schema(self) -> None:
         with self._connect() as conn:

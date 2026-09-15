@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -9,6 +10,9 @@ from uuid import uuid4
 import jwt
 
 from clasificacion_langchain.auth.schemas import AuthPrincipal, TokenPair
+
+
+logger = logging.getLogger(__name__)
 
 
 class AuthTokenError(Exception):
@@ -41,8 +45,12 @@ class TokenService:
 
     @classmethod
     def from_env(cls) -> "TokenService":
+        secret_key = os.getenv("AUTH_SECRET_KEY", "").strip()
+        if not secret_key:
+            secret_key = "dev-insecure-auth-secret"
+            logger.warning("auth_secret_key_missing_using_dev_fallback")
         return cls(
-            secret_key=os.getenv("AUTH_SECRET_KEY", ""),
+            secret_key=secret_key,
             algorithm=os.getenv("AUTH_TOKEN_ALGORITHM", "HS256"),
             access_ttl_minutes=int(os.getenv("AUTH_ACCESS_TTL_MINUTES", "15")),
             refresh_ttl_days=int(os.getenv("AUTH_REFRESH_TTL_DAYS", "7")),

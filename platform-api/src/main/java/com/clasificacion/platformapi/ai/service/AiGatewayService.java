@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,17 +47,57 @@ public class AiGatewayService {
     private final TenancyService tenancyService;
     private final AiEngineClient aiEngineClient;
     private final String integrationServiceToken;
+    private final long identityCacheMillis;
+    /**
+     * Cache corto (por bearer token) del usuario + organizaciones ya resueltos.
+     * Cada request proxied hacia el AI Engine necesitaba dos consultas a una base remota
+     * solo para armar el contexto de tenant; con TTL corto se evita repetirlas.
+     */
+    private final ConcurrentHashMap<String, CachedIdentity> identityCache = new ConcurrentHashMap<>();
+
+    private record CachedIdentity(
+        String userId,
+        List<TenancyService.OrganizationMembershipView> organizations,
+        long expiresAtMillis
+    ) {
+    }
 
     public AiGatewayService(
         AuthService authService,
         TenancyService tenancyService,
         AiEngineClient aiEngineClient,
-        @Value("${app.integration.service-token:}") String integrationServiceToken
+        @Value("${app.integration.service-token:}") String integrationServiceToken,
+        @Value("${app.ai-engine.identity-cache-seconds:30}") long identityCacheSeconds
     ) {
         this.authService = authService;
         this.tenancyService = tenancyService;
         this.aiEngineClient = aiEngineClient;
         this.integrationServiceToken = integrationServiceToken == null ? "" : integrationServiceToken.trim();
+        this.identityCacheMillis = Math.max(0L, identityCacheSeconds) * 1000L;
+    }
+
+    private CachedIdentity resolveIdentity(String authorization) {
+        long now = System.currentTimeMillis();
+        if (identityCacheMillis > 0) {
+            CachedIdentity cached = identityCache.get(authorization);
+            if (cached != null && cached.expiresAtMillis() > now) {
+                return cached;
+            }
+        }
+        var profile = authService.me(authorization);
+        var organizations = tenancyService.listOrganizations(authorization);
+        CachedIdentity resolved = new CachedIdentity(
+            profile.user().userId(),
+            List.copyOf(organizations),
+            now + identityCacheMillis
+        );
+        if (identityCacheMillis > 0) {
+            if (identityCache.size() > 1000) {
+                identityCache.entrySet().removeIf(entry -> entry.getValue().expiresAtMillis() <= now);
+            }
+            identityCache.put(authorization, resolved);
+        }
+        return resolved;
     }
 
     public AiAgentResponse createAgent(
@@ -515,8 +556,8 @@ public class AiGatewayService {
             );
         }
 
-        var profile = authService.me(authorization);
-        var organizations = tenancyService.listOrganizations(authorization);
+        var identity = resolveIdentity(authorization);
+        var organizations = identity.organizations();
         if (organizations.isEmpty()) {
             throw new IllegalArgumentException("El usuario no tiene organizaciones activas");
         }
@@ -529,7 +570,7 @@ public class AiGatewayService {
         return new AiRequestContext(
             selected.companyId(),
             selected.orgId(),
-            profile.user().userId(),
+            identity.userId(),
             effectiveRequestId
         );
     }

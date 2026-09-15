@@ -1,13 +1,152 @@
 from __future__ import annotations
 
-import importlib
+import inspect
+import sys
 import tempfile
 from datetime import UTC, datetime, timedelta
+from functools import partial
+from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from clasificacion_langchain.agents.commerce import (  # noqa: E402
+    checkout_resolver,
+    extractors,
+    helpers,
+    intent_parser,
+    resolvers,
+    routing,
+    widget_payload,
+)
+from clasificacion_langchain.api.app import create_app  # noqa: E402
+from clasificacion_langchain.api.support import widget as widget_support  # noqa: E402
+from clasificacion_langchain.shared.ml.agent_tools import AgentToolset  # noqa: E402
+
+
+class _LegacyApiModule:
+    """
+    Adaptador del monolito `chat_api` legacy sobre la app modular.
+
+    - Atributos publicos (`app`, `chat_service`, `agent_service`, `tenancy_service`)
+      se leen/escriben sobre `app.state.runtime`.
+    - Los helpers privados `_xxx` del monolito se mapean a las funciones extraidas
+      en `agents/commerce/*`, inyectando `agent_service` y los callbacks que antes
+      eran globals del modulo.
+    - `monkeypatch.setattr(module, "_xxx", fake)` parchea el modulo real donde la
+      funcion se consume, para que el reemplazo tenga efecto.
+    """
+
+    _PATCH_TARGETS: dict[str, list[tuple[Any, str]]] = {
+        "_get_clubhx_tools_client": [(resolvers, "get_clubhx_tools_client"), (widget_support, "get_clubhx_tools_client")],
+        "_parse_commerce_intent_with_openai": [
+            (routing, "_parse_commerce_intent_with_openai"),
+            (intent_parser, "parse_commerce_intent_with_openai"),
+        ],
+        "_parse_invoice_data_with_openai": [(intent_parser, "parse_invoice_data_with_openai")],
+        "_run_commerce_workflow_router": [(routing, "run_commerce_workflow_router")],
+    }
+
+    def __init__(self, app) -> None:
+        object.__setattr__(self, "app", app)
+        object.__setattr__(self, "AgentToolset", AgentToolset)
+
+    # --- runtime publico -------------------------------------------------
+    @property
+    def _runtime(self):
+        return self.app.state.runtime
+
+    def __getattr__(self, name: str):
+        if name in self._PATCH_TARGETS:
+            module, attr = self._PATCH_TARGETS[name][0]
+            return getattr(module, attr)
+        runtime = self._runtime
+        if hasattr(runtime, name):
+            return getattr(runtime, name)
+        raise AttributeError(name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in self._PATCH_TARGETS:
+            for module, attr in self._PATCH_TARGETS[name]:
+                setattr(module, attr, value)
+            return
+        setattr(self._runtime, name, value)
+
+    # --- helpers privados del monolito ----------------------------------
+    def _with_agent_service(self, func):
+        if "agent_service" in inspect.signature(func).parameters:
+            return partial(func, agent_service=self._runtime.agent_service)
+        return func
+
+    def _commerce_callbacks(self) -> dict[str, Any]:
+        bind = self._with_agent_service
+        return {
+            "agent_service": self._runtime.agent_service,
+            "resolve_affirmative_followup": bind(resolvers.resolve_affirmative_workflow_followup),
+            "resolve_greeting_followup": bind(resolvers.resolve_greeting_workflow_followup),
+            "resolve_workflow_resume": bind(resolvers.resolve_workflow_resume_followup),
+            "legacy_preflight": bind(resolvers.legacy_checkout_preflight_response),
+            "resolve_checkout_followup": bind(resolvers.resolve_checkout_workflow_followup),
+            "update_memory": bind(resolvers.update_agent_memory_from_payload),
+            "fetch_addresses": bind(resolvers.fetch_saved_addresses_for_user),
+            "create_address": bind(resolvers.create_address_for_user),
+            "process_reminders": bind(resolvers.process_workflow_reminders_once),
+        }
+
+    def _resolve_shared_commerce_payload(self, **kwargs):
+        return routing.resolve_shared_commerce_payload(**{**self._commerce_callbacks(), **kwargs})
+
+    def _resolve_shared_commerce_payload_legacy(self, **kwargs):
+        return routing.resolve_shared_commerce_payload_legacy(**{**self._commerce_callbacks(), **kwargs})
+
+    def _agent_workflow_state(self, company_id: str, agent_id: str, session_id: str):
+        return helpers.agent_workflow_state(company_id, agent_id, session_id, self._runtime.agent_service)
+
+    def _update_agent_memory_from_payload(self, **kwargs):
+        return self._with_agent_service(resolvers.update_agent_memory_from_payload)(**kwargs)
+
+    def _process_workflow_reminders_once(self, **kwargs):
+        return self._with_agent_service(resolvers.process_workflow_reminders_once)(**kwargs)
+
+    def _resolve_checkout_workflow_followup(self, **kwargs):
+        return self._with_agent_service(resolvers.resolve_checkout_workflow_followup)(**kwargs)
+
+    def _resolve_affirmative_workflow_followup(self, **kwargs):
+        return resolvers.resolve_affirmative_workflow_followup(**kwargs)
+
+    def _resolve_checkout_payment_followup(self, **kwargs):
+        return self._with_agent_service(checkout_resolver.resolve_checkout_payment_followup)(**kwargs)
+
+    def _resolve_checkout_order_confirmation_followup(self, **kwargs):
+        return self._with_agent_service(checkout_resolver.resolve_checkout_order_confirmation_followup)(**kwargs)
+
+    @staticmethod
+    def _remember_commerce_products(*args, **kwargs):
+        return helpers.remember_commerce_products(*args, **kwargs)
+
+    @staticmethod
+    def _format_public_widget_tool_payload(*args, **kwargs):
+        return widget_payload.format_public_widget_tool_payload(*args, **kwargs)
+
+    @staticmethod
+    def _extract_pickup_location(*args, **kwargs):
+        return extractors.extract_pickup_location(*args, **kwargs)
+
+    @staticmethod
+    def _is_affirmative_followup_message(*args, **kwargs):
+        return extractors.is_affirmative_followup_message(*args, **kwargs)
+
+    @staticmethod
+    def _public_widget_token(*args, **kwargs):
+        return widget_support.public_widget_token(*args, **kwargs)
 
 
 def _load_api(
@@ -24,10 +163,11 @@ def _load_api(
     monkeypatch.setenv("PERSISTENCE_BACKEND", "sqlite")
     monkeypatch.setenv("SQLITE_DB_PATH", f"{temp_root}/clasi_api_{run_id}.db")
     monkeypatch.setenv("AGENT_ORCHESTRATOR_USE_LLM", orchestrator_use_llm)
+    # Aislar de la configuracion local (.env) que pueda apuntar a Postgres/Redis/S3.
+    for var in ("POSTGRES_DSN", "DATABASE_URL", "CHAT_SESSION_BACKEND", "DOC_STORAGE_BACKEND"):
+        monkeypatch.delenv(var, raising=False)
 
-    import chat_api
-
-    module = importlib.reload(chat_api)
+    module = _LegacyApiModule(create_app())
 
     class FakeChatService:
         def chat(self, request):
@@ -45,7 +185,8 @@ def _load_api(
             )
 
     module.chat_service = FakeChatService()
-    client = TestClient(module.app)
+    # La app modular monta todo bajo /api; el base_url evita reescribir cada ruta del test.
+    client = TestClient(module.app, base_url="http://testserver/api")
     return module, client
 
 
@@ -2506,6 +2647,62 @@ def test_greeting_with_auth_pending_workflow_returns_contextual_followup(monkeyp
     assert "correo" in payload["answer"].lower()
 
 
+def test_malformed_planner_payload_falls_back_to_legacy_followup(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(module, "_parse_commerce_intent_with_openai", lambda *args, **kwargs: {"unexpected": True})
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-malformed-planner-1",
+        message="Hola",
+        channel="api_internal",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "checkout_stage": "auth_pending",
+            "pending_next_step": "auth_confirmation",
+        },
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "checkout_auth_needed"
+    assert payload["checkout_stage"] == "auth_pending"
+
+
+def test_checkout_langgraph_flag_disabled_uses_legacy_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WHATSAPP_CHECKOUT_LANGGRAPH_ENABLED", "false")
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_run_commerce_workflow_router",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("graph router should be disabled")),
+    )
+    monkeypatch.setattr(module, "_parse_commerce_intent_with_openai", lambda *args, **kwargs: {"unexpected": True})
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="496df3f6-46d4-4929-a352-5135e7ddae6c",
+        user_id="user-1",
+        session_id="session-rollback-1",
+        message="Hola",
+        channel="api_internal",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "checkout_stage": "auth_pending",
+            "pending_next_step": "auth_confirmation",
+        },
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "checkout_auth_needed"
+    assert payload["checkout_stage"] == "auth_pending"
+
+
 def test_greeting_with_otp_pending_workflow_returns_contextual_followup(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
@@ -3722,6 +3919,75 @@ def test_affirmative_followup_does_not_intercept_order_confirmation(monkeypatch:
     assert payload is None
 
 
+def test_affirmative_followup_recognizes_si_confirmo(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    assert module._is_affirmative_followup_message("si confirmo") is True  # type: ignore[attr-defined]
+
+
+def test_generic_create_order_draft_payload_has_useful_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    payload = module._format_public_widget_tool_payload(  # type: ignore[attr-defined]
+        {
+            "ok": True,
+            "tool": "create_order_draft",
+            "data": {
+                "draft_id": "draft-123",
+                "total": "$10980",
+                "items": [{"name": "Milo", "quantity": 2}],
+            },
+        },
+        user_message="si confirmo",
+        intent_label="create_order_draft",
+        channel="whatsapp",
+        session_id="56912345678",
+    )
+
+    assert payload is not None
+    assert "Orden: draft-123" in payload["answer"]
+    assert "• Milo x2" in payload["answer"]
+    assert "Total referencial: $10980" in payload["answer"]
+    assert "Gracias por tu compra." in payload["answer"]
+
+
+def test_order_confirmation_does_not_use_legacy_payment_tool_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    monkeypatch.setattr(
+        module,
+        "_parse_commerce_intent_with_openai",
+        lambda *args, **kwargs: {
+            "intent": "create_order_draft",
+            "tool": "create_order_draft",
+            "query": "si confirmo",
+            "needs_clarification": False,
+        },
+    )
+
+    payload = module._resolve_shared_commerce_payload_legacy(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="56912345678",
+        session_id="56912345678",
+        message="si confirmo",
+        channel="whatsapp",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={
+            "stage": "payment_selection",
+            "checkout_stage": "order_summary_pending",
+            "pending_next_step": "order_confirmation",
+            "invoice_type": "boleta",
+            "payment_preference": "Transferencia bancaria",
+        },
+    )
+
+    assert payload is not None
+    assert payload["answer"] != "Pude preparar la accion de pago, pero el proveedor no devolvio un link utilizable."
+
+
 def test_factura_offers_saved_addresses(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
@@ -3950,7 +4216,50 @@ def test_cart_status_backfills_price_for_legacy_snapshot(monkeypatch: pytest.Mon
 
     assert payload is not None
     assert "Milo x2 — $5490 c/u" in payload["answer"]
-    assert "Subtotal: $10980" in payload["answer"]
+
+
+def test_clear_cart_request_returns_runtime_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="user-1",
+        session_id="session-clear-cart",
+        message="vacia el carrito",
+        channel="whatsapp",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={"stage": "cart_building", "pending_next_step": "shipping_selection"},
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "clear_cart"
+    assert payload["cart_action"]["type"] == "clear_cart"
+    assert payload["workflow_stage"] == "browsing"
+
+
+def test_cart_status_empty_cart_returns_runtime_guidance(monkeypatch: pytest.MonkeyPatch) -> None:
+    module, _client = _load_api(monkeypatch, compat_mode="false")
+
+    payload = module._resolve_shared_commerce_payload(  # type: ignore[attr-defined]
+        company_id="demo-company",
+        agent_id="demo-agent",
+        user_id="user-1",
+        session_id="session-empty-cart",
+        message="como va mi carrito ?",
+        channel="whatsapp",
+        clubhx_tools_client=object(),
+        intent_label=None,
+        response_style_context="",
+        workflow_state={"stage": "cart_building", "pending_next_step": "shipping_selection"},
+    )
+
+    assert payload is not None
+    assert payload["intent_label"] == "cart_status"
+    assert "carrito esta vacio" in payload["answer"].lower()
+    assert payload["workflow_action"]["type"] == "show_cart"
 
 
 def test_checkout_followup_sends_otp_and_persists_email(monkeypatch: pytest.MonkeyPatch) -> None:
