@@ -47,6 +47,8 @@ public class AiGatewayService {
     private final TenancyService tenancyService;
     private final AiEngineClient aiEngineClient;
     private final String integrationServiceToken;
+    private final String integrationAllowedCompanyId;
+    private final String integrationAllowedOrgId;
     private final long identityCacheMillis;
     private final String aiEnginePublicBaseUrl;
     /**
@@ -68,6 +70,8 @@ public class AiGatewayService {
         TenancyService tenancyService,
         AiEngineClient aiEngineClient,
         @Value("${app.integration.service-token:}") String integrationServiceToken,
+        @Value("${app.integration.allowed-company-id:}") String integrationAllowedCompanyId,
+        @Value("${app.integration.allowed-org-id:}") String integrationAllowedOrgId,
         @Value("${app.ai-engine.identity-cache-seconds:30}") long identityCacheSeconds,
         @Value("${app.ai-engine.public-base-url:}") String aiEnginePublicBaseUrl
     ) {
@@ -75,6 +79,8 @@ public class AiGatewayService {
         this.tenancyService = tenancyService;
         this.aiEngineClient = aiEngineClient;
         this.integrationServiceToken = integrationServiceToken == null ? "" : integrationServiceToken.trim();
+        this.integrationAllowedCompanyId = integrationAllowedCompanyId == null ? "" : integrationAllowedCompanyId.trim();
+        this.integrationAllowedOrgId = integrationAllowedOrgId == null ? "" : integrationAllowedOrgId.trim();
         this.identityCacheMillis = Math.max(0L, identityCacheSeconds) * 1000L;
         this.aiEnginePublicBaseUrl = aiEnginePublicBaseUrl == null ? "" : aiEnginePublicBaseUrl.trim();
     }
@@ -567,6 +573,20 @@ public class AiGatewayService {
             if (companyId.isBlank() || orgId.isBlank()) {
                 throw new IllegalArgumentException(
                     "company_id y org_id son requeridos para token de integracion"
+                );
+            }
+            // El token de integracion no distingue quien lo usa: sin esto, cualquiera
+            // que lo tenga podria pedir CUALQUIER company_id/org_id de la plataforma,
+            // no solo el tenant para el que se emitio. Se exige coincidencia exacta
+            // con lo configurado (fail-closed: sin configurar, el token no autoriza).
+            if (integrationAllowedCompanyId.isBlank() || integrationAllowedOrgId.isBlank()) {
+                throw new IllegalArgumentException(
+                    "Token de integracion sin alcance configurado (app.integration.allowed-company-id/allowed-org-id)"
+                );
+            }
+            if (!integrationAllowedCompanyId.equals(companyId) || !integrationAllowedOrgId.equals(orgId)) {
+                throw new IllegalArgumentException(
+                    "Token de integracion no autorizado para ese company_id/org_id"
                 );
             }
             String effectiveRequestId = requestId == null || requestId.isBlank()
