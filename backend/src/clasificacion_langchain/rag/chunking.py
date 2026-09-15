@@ -103,11 +103,38 @@ def _chunk_markdown_semantic(text: str, chunk_size: int, overlap: int) -> list[s
     return chunks
 
 
+def _chunk_rows(text: str, chunk_size: int, max_rows: int) -> list[str]:
+    """
+    Datos tabulares (CSV/JSON por linea): una fila es la unidad minima de sentido.
+    Se agrupan filas consecutivas hasta `chunk_size` caracteres o `max_rows` filas,
+    sin partir nunca una fila. Si el origen viene ordenado por categoria, cada chunk
+    queda tematicamente coherente (todos los cafes juntos, etc.).
+    """
+    rows = [line.strip() for line in text.splitlines() if line.strip()]
+    if not rows:
+        return []
+    chunks: list[str] = []
+    buffer: list[str] = []
+    size = 0
+    for row in rows:
+        row_len = len(row) + 1
+        if buffer and (size + row_len > chunk_size or len(buffer) >= max_rows):
+            chunks.append("\n".join(buffer))
+            buffer, size = [], 0
+        buffer.append(row)
+        size += row_len
+    if buffer:
+        chunks.append("\n".join(buffer))
+    return chunks
+
+
 def chunk_documents(
     documents: list[KnowledgeDocument],
     chunk_size: int = 900,
     overlap: int = 120,
     min_length: int = 50,
+    table_chunk_size: int = 600,
+    table_max_rows: int = 6,
 ) -> list[ChunkedDocument]:
     chunks: list[ChunkedDocument] = []
 
@@ -122,6 +149,8 @@ def chunk_documents(
                 chunk_size=chunk_size,
                 overlap=overlap,
             )
+        elif extension in {".csv", ".json"}:
+            raw_chunks = _chunk_rows(document.text, chunk_size=table_chunk_size, max_rows=table_max_rows)
         else:
             raw_chunks = _chunk_text(document.text, chunk_size=chunk_size, overlap=overlap)
 
