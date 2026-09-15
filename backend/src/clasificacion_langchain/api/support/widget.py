@@ -11,6 +11,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import HTTPException, Request
+from starlette.datastructures import Headers
 
 from clasificacion_langchain.integrations.clubhx import ClubHxToolsClient
 
@@ -76,6 +77,80 @@ def public_widget_origin_allowed(origin: str | None) -> bool:
     return "*" in allowed or origin in allowed
 
 
+class PublicWidgetCORSMiddleware:
+    """CORS propio de `/public/widget/chat`, gobernado por PUBLIC_WIDGET_ALLOW_ORIGINS.
+
+    El `CORSMiddleware` global de la app solo permite `CORS_ALLOW_ORIGINS`
+    (localhost por default) porque protege la API autenticada. El widget
+    embebible lo llama un navegador de terceros (el dominio del integrador,
+    desconocido de antemano) y se autentica con `widget_token`, no cookies:
+    necesita su propia politica de origen, mas permisiva, sin tocar la del
+    resto de la API. Responde el preflight OPTIONS directo y agrega el header
+    a la respuesta real; si el origen ya trae headers CORS del middleware
+    global (coincide con la whitelist de localhost) los reemplaza para no
+    duplicar `Access-Control-Allow-Origin`.
+    """
+
+    def __init__(self, app, path: str) -> None:
+        self.app = app
+        self.path = path
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http" or scope.get("path") != self.path:
+            await self.app(scope, receive, send)
+            return
+
+        headers = Headers(scope=scope)
+        origin = headers.get("origin")
+        if not origin:
+            await self.app(scope, receive, send)
+            return
+
+        if not public_widget_origin_allowed(origin):
+            allow_origin = None
+        elif "*" in public_widget_allowed_origins():
+            # El widget no usa cookies/credenciales, asi que "*" es valido y
+            # ademas es el unico valor que los navegadores aceptan para un
+            # origen "null" (paginas file:// o sandboxed): reflejar ese origen
+            # literalmente no funciona en la practica.
+            allow_origin = "*"
+        else:
+            allow_origin = origin
+
+        if scope["method"] == "OPTIONS" and headers.get("access-control-request-method"):
+            response_headers = [(b"vary", b"origin")]
+            if allow_origin:
+                requested_headers = headers.get("access-control-request-headers")
+                response_headers.extend(
+                    [
+                        (b"access-control-allow-origin", allow_origin.encode("latin-1")),
+                        (b"access-control-allow-methods", b"POST, OPTIONS"),
+                        (b"access-control-max-age", b"600"),
+                    ]
+                )
+                if requested_headers:
+                    response_headers.append(
+                        (b"access-control-allow-headers", requested_headers.encode("latin-1"))
+                    )
+            await send({"type": "http.response.start", "status": 204, "headers": response_headers})
+            await send({"type": "http.response.body", "body": b""})
+            return
+
+        async def send_with_cors(message: dict) -> None:
+            if message["type"] == "http.response.start" and allow_origin:
+                filtered = [
+                    (key, value)
+                    for key, value in message.get("headers", [])
+                    if key.lower() not in (b"access-control-allow-origin", b"vary")
+                ]
+                filtered.append((b"access-control-allow-origin", allow_origin.encode("latin-1")))
+                filtered.append((b"vary", b"origin"))
+                message = {**message, "headers": filtered}
+            await send(message)
+
+        await self.app(scope, receive, send_with_cors)
+
+
 def public_widget_rate_limit_window_seconds() -> int:
     try:
         return max(1, int(os.getenv("PUBLIC_WIDGET_RATE_LIMIT_WINDOW_SECONDS", "60").strip()))
@@ -102,21 +177,28 @@ def public_widget_token(agent_id: str, company_id: str) -> str:
     return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
 
+# Debe coincidir con el `api_prefix` que api/app.py usa para montar todos los
+# routers (incluido el de widget/internal). PUBLIC_WIDGET_API_BASE_URL y
+# X-Public-Base-Url solo llevan el dominio publico (lo que configura el
+# usuario/Spring); las rutas reales siempre viven bajo este prefijo, asi que
+# hay que agregarlo aca en vez de pedirselo a quien configura el dominio.
+PUBLIC_API_PREFIX = "/api"
+
+
 def public_widget_api_base_url(request: Request) -> str:
     configured = os.getenv("PUBLIC_WIDGET_API_BASE_URL", "").strip()
-    if configured:
-        return configured.rstrip("/")
-    return str(request.base_url).rstrip("/")
+    base = configured.rstrip("/") if configured else str(request.base_url).rstrip("/")
+    return f"{base}{PUBLIC_API_PREFIX}"
 
 
 def public_widget_api_base_url_internal(x_public_base_url: str | None) -> str:
     override = (x_public_base_url or "").strip()
     if override:
-        return override.rstrip("/")
-    configured = os.getenv("PUBLIC_WIDGET_API_BASE_URL", "").strip()
-    if configured:
-        return configured.rstrip("/")
-    return "http://localhost:8080"
+        base = override.rstrip("/")
+    else:
+        configured = os.getenv("PUBLIC_WIDGET_API_BASE_URL", "").strip()
+        base = configured.rstrip("/") if configured else "http://localhost:8080"
+    return f"{base}{PUBLIC_API_PREFIX}"
 
 
 def public_widget_session_id(widget_id: str, session_id: str | None) -> str:

@@ -32,6 +32,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from clasificacion_langchain.api.support.presenters import cors_allowed_origins
+from clasificacion_langchain.api.support.widget import PUBLIC_API_PREFIX, PublicWidgetCORSMiddleware
 
 from .routes.agents import router as agents_router
 from .routes.auth import router as auth_router
@@ -56,7 +57,7 @@ from .runtime import build_runtime
 
 def create_app() -> FastAPI:
     runtime = build_runtime()
-    api_prefix = "/api"
+    api_prefix = PUBLIC_API_PREFIX
     app = FastAPI(
         title="Clasificacion LangChain API",
         version="2.0.0-alpha",
@@ -70,6 +71,12 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Starlette apila los middlewares en orden inverso de registro (el ultimo
+    # `add_middleware` queda mas afuera), por eso este va DESPUES de
+    # CORSMiddleware: necesita quedar mas afuera para resolver el preflight y
+    # los headers de esta ruta publica sin depender de la whitelist
+    # restringida (localhost) de la API autenticada.
+    app.add_middleware(PublicWidgetCORSMiddleware, path=f"{api_prefix}/public/widget/chat")
     app.include_router(system_router)
     app.include_router(auth_router, prefix=api_prefix)
     app.include_router(tenancy_router, prefix=api_prefix)
