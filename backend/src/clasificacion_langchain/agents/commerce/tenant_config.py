@@ -38,6 +38,7 @@ _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 class CommerceTenantConfig:
     tenant_id: str
     shop_domain: str | None = None
+    storefront_url: str | None = None
 
 
 def _tenant_map() -> dict[str, dict[str, Any]]:
@@ -59,6 +60,7 @@ def resolve_commerce_tenant(company_id: str | None, agent: Any | None = None) ->
         return CommerceTenantConfig(
             tenant_id=agent_tenant,
             shop_domain=str(getattr(agent, "clubhx_shop_domain", "") or "").strip() or None,
+            storefront_url=str(getattr(agent, "clubhx_storefront_url", "") or "").strip() or None,
         )
 
     clean_company = (company_id or "").strip()
@@ -73,15 +75,25 @@ def resolve_commerce_tenant(company_id: str | None, agent: Any | None = None) ->
             return CommerceTenantConfig(
                 tenant_id=tenant_id,
                 shop_domain=str(entry.get("shop_domain") or "").strip() or None,
+                storefront_url=str(entry.get("storefront_url") or "").strip() or None,
             )
 
     fallback_tenant = os.getenv("CLUBHX_TENANT_ID", "").strip()
     fallback_domain = os.getenv("CLUBHX_SHOP_DOMAIN", "").strip() or os.getenv("SHOP_DOMAIN", "").strip()
+    fallback_storefront = os.getenv("CLUBHX_STOREFRONT_URL", "").strip()
     if fallback_tenant:
-        return CommerceTenantConfig(tenant_id=fallback_tenant, shop_domain=fallback_domain or None)
+        return CommerceTenantConfig(
+            tenant_id=fallback_tenant,
+            shop_domain=fallback_domain or None,
+            storefront_url=fallback_storefront or None,
+        )
 
     if _UUID_RE.match(clean_company):
-        return CommerceTenantConfig(tenant_id=clean_company, shop_domain=fallback_domain or None)
+        return CommerceTenantConfig(
+            tenant_id=clean_company,
+            shop_domain=fallback_domain or None,
+            storefront_url=fallback_storefront or None,
+        )
 
     return None
 
@@ -89,11 +101,12 @@ def resolve_commerce_tenant(company_id: str | None, agent: Any | None = None) ->
 class TenantScopedClubHxClient:
     """Cliente ClubHx fijado a un tenant: ignora el tenant_id que le pasen y usa el configurado."""
 
-    def __init__(self, inner: ClubHxToolsClient, tenant_id: str) -> None:
+    def __init__(self, inner: ClubHxToolsClient, tenant_id: str, storefront_url: str | None = None) -> None:
         self._inner = inner
         self.tenant_id = tenant_id
         self.base_url = inner.base_url
         self.shop_domain = inner.shop_domain
+        self.storefront_url = storefront_url
 
     def execute_canonical(
         self,
@@ -115,6 +128,10 @@ class TenantScopedClubHxClient:
     def contracts(self) -> dict[str, Any]:
         return self._inner.contracts()
 
+    def create_shopping_list(self, **kwargs: Any) -> dict[str, Any]:
+        kwargs.pop("tenant_id", None)
+        return self._inner.create_shopping_list(tenant_id=self.tenant_id, **kwargs)
+
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
 
@@ -129,10 +146,12 @@ def build_clubhx_client_for_company(company_id: str | None, agent: Any | None = 
         logger.info("clubhx_tenant_not_configured company_id=%s", company_id)
         return None
     timeout_seconds = int(os.getenv("CLUBHX_TOOLS_TIMEOUT_SECONDS", "12") or "12")
+    shopping_list_token = os.getenv("CLUBHX_SHOPPING_LIST_SERVICE_TOKEN", "").strip() or None
     inner = ClubHxToolsClient(
         base_url=base_url,
         service_token=service_token,
         shop_domain=config.shop_domain,
         timeout_seconds=timeout_seconds,
+        shopping_list_service_token=shopping_list_token,
     )
-    return TenantScopedClubHxClient(inner=inner, tenant_id=config.tenant_id)
+    return TenantScopedClubHxClient(inner=inner, tenant_id=config.tenant_id, storefront_url=config.storefront_url)

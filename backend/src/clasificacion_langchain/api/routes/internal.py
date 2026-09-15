@@ -115,6 +115,7 @@ def internal_create_agent(
         openai_model=payload.openai_model or "gpt-4o-mini",
         clubhx_tenant_id=payload.clubhx_tenant_id,
         clubhx_shop_domain=payload.clubhx_shop_domain,
+        clubhx_storefront_url=payload.clubhx_storefront_url,
     )
     return to_agent_payload(agent, 0)
 
@@ -166,6 +167,7 @@ def internal_update_agent(
         openai_model=payload.openai_model,
         clubhx_tenant_id=payload.clubhx_tenant_id,
         clubhx_shop_domain=payload.clubhx_shop_domain,
+        clubhx_storefront_url=payload.clubhx_storefront_url,
     )
     return to_agent_payload(updated, len(runtime.agent_service.list_documents(updated.agent_id)))
 

@@ -277,9 +277,11 @@ set EVAL_EMBEDDED_WORKER_ENABLED=false
 - `EVAL_JOB_QUEUE_KEY` (default `eval_job_queue`)
 - `EVAL_EMBEDDED_WORKER_ENABLED` (`true/false`, default `true`) ejecuta worker dentro del proceso API
 - `CLUBHX_API_BASE_URL`, `CLUBHX_SERVICE_TOKEN` credenciales del backend de ClubHx (whsflow) para las tools de comercio
-- La configuracion de ClubHx por agente vive en la BD: campos `clubhx_tenant_id` y `clubhx_shop_domain` del agente (`POST/PATCH /agents`, tambien via platform-api y el formulario de creacion de la consola). Es la fuente de verdad; las variables siguientes son solo fallback
-- `CLUBHX_TENANT_MAP` JSON `{"<company_id>": {"tenant_id": "<uuid whsflow>", "shop_domain": "<dominio conectado>"}}`. ClubHx exige el UUID de su tenant y el header `X-Shop-Domain`; este mapa traduce la empresa de la plataforma a esos dos datos y permite varias tiendas por despliegue
-- `CLUBHX_TENANT_ID`, `CLUBHX_SHOP_DOMAIN` fallback de una sola tienda cuando no hay mapa. Si el `company_id` ya es un UUID se usa tal cual
+- `CLUBHX_SHOPPING_LIST_SERVICE_TOKEN` token separado (scope `shopping_lists:write`) para la API de listas de compra publicas; no comparte credencial con las tools de IA. Sin este token, el redirect a checkout web no funciona aunque las tools si
+- La configuracion de ClubHx por agente vive en la BD: campos `clubhx_tenant_id`, `clubhx_shop_domain` y `clubhx_storefront_url` del agente (`POST/PATCH /agents`, tambien via platform-api y el formulario de creacion de la consola). Es la fuente de verdad; las variables siguientes son solo fallback
+- `clubhx_storefront_url` es el sitio publico real de la tienda (p. ej. `https://emporiosura.cl`), **no** el `shop_domain` (que solo identifica al tenant en el header `X-Shop-Domain`, no sirve como URL web). En canal web, cuando el cliente pide pagar, el agente arma una shopping-list en ClubHx con el carrito y redirige a `<clubhx_storefront_url>/lista/<token>` para que el cliente inicie sesion y pague en el sitio real, en vez de completar el pago por chat como en WhatsApp
+- `CLUBHX_TENANT_MAP` JSON `{"<company_id>": {"tenant_id": "<uuid whsflow>", "shop_domain": "<dominio conectado>", "storefront_url": "<sitio publico>"}}`. ClubHx exige el UUID de su tenant y el header `X-Shop-Domain`; este mapa traduce la empresa de la plataforma a esos datos y permite varias tiendas por despliegue
+- `CLUBHX_TENANT_ID`, `CLUBHX_SHOP_DOMAIN`, `CLUBHX_STOREFRONT_URL` fallback de una sola tienda cuando no hay mapa. Si el `company_id` ya es un UUID se usa tal cual
 - Sin ClubHx configurado para la empresa, el chat del agente omite el flujo commerce y responde solo con RAG
 
 ### Auth + multi-tenant foundation (fase inicial)

@@ -140,7 +140,8 @@ public class AiGatewayService {
             request.use_openai_generation(),
             request.openai_model(),
             request.clubhx_tenant_id(),
-            request.clubhx_shop_domain()
+            request.clubhx_shop_domain(),
+            request.clubhx_storefront_url()
         );
         return aiEngineClient.createAgent(context, payload);
     }
@@ -210,7 +211,8 @@ public class AiGatewayService {
             request.use_openai_generation(),
             request.openai_model(),
             request.clubhx_tenant_id(),
-            request.clubhx_shop_domain()
+            request.clubhx_shop_domain(),
+            request.clubhx_storefront_url()
         );
         return aiEngineClient.updateAgent(context, agentId, payload);
     }

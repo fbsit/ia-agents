@@ -13,6 +13,7 @@ public record AiAgentCreateRequest(
     Boolean use_openai_generation,
     String openai_model,
     String clubhx_tenant_id,
-    String clubhx_shop_domain
+    String clubhx_shop_domain,
+    String clubhx_storefront_url
 ) {
 }

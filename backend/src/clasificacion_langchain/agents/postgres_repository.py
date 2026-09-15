@@ -111,6 +111,7 @@ class PostgresAgentRepository:
                 )
                 cur.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS clubhx_tenant_id TEXT")
                 cur.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS clubhx_shop_domain TEXT")
+                cur.execute("ALTER TABLE agents ADD COLUMN IF NOT EXISTS clubhx_storefront_url TEXT")
                 cur.execute(
                     """
                     UPDATE agent_documents
@@ -141,6 +142,7 @@ class PostgresAgentRepository:
             indexed_at=_parse_datetime(row[15]),
             clubhx_tenant_id=(row[16] if len(row) > 16 else None) or None,
             clubhx_shop_domain=(row[17] if len(row) > 17 else None) or None,
+            clubhx_storefront_url=(row[18] if len(row) > 18 else None) or None,
         )
 
     @staticmethod
@@ -319,7 +321,8 @@ class PostgresAgentRepository:
                         updated_at = %s,
                         indexed_at = %s,
                         clubhx_tenant_id = %s,
-                        clubhx_shop_domain = %s
+                        clubhx_shop_domain = %s,
+                        clubhx_storefront_url = %s
                     WHERE agent_id = %s
                     """,
                     (
@@ -339,6 +342,7 @@ class PostgresAgentRepository:
                         agent.indexed_at,
                         agent.clubhx_tenant_id or None,
                         agent.clubhx_shop_domain or None,
+                        agent.clubhx_storefront_url or None,
                         agent.agent_id,
                     ),
                 )

@@ -414,6 +414,7 @@ class AgentService:
         openai_model: str,
         clubhx_tenant_id: str | None = None,
         clubhx_shop_domain: str | None = None,
+        clubhx_storefront_url: str | None = None,
     ) -> AgentRecord:
         clean_name = name.strip()
         if len(clean_name) < 2:
@@ -454,6 +455,7 @@ class AgentService:
         created.index_path = str(index_path)
         created.clubhx_tenant_id = _clean_optional(clubhx_tenant_id)
         created.clubhx_shop_domain = _clean_optional(clubhx_shop_domain)
+        created.clubhx_storefront_url = _clean_optional(clubhx_storefront_url)
         return self.repository.update_agent(created)
 
     def list_agents(self, allowed_org_ids: set[str], company_id: str | None = None) -> list[AgentRecord]:
@@ -1257,6 +1259,7 @@ class AgentService:
         openai_model: str | None = None,
         clubhx_tenant_id: str | None = None,
         clubhx_shop_domain: str | None = None,
+        clubhx_storefront_url: str | None = None,
     ) -> AgentRecord:
         if name is not None:
             clean_name = name.strip()
@@ -1303,6 +1306,8 @@ class AgentService:
             agent.clubhx_tenant_id = _clean_optional(clubhx_tenant_id)
         if clubhx_shop_domain is not None:
             agent.clubhx_shop_domain = _clean_optional(clubhx_shop_domain)
+        if clubhx_storefront_url is not None:
+            agent.clubhx_storefront_url = _clean_optional(clubhx_storefront_url)
 
         return self.repository.update_agent(agent)
 

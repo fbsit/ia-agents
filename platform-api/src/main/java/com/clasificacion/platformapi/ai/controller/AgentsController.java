@@ -120,7 +120,8 @@ public class AgentsController {
             created.indexed_at(),
             created.documents_count(),
             created.clubhx_tenant_id(),
-            created.clubhx_shop_domain()
+            created.clubhx_shop_domain(),
+            created.clubhx_storefront_url()
         );
     }
 
@@ -177,7 +178,8 @@ public class AgentsController {
                 item.indexed_at(),
                 item.documents_count(),
                 item.clubhx_tenant_id(),
-                item.clubhx_shop_domain()
+                item.clubhx_shop_domain(),
+                item.clubhx_storefront_url()
             ))
             .toList();
     }
@@ -207,7 +209,8 @@ public class AgentsController {
             updated.indexed_at(),
             updated.documents_count(),
             updated.clubhx_tenant_id(),
-            updated.clubhx_shop_domain()
+            updated.clubhx_shop_domain(),
+            updated.clubhx_storefront_url()
         );
     }
 

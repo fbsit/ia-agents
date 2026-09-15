@@ -66,6 +66,7 @@ def to_agent_payload(agent, documents_count: int) -> AgentPayload:
         documents_count=documents_count,
         clubhx_tenant_id=getattr(agent, "clubhx_tenant_id", None),
         clubhx_shop_domain=getattr(agent, "clubhx_shop_domain", None),
+        clubhx_storefront_url=getattr(agent, "clubhx_storefront_url", None),
         commerce_enabled=bool(getattr(agent, "clubhx_tenant_id", None)),
     )
 

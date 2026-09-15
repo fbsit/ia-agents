@@ -17,6 +17,7 @@ public record AiAgentResponse(
     String indexed_at,
     int documents_count,
     String clubhx_tenant_id,
-    String clubhx_shop_domain
+    String clubhx_shop_domain,
+    String clubhx_storefront_url
 ) {
 }

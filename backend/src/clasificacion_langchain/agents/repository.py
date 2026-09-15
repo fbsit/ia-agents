@@ -27,6 +27,7 @@ class AgentRecord:
     # Integracion de comercio (ClubHx/whsflow): tenant y dominio de la tienda conectada.
     clubhx_tenant_id: str | None = None
     clubhx_shop_domain: str | None = None
+    clubhx_storefront_url: str | None = None
 
 
 @dataclass
