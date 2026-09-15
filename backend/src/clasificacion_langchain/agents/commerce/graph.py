@@ -5,7 +5,12 @@ from typing import Any, Callable, TypedDict
 from langchain_core.runnables import RunnableLambda
 from langgraph.graph import END, StateGraph
 
+from clasificacion_langchain.agents.commerce.checkout_link import (
+    build_web_checkout_redirect,
+    describe_web_checkout_answer,
+)
 from clasificacion_langchain.agents.commerce.commands import CheckoutCommand
+from clasificacion_langchain.agents.commerce.extractors import is_checkout_redirect_channel
 from clasificacion_langchain.agents.commerce.guards import evaluate_tool_guard
 from clasificacion_langchain.agents.commerce.response_mapper import map_checkout_response_payload
 from clasificacion_langchain.agents.commerce.slots import align_command_to_stage, merge_command_into_state
@@ -25,6 +30,7 @@ def build_checkout_workflow_graph(
     *,
     planner: Callable[[WhatsAppCheckoutState], CheckoutCommand | None],
     resolver: Callable[[WhatsAppCheckoutState, CheckoutCommand | None], dict[str, Any] | None],
+    commerce_client: Any = None,
 ):
     # Graph authority stays intentionally small in phase one:
     # plan -> guard -> resolve -> compatibility map.
@@ -62,6 +68,36 @@ def build_checkout_workflow_graph(
                 "awaiting_slot": checkout_state.awaiting_slot,
             }
             if state.get("tool_guard_reason") == "auth_required":
+                if is_checkout_redirect_channel(checkout_state.channel):
+                    # Web nunca autentica por chat: el guard bloqueo create_payment_link/
+                    # create_order_draft por falta de login, pero en vez de pedir el OTP
+                    # aca armamos el link real de checkout (el login lo hace el sitio).
+                    checkout_link = build_web_checkout_redirect(
+                        client=commerce_client,
+                        workflow_state=checkout_state.to_workflow_state_dict(),
+                        session_id=checkout_state.session_id,
+                    )
+                    if checkout_link is not None:
+                        payload.update(
+                            {
+                                "answer": describe_web_checkout_answer(checkout_link),
+                                "intent_label": "checkout_web",
+                                "workflow_stage": "checkout_ready",
+                                "checkout_stage": "web_checkout_redirect",
+                                "pending_next_step": "payment_selection",
+                                "awaiting_slot": "",
+                                "redirect_to": checkout_link.url,
+                                "workflow_action": {"type": "open_checkout", "payload": {"redirect_to": checkout_link.url}},
+                            }
+                        )
+                        return {"payload": payload}
+                    payload.update(
+                        {
+                            "answer": "No pude armar el link de compra ahora mismo. Decime que producto queres y seguimos por aca.",
+                            "intent_label": "checkout_web",
+                        }
+                    )
+                    return {"payload": payload}
                 # Dejar el checkout esperando el correo: el siguiente mensaje con un email dispara el OTP.
                 payload.update(
                     {

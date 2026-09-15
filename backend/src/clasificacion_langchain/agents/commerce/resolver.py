@@ -6,8 +6,16 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from clasificacion_langchain.agents.commerce.cart_snapshot import cart_snapshot_items
+from clasificacion_langchain.agents.commerce.checkout_link import (
+    build_web_checkout_redirect,
+    describe_web_checkout_answer,
+)
 from clasificacion_langchain.agents.commerce.commands import CheckoutCommand
-from clasificacion_langchain.agents.commerce.extractors import canonical_tool_succeeded, is_email_message
+from clasificacion_langchain.agents.commerce.extractors import (
+    canonical_tool_succeeded,
+    is_checkout_redirect_channel,
+    is_email_message,
+)
 from clasificacion_langchain.agents.commerce.lookup_cart import LookupCartResolver
 from clasificacion_langchain.agents.commerce.recent_products import normalize_text
 from clasificacion_langchain.agents.commerce.resume_timeout import (
@@ -273,6 +281,30 @@ class CheckoutWorkflowResolver:
                 token in normalized_goal
                 for token in ["quiero pagar", "pagar", "medio de pago", "medios de pago", "mercado pago", "transferencia", "link de pago"]
             )
+        if wants_checkout_progression and is_checkout_redirect_channel(state.channel):
+            # Web nunca completa OTP/direccion/pago por chat: arma el link real
+            # del carrito y que el cliente inicie sesion y pague en el
+            # storefront. Sin esto, este mismo "quiero pagar" caia en el
+            # requerimiento de OTP de mas abajo, pensado para WhatsApp.
+            checkout_link = build_web_checkout_redirect(
+                client=self.executor.client,
+                workflow_state=state.to_workflow_state_dict(),
+                session_id=state.session_id,
+            )
+            if checkout_link is None:
+                return {
+                    "answer": "No pude armar el link de compra ahora mismo. Decime que producto queres y seguimos por aca.",
+                    "intent_label": "checkout_web",
+                }
+            return {
+                "answer": describe_web_checkout_answer(checkout_link),
+                "intent_label": "checkout_web",
+                "workflow_stage": "checkout_ready",
+                "checkout_stage": "web_checkout_redirect",
+                "pending_next_step": "payment_selection",
+                "redirect_to": checkout_link.url,
+                "workflow_action": {"type": "open_checkout", "payload": {"redirect_to": checkout_link.url}},
+            }
         if (
             wants_checkout_progression
             and not state.customer_authenticated

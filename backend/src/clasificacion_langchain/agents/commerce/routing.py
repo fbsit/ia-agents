@@ -6,6 +6,7 @@ from typing import Any
 from clasificacion_langchain.agents.commerce.checkout_link import (
     build_web_checkout_redirect as _build_web_checkout_redirect,
     build_web_checkout_redirect_from_requests as _build_web_checkout_redirect_from_requests,
+    describe_web_checkout_answer as _describe_web_checkout_answer,
 )
 from clasificacion_langchain.agents.commerce.commands import parse_checkout_command
 from clasificacion_langchain.agents.commerce.extractors import (
@@ -191,6 +192,7 @@ def run_commerce_workflow_router(
     router = CommerceWorkflowRouter(
         planner=plan_checkout_command,
         resolver=resolver.resolve,
+        commerce_client=clubhx_tools_client,
     )
     return router.process_turn(
         company_id=company_id,
@@ -694,7 +696,7 @@ def resolve_shared_commerce_payload_legacy(
             or llm_tool_name in {"create_payment_link", "get_payment_options"}
             or _is_checkout_request_message(message)
         ):
-            checkout_url = _build_web_checkout_redirect(
+            checkout_link = _build_web_checkout_redirect(
                 client=clubhx_tools_client,
                 workflow_state=workflow_state,
                 session_id=session_id,
@@ -704,23 +706,23 @@ def resolve_shared_commerce_payload_legacy(
                 session_id=session_id,
                 intent=llm_intent_name,
                 tool=llm_tool_name,
-                checkout_url=bool(checkout_url),
+                checkout_url=bool(checkout_link),
             )
-            if not checkout_url:
+            if checkout_link is None:
                 return {
                     "answer": "No pude armar el link de compra ahora mismo. Decime que producto queres y seguimos por aca.",
                     "intent_label": llm_intent_name or "checkout_web",
                 }
             return {
-                "answer": "Te dejo el carrito listo para que lo revises, inicies sesion y termines la compra.",
+                "answer": _describe_web_checkout_answer(checkout_link),
                 "intent_label": llm_intent_name or "checkout_web",
                 "workflow_stage": "checkout_ready",
                 "checkout_stage": "web_checkout_redirect",
                 "pending_next_step": "payment_selection",
-                "redirect_to": checkout_url,
+                "redirect_to": checkout_link.url,
                 "workflow_action": _workflow_action(
                     "open_checkout",
-                    redirect_to=checkout_url,
+                    redirect_to=checkout_link.url,
                 ),
             }
 
@@ -861,7 +863,7 @@ def resolve_shared_commerce_payload_legacy(
                 # Web no completa OTP/pago por chat: arma el link real del
                 # carrito preseleccionado y que el cliente inicie sesion y
                 # pague en el storefront, igual que la rama generica de arriba.
-                checkout_url = _build_web_checkout_redirect_from_requests(
+                checkout_link = _build_web_checkout_redirect_from_requests(
                     client=clubhx_tools_client,
                     cart_requests=cart_requests,
                     session_id=session_id,
@@ -870,23 +872,23 @@ def resolve_shared_commerce_payload_legacy(
                     "commerce.resolve_web_checkout_redirect_from_requests",
                     session_id=session_id,
                     tool=planned_tool[0],
-                    checkout_url=bool(checkout_url),
+                    checkout_url=bool(checkout_link),
                 )
-                if not checkout_url:
+                if checkout_link is None:
                     return {
                         "answer": "No pude armar el link de compra ahora mismo. Decime que producto queres y seguimos por aca.",
                         "intent_label": str(llm_commerce_intent.get("intent") or intent_label or "checkout_web").strip() or "checkout_web",
                     }
                 return {
-                    "answer": "Te dejo el carrito listo para que lo revises, inicies sesion y termines la compra.",
+                    "answer": _describe_web_checkout_answer(checkout_link),
                     "intent_label": str(llm_commerce_intent.get("intent") or intent_label or "checkout_web").strip() or "checkout_web",
                     "workflow_stage": "checkout_ready",
                     "checkout_stage": "web_checkout_redirect",
                     "pending_next_step": "payment_selection",
-                    "redirect_to": checkout_url,
+                    "redirect_to": checkout_link.url,
                     "workflow_action": _workflow_action(
                         "open_checkout",
-                        redirect_to=checkout_url,
+                        redirect_to=checkout_link.url,
                     ),
                 }
             final_summary_stage = str(getattr(current_workflow, "checkout_stage", "") or "").strip() in {

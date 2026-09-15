@@ -16,6 +16,7 @@ ResolverFn = Callable[[WhatsAppCheckoutState, CheckoutCommand | None], dict[str,
 class CommerceWorkflowRouter:
     planner: PlannerFn
     resolver: ResolverFn
+    commerce_client: Any = None
 
     def __post_init__(self) -> None:
         # Router is request-scoped because resolver dependencies such as tool clients,
@@ -23,6 +24,7 @@ class CommerceWorkflowRouter:
         self._graph = build_checkout_workflow_graph(
             planner=self.planner,
             resolver=self.resolver,
+            commerce_client=self.commerce_client,
         )
 
     def process_turn(
