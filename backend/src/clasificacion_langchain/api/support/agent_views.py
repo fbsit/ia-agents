@@ -8,7 +8,6 @@ de modo que ambos routers exponen exactamente el mismo contrato.
 """
 
 import os
-from pathlib import Path
 
 from fastapi import HTTPException
 
@@ -62,7 +61,7 @@ def index_status_payload(runtime: RuntimeContainer, agent) -> AgentIndexStatusPa
     last_error = next((item.error_message for item in reversed(failed) if item.error_message), None)
     return AgentIndexStatusPayload(
         agent_id=agent.agent_id,
-        has_index=Path(agent.index_path).exists(),
+        has_index=runtime.agent_service.ensure_index_local(agent),
         indexed_at=agent.indexed_at.isoformat() if agent.indexed_at else None,
         documents_total=len(documents),
         documents_indexed=len(indexed),

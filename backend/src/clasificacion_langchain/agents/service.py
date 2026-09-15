@@ -466,6 +466,14 @@ class AgentService:
     def list_documents(self, agent_id: str) -> list[AgentDocumentRecord]:
         return self.repository.list_documents(agent_id)
 
+    def ensure_index_local(self, agent: AgentRecord) -> bool:
+        # True si el indice esta disponible en disco (bajandolo del storage remoto si hace falta).
+        try:
+            return self.document_storage.ensure_index_local(agent.agent_id, Path(agent.index_path))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("agent_index_download_failed agent_id=%s detail=%s", agent.agent_id, exc)
+            return Path(agent.index_path).exists()
+
     def get_whatsapp_channel_config(self, agent: AgentRecord) -> dict[str, str | None]:
         config_path = self._whatsapp_config_path(agent)
         if not config_path.exists():
@@ -1067,6 +1075,10 @@ class AgentService:
         removed = self.repository.delete_agent(agent.agent_id)
         if removed is None:
             raise AgentNotFoundError("Agente no encontrado")
+        try:
+            self.document_storage.delete_index(agent.agent_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("agent_delete_index_remote_skip agent_id=%s detail=%s", agent.agent_id, exc)
 
         for target_path in [
             Path(agent.knowledge_dir),
@@ -1352,6 +1364,16 @@ class AgentService:
                 )
 
             saved_path = index.save(agent.index_path)
+            try:
+                remote_key = self.document_storage.upload_index(agent.agent_id, Path(saved_path))
+                if remote_key:
+                    logger.info("agent_index_uploaded agent_id=%s key=%s", agent.agent_id, remote_key)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "agent_index_upload_failed agent_id=%s detail=%s (el indice queda solo en disco local)",
+                    agent.agent_id,
+                    exc,
+                )
             result = IndexBuildResult(
                 index_path=saved_path,
                 total_documents=len(documents),
@@ -1489,7 +1511,7 @@ class AgentService:
 
         documents = self.repository.list_documents(agent.agent_id)
         has_uploaded_documents = any(document.status == "uploaded" for document in documents)
-        has_index_artifact = Path(agent.index_path).exists()
+        has_index_artifact = self.ensure_index_local(agent)
         has_available_documents = any(
             document.status in {"uploaded", "indexed"}
             for document in documents
@@ -2014,6 +2036,7 @@ class AgentService:
             )
 
         try:
+            self.ensure_index_local(agent)
             pipeline = RAGPipeline.from_artifact(
                 index_path=agent.index_path,
                 use_openai=use_openai,

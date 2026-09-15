@@ -225,6 +225,7 @@ set EVAL_EMBEDDED_WORKER_ENABLED=false
   - `RUSTFS_ENDPOINT`, `RUSTFS_PUBLIC_ENDPOINT`
   - `RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY`
   - `RUSTFS_BUCKET`, `RUSTFS_REGION`
+- Con `DOC_STORAGE_BACKEND=s3` los indices RAG (`.joblib`) tambien se suben al bucket bajo `<S3_PREFIX>/indexes/<agent_id>.joblib` y se descargan al disco local cuando faltan (filesystem efimero, p. ej. Railway). Endpoints S3-compatibles usan direccionamiento por path automaticamente.
 - `AGENT_ORCHESTRATOR_USE_LLM` (`true` o `false`, default `true`) para clasificar intenciones con LLM antes de rutear
 - `CHAT_USE_OPENAI` (`true` o `false`, default `false`) habilita generacion LLM (OpenAI/Claude segun provider)
 - `OPENAI_MODEL` (default: `gpt-4o-mini`)

@@ -121,6 +121,13 @@ class S3DocumentStorage:
 
         self.bucket = clean_bucket
         self.prefix = clean_prefix
+        client_kwargs: dict[str, Any] = {}
+        if endpoint_url:
+            # Endpoints S3-compatibles (RustFS, MinIO, R2) no resuelven <bucket>.<host>:
+            # forzar direccionamiento por path. AWS real no necesita endpoint_url.
+            from botocore.config import Config
+
+            client_kwargs["config"] = Config(s3={"addressing_style": "path"})
         self.client = client or boto3.client(
             "s3",
             region_name=region_name or None,
@@ -128,6 +135,7 @@ class S3DocumentStorage:
             aws_access_key_id=_env_first("RUSTFS_ACCESS_KEY", "AWS_ACCESS_KEY_ID") or None,
             aws_secret_access_key=_env_first("RUSTFS_SECRET_KEY", "AWS_SECRET_ACCESS_KEY") or None,
             aws_session_token=os.getenv("AWS_SESSION_TOKEN") or None,
+            **client_kwargs,
         )
 
     def _build_key(self, agent: AgentRecord, filename: str) -> str:
@@ -185,6 +193,31 @@ class S3DocumentStorage:
         except (ClientError, BotoCoreError):
             return
 
+    # --- artefactos binarios (indices RAG) ------------------------------------
+
+    def _artifact_key(self, agent_id: str) -> str:
+        return f"{self.prefix}/indexes/{_safe_segment(agent_id)}.joblib"
+
+    def upload_artifact(self, agent_id: str, local_path: Path) -> str:
+        key = self._artifact_key(agent_id)
+        self.client.upload_file(str(local_path), self.bucket, key)
+        return key
+
+    def download_artifact(self, agent_id: str, local_path: Path) -> bool:
+        key = self._artifact_key(agent_id)
+        try:
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            self.client.download_file(self.bucket, key, str(local_path))
+            return True
+        except (ClientError, BotoCoreError):
+            return False
+
+    def delete_artifact(self, agent_id: str) -> None:
+        try:
+            self.client.delete_object(Bucket=self.bucket, Key=self._artifact_key(agent_id))
+        except (ClientError, BotoCoreError):
+            return
+
 
 class RoutedDocumentStorage:
     def __init__(
@@ -196,6 +229,29 @@ class RoutedDocumentStorage:
         self.default_backend = default_backend
         self.local_storage = local_storage
         self.s3_storage = s3_storage
+
+    @property
+    def artifact_store(self) -> S3DocumentStorage | None:
+        # Store remoto para indices RAG; solo cuando el backend por defecto es s3.
+        if self.default_backend == "s3" and self.s3_storage is not None:
+            return self.s3_storage
+        return None
+
+    def upload_index(self, agent_id: str, local_path: Path) -> str | None:
+        store = self.artifact_store
+        return store.upload_artifact(agent_id, local_path) if store is not None else None
+
+    def ensure_index_local(self, agent_id: str, local_path: Path) -> bool:
+        # Garantiza el joblib en disco: si no esta, lo baja del store remoto (filesystem efimero).
+        if local_path.exists():
+            return True
+        store = self.artifact_store
+        return store.download_artifact(agent_id, local_path) if store is not None else False
+
+    def delete_index(self, agent_id: str) -> None:
+        store = self.artifact_store
+        if store is not None:
+            store.delete_artifact(agent_id)
 
     def _storage_for_provider(self, provider: str) -> DocumentStorage:
         normalized = provider.strip().lower()
