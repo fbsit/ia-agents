@@ -25,6 +25,8 @@ class AgentCreatePayload(BaseModel):
     generation_provider: str = Field(default="auto")
     use_openai_generation: bool = False
     openai_model: str | None = Field(default=None, min_length=3)
+    clubhx_tenant_id: str | None = None
+    clubhx_shop_domain: str | None = None
 
 
 class AgentUpdatePayload(BaseModel):
@@ -36,6 +38,8 @@ class AgentUpdatePayload(BaseModel):
     generation_provider: str | None = None
     use_openai_generation: bool | None = None
     openai_model: str | None = Field(default=None, min_length=3)
+    clubhx_tenant_id: str | None = None
+    clubhx_shop_domain: str | None = None
 
 
 class AgentPayload(BaseModel):
@@ -54,6 +58,9 @@ class AgentPayload(BaseModel):
     index_path: str
     indexed_at: str | None
     documents_count: int
+    clubhx_tenant_id: str | None = None
+    clubhx_shop_domain: str | None = None
+    commerce_enabled: bool = False
 
 
 class AgentDocumentPayload(BaseModel):

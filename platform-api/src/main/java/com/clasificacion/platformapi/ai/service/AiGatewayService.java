@@ -120,7 +120,9 @@ public class AiGatewayService {
             request.rag_backend(),
             request.generation_provider(),
             request.use_openai_generation(),
-            request.openai_model()
+            request.openai_model(),
+            request.clubhx_tenant_id(),
+            request.clubhx_shop_domain()
         );
         return aiEngineClient.createAgent(context, payload);
     }
@@ -188,7 +190,9 @@ public class AiGatewayService {
             request.rag_backend(),
             request.generation_provider(),
             request.use_openai_generation(),
-            request.openai_model()
+            request.openai_model(),
+            request.clubhx_tenant_id(),
+            request.clubhx_shop_domain()
         );
         return aiEngineClient.updateAgent(context, agentId, payload);
     }

@@ -52,11 +52,20 @@ def _tenant_map() -> dict[str, dict[str, Any]]:
     return payload if isinstance(payload, dict) else {}
 
 
-def resolve_commerce_tenant(company_id: str | None) -> CommerceTenantConfig | None:
+def resolve_commerce_tenant(company_id: str | None, agent: Any | None = None) -> CommerceTenantConfig | None:
+    # 1) Configuracion del agente (fuente de verdad, editable desde la consola).
+    agent_tenant = str(getattr(agent, "clubhx_tenant_id", "") or "").strip() if agent is not None else ""
+    if agent_tenant:
+        return CommerceTenantConfig(
+            tenant_id=agent_tenant,
+            shop_domain=str(getattr(agent, "clubhx_shop_domain", "") or "").strip() or None,
+        )
+
     clean_company = (company_id or "").strip()
     if not clean_company:
         return None
 
+    # 2) Fallbacks por entorno (despliegues de una sola tienda o migracion).
     entry = _tenant_map().get(clean_company)
     if isinstance(entry, dict):
         tenant_id = str(entry.get("tenant_id") or "").strip()
@@ -110,12 +119,12 @@ class TenantScopedClubHxClient:
         return getattr(self._inner, name)
 
 
-def build_clubhx_client_for_company(company_id: str | None) -> TenantScopedClubHxClient | None:
+def build_clubhx_client_for_company(company_id: str | None, agent: Any | None = None) -> TenantScopedClubHxClient | None:
     base_url = os.getenv("CLUBHX_API_BASE_URL", "").strip()
     service_token = os.getenv("CLUBHX_SERVICE_TOKEN", "").strip()
     if not base_url or not service_token:
         return None
-    config = resolve_commerce_tenant(company_id)
+    config = resolve_commerce_tenant(company_id, agent=agent)
     if config is None:
         logger.info("clubhx_tenant_not_configured company_id=%s", company_id)
         return None

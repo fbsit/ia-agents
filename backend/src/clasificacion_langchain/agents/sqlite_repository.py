@@ -90,6 +90,15 @@ class SQLiteAgentRepository:
                 """
             )
             self._ensure_document_columns(conn)
+            self._ensure_agent_columns(conn)
+
+    @staticmethod
+    def _ensure_agent_columns(conn: sqlite3.Connection) -> None:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(agents)").fetchall()}
+        if "clubhx_tenant_id" not in columns:
+            conn.execute("ALTER TABLE agents ADD COLUMN clubhx_tenant_id TEXT")
+        if "clubhx_shop_domain" not in columns:
+            conn.execute("ALTER TABLE agents ADD COLUMN clubhx_shop_domain TEXT")
 
     @staticmethod
     def _ensure_document_columns(conn: sqlite3.Connection) -> None:
@@ -160,6 +169,8 @@ class SQLiteAgentRepository:
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
             indexed_at=_parse_datetime(row["indexed_at"]),
+            clubhx_tenant_id=(row["clubhx_tenant_id"] if "clubhx_tenant_id" in row.keys() else None) or None,
+            clubhx_shop_domain=(row["clubhx_shop_domain"] if "clubhx_shop_domain" in row.keys() else None) or None,
         )
 
     @staticmethod
@@ -329,7 +340,9 @@ class SQLiteAgentRepository:
                     knowledge_dir = ?,
                     index_path = ?,
                     updated_at = ?,
-                    indexed_at = ?
+                    indexed_at = ?,
+                    clubhx_tenant_id = ?,
+                    clubhx_shop_domain = ?
                 WHERE agent_id = ?
                 """,
                 (
@@ -347,6 +360,8 @@ class SQLiteAgentRepository:
                     agent.index_path,
                     agent.updated_at.isoformat(),
                     agent.indexed_at.isoformat() if agent.indexed_at else None,
+                    agent.clubhx_tenant_id or None,
+                    agent.clubhx_shop_domain or None,
                     agent.agent_id,
                 ),
             )

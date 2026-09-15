@@ -118,7 +118,9 @@ public class AgentsController {
             created.knowledge_dir(),
             created.index_path(),
             created.indexed_at(),
-            created.documents_count()
+            created.documents_count(),
+            created.clubhx_tenant_id(),
+            created.clubhx_shop_domain()
         );
     }
 
@@ -173,7 +175,9 @@ public class AgentsController {
                 item.knowledge_dir(),
                 item.index_path(),
                 item.indexed_at(),
-                item.documents_count()
+                item.documents_count(),
+                item.clubhx_tenant_id(),
+                item.clubhx_shop_domain()
             ))
             .toList();
     }
@@ -201,7 +205,9 @@ public class AgentsController {
             updated.knowledge_dir(),
             updated.index_path(),
             updated.indexed_at(),
-            updated.documents_count()
+            updated.documents_count(),
+            updated.clubhx_tenant_id(),
+            updated.clubhx_shop_domain()
         );
     }
 

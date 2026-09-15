@@ -55,6 +55,8 @@ def create_agent(
             generation_provider=payload.generation_provider,
             use_openai_generation=payload.use_openai_generation,
             openai_model=payload.openai_model or "gpt-4o-mini",
+            clubhx_tenant_id=payload.clubhx_tenant_id,
+            clubhx_shop_domain=payload.clubhx_shop_domain,
         )
     except AgentValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -93,6 +95,8 @@ def update_agent(
             generation_provider=payload.generation_provider,
             use_openai_generation=payload.use_openai_generation,
             openai_model=payload.openai_model,
+            clubhx_tenant_id=payload.clubhx_tenant_id,
+            clubhx_shop_domain=payload.clubhx_shop_domain,
         )
     except AgentValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

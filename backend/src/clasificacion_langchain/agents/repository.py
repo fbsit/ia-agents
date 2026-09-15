@@ -24,6 +24,9 @@ class AgentRecord:
     created_at: datetime
     updated_at: datetime
     indexed_at: datetime | None = None
+    # Integracion de comercio (ClubHx/whsflow): tenant y dominio de la tienda conectada.
+    clubhx_tenant_id: str | None = None
+    clubhx_shop_domain: str | None = None
 
 
 @dataclass

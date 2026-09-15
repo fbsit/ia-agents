@@ -80,6 +80,11 @@ SUPPORTED_OPERATIONAL_SECTIONS = {
 logger = logging.getLogger(__name__)
 
 
+def _clean_optional(value: str | None) -> str | None:
+    clean = (value or "").strip()
+    return clean or None
+
+
 def _load_cart_snapshot(raw: str | None) -> list[dict[str, object]]:
     clean = str(raw or "").strip()
     if not clean:
@@ -407,6 +412,8 @@ class AgentService:
         generation_provider: str,
         use_openai_generation: bool,
         openai_model: str,
+        clubhx_tenant_id: str | None = None,
+        clubhx_shop_domain: str | None = None,
     ) -> AgentRecord:
         clean_name = name.strip()
         if len(clean_name) < 2:
@@ -445,6 +452,8 @@ class AgentService:
 
         created.knowledge_dir = str(agent_root)
         created.index_path = str(index_path)
+        created.clubhx_tenant_id = _clean_optional(clubhx_tenant_id)
+        created.clubhx_shop_domain = _clean_optional(clubhx_shop_domain)
         return self.repository.update_agent(created)
 
     def list_agents(self, allowed_org_ids: set[str], company_id: str | None = None) -> list[AgentRecord]:
@@ -496,7 +505,7 @@ class AgentService:
         from clasificacion_langchain.agents.commerce.tenant_config import build_clubhx_client_for_company
         from clasificacion_langchain.rag.generation import enforce_channel_response_contract
 
-        client = build_clubhx_client_for_company(company_id)
+        client = build_clubhx_client_for_company(company_id, agent=agent)
         if client is None:
             return None
 
@@ -1246,6 +1255,8 @@ class AgentService:
         generation_provider: str | None = None,
         use_openai_generation: bool | None = None,
         openai_model: str | None = None,
+        clubhx_tenant_id: str | None = None,
+        clubhx_shop_domain: str | None = None,
     ) -> AgentRecord:
         if name is not None:
             clean_name = name.strip()
@@ -1286,6 +1297,12 @@ class AgentService:
             if len(clean_model) < 3:
                 raise AgentValidationError("openai_model invalido")
             agent.openai_model = clean_model
+
+        # Cadena vacia = borrar la configuracion; None = no tocar.
+        if clubhx_tenant_id is not None:
+            agent.clubhx_tenant_id = _clean_optional(clubhx_tenant_id)
+        if clubhx_shop_domain is not None:
+            agent.clubhx_shop_domain = _clean_optional(clubhx_shop_domain)
 
         return self.repository.update_agent(agent)
 

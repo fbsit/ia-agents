@@ -65,6 +65,8 @@ Request body (`AiAgentCreateRequest`):
 - `generation_provider`
 - `use_openai_generation`
 - `openai_model`
+- `clubhx_tenant_id` (opcional; UUID del tenant en ClubHx/whsflow: habilita el flujo de venta del agente)
+- `clubhx_shop_domain` (opcional; dominio con el que la tienda esta conectada en ClubHx)
 
 Response body (`AiAgentResponse`):
 
@@ -83,6 +85,9 @@ Response body (`AiAgentResponse`):
 - `index_path`
 - `indexed_at`
 - `documents_count`
+- `clubhx_tenant_id`
+- `clubhx_shop_domain`
+- `commerce_enabled`
 
 ## Agent chat payload (Spring -> Python)
 
