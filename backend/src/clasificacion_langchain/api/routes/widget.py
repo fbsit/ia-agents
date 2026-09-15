@@ -66,7 +66,11 @@ def public_widget_chat(
         session_id=session_id,
         visitor_id=payload.visitor_id,
         external_user_id=payload.external_user_id,
-        channel="widget",
+        # "widget_public" (no "widget" a secas) es el alias que reconoce todo
+        # el modulo commerce (is_checkout_redirect_channel, format_public_widget_tool_payload,
+        # etc.) para tratar la conversacion como canal web: con "widget" ninguna
+        # de esas ramas web se activaba.
+        channel="widget_public",
     )
     return PublicWidgetChatResponsePayload(
         widget_id=payload.widget_id,

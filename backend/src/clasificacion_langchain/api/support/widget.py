@@ -253,6 +253,7 @@ def public_widget_snippet(api_base_url: str, widget_id: str, widget_token: str) 
 .northline-msg{padding:9px 10px;border:1px solid #dbe2ea;border-radius:10px;font-size:14px;line-height:1.35;white-space:pre-wrap;word-break:break-word;}
 .northline-msg.user{background:#e8f7f5;border-color:#b8e3dd;}
 .northline-msg.assistant{background:#fff;}
+.northline-checkout-link{display:inline-block;margin-top:6px;padding:8px 12px;border-radius:8px;background:#0f766e;color:#fff;text-decoration:none;font-size:13px;font-weight:600;}
 #northline-agent-widget-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px;border-top:1px solid #e2e8f0;background:#fff;}
 #northline-agent-widget-input{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #cdd7e3;}
 #northline-agent-widget-send{padding:10px 12px;border:0;border-radius:8px;background:#0f766e;color:#fff;cursor:pointer;}
@@ -363,6 +364,17 @@ def public_widget_snippet(api_base_url: str, widget_id: str, widget_token: str) 
     }
   }
 
+  function addCheckoutLink(url){
+    const link = document.createElement("a");
+    link.className = "northline-checkout-link";
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Ir a pagar";
+    messages.appendChild(link);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
   if (history.length > 0) {
     history.forEach(function(item){
       addBubble(item.role, item.text, false);
@@ -408,6 +420,9 @@ def public_widget_snippet(api_base_url: str, widget_id: str, widget_token: str) 
       }
 
       addBubble("assistant", (data && data.answer) ? data.answer : "Sin respuesta", true);
+      if (data && data.redirect_to) {
+        addCheckoutLink(data.redirect_to);
+      }
     } catch (error) {
       addBubble("assistant", "Error del widget: " + (error && error.message ? error.message : "sin detalle"), true);
     } finally {
