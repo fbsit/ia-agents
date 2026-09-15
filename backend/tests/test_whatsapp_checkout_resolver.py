@@ -25,7 +25,7 @@ class FakeExecutor:
             return {"ok": True, "data": {"status": "sent"}}
         if tool == "verify_verification_code":
             return {"ok": True, "data": {"status": "verified"}}
-        if tool == "create_order":
+        if tool == "create_order_draft":
             return {"ok": True, "data": {"order_reference": "12345", "total": "$10980"}}
         raise AssertionError(tool)
 
@@ -89,7 +89,9 @@ def test_resolver_checkout_continue_requires_auth_then_otp_flow() -> None:
     otp_payload = resolver.resolve(otp_state, CheckoutCommand(intent="checkout_continue", confidence=0.9))
     assert otp_payload is not None
     assert otp_payload["checkout_stage"] == "shipping_method_pending"
-    assert executor.calls[-1][0] == "verify_verification_code"
+    # verify + login_with_code (sesion de cliente en ClubHx) tras un codigo valido
+    assert executor.calls[-2][0] == "verify_verification_code"
+    assert executor.calls[-1][0] == "login_with_code"
 
 
 def test_resolver_handles_payment_to_boleta_to_order_confirmation() -> None:
@@ -164,4 +166,4 @@ def test_resolver_handles_payment_to_boleta_to_order_confirmation() -> None:
     assert confirm_payload is not None
     assert confirm_payload["checkout_stage"] == "completed"
     assert "Orden: 12345" in confirm_payload["answer"]
-    assert executor.calls[-1][0] == "create_order"
+    assert executor.calls[-1][0] == "create_order_draft"

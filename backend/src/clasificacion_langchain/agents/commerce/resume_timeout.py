@@ -21,11 +21,17 @@ def timeout_message() -> str:
     return "El proceso quedo pausado por inactividad. Si quieres retomarlo donde lo dejamos, responde 'si' dentro de 3 minutos. Si no, reinicio todo."
 
 
+def _stage_is_active(value: object) -> bool:
+    # "browsing" es el estado inicial normalizado de toda sesion: no implica un proceso en curso.
+    return str(value or "").strip().lower() not in {"", "browsing"}
+
+
 def workflow_state_has_active_checkout(workflow_state: WorkflowDict) -> bool:
+    if _stage_is_active((workflow_state or {}).get("stage")):
+        return True
     return any(
         str((workflow_state or {}).get(field) or "").strip()
         for field in {
-            "stage",
             "checkout_stage",
             "pending_next_step",
             "awaiting_slot",
@@ -46,7 +52,7 @@ def describe_current_workflow(workflow_state: WorkflowDict) -> tuple[str, str, s
     otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
     selected_products = str((workflow_state or {}).get("selected_products") or "").strip()
 
-    if not any([current_stage, current_checkout_stage, current_pending_next_step, otp_email]):
+    if not any([_stage_is_active(current_stage), current_checkout_stage, current_pending_next_step, otp_email]):
         return ("", "", "", "")
 
     if current_checkout_stage == "auth_pending" or current_pending_next_step in {"auth_pending", "auth_confirmation"}:

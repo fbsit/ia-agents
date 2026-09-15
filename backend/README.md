@@ -276,6 +276,10 @@ set EVAL_EMBEDDED_WORKER_ENABLED=false
 - `EVAL_JOB_QUEUE_REDIS_URL` (opcional; si no se setea usa `REDIS_URL`)
 - `EVAL_JOB_QUEUE_KEY` (default `eval_job_queue`)
 - `EVAL_EMBEDDED_WORKER_ENABLED` (`true/false`, default `true`) ejecuta worker dentro del proceso API
+- `CLUBHX_API_BASE_URL`, `CLUBHX_SERVICE_TOKEN` credenciales del backend de ClubHx (whsflow) para las tools de comercio
+- `CLUBHX_TENANT_MAP` JSON `{"<company_id>": {"tenant_id": "<uuid whsflow>", "shop_domain": "<dominio conectado>"}}`. ClubHx exige el UUID de su tenant y el header `X-Shop-Domain`; este mapa traduce la empresa de la plataforma a esos dos datos y permite varias tiendas por despliegue
+- `CLUBHX_TENANT_ID`, `CLUBHX_SHOP_DOMAIN` fallback de una sola tienda cuando no hay mapa. Si el `company_id` ya es un UUID se usa tal cual
+- Sin ClubHx configurado para la empresa, el chat del agente omite el flujo commerce y responde solo con RAG
 
 ### Auth + multi-tenant foundation (fase inicial)
 

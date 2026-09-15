@@ -466,6 +466,143 @@ class AgentService:
     def list_documents(self, agent_id: str) -> list[AgentDocumentRecord]:
         return self.repository.list_documents(agent_id)
 
+    def _resolve_commerce_answer(
+        self,
+        *,
+        agent: AgentRecord,
+        message: str,
+        company_id: str,
+        session_id: str,
+        channel: str,
+        user_id: str,
+        role_context,
+    ) -> RAGAnswer | None:
+        """
+        Paso commerce previo al RAG (equivalente a lo que hacia el monolito en cada handler de chat):
+        si la empresa tiene ClubHx configurado, el router commerce decide si el mensaje es parte
+        de un flujo de venta (buscar producto, carrito, OTP, despacho, pago, orden). Si devuelve
+        payload, esa es la respuesta y se persiste el estado del checkout; si no, sigue el RAG.
+        """
+        if not session_id:
+            return None
+        # Imports diferidos: el paquete commerce es pesado y no debe cargarse si no hay ClubHx.
+        from clasificacion_langchain.agents.commerce import resolvers, routing
+        from clasificacion_langchain.agents.commerce.extractors import reminder_recipient_for_channel
+        from clasificacion_langchain.agents.commerce.helpers import (
+            agent_summary_context,
+            agent_workflow_state,
+            remember_commerce_products,
+        )
+        from clasificacion_langchain.agents.commerce.tenant_config import build_clubhx_client_for_company
+        from clasificacion_langchain.rag.generation import enforce_channel_response_contract
+
+        client = build_clubhx_client_for_company(company_id)
+        if client is None:
+            return None
+
+        def _bind(func):
+            import inspect
+            from functools import partial
+
+            if "agent_service" in inspect.signature(func).parameters:
+                return partial(func, agent_service=self)
+            return func
+
+        try:
+            payload = routing.resolve_shared_commerce_payload(
+                company_id=company_id,
+                agent_id=agent.agent_id,
+                user_id=user_id,
+                session_id=session_id,
+                message=message,
+                channel=channel,
+                clubhx_tools_client=client,
+                intent_label=None,
+                response_style_context=(
+                    f"objective={role_context.objective}\n"
+                    f"tone={role_context.tone}\n"
+                    f"rules={role_context.system_rules}\n"
+                    f"summary={agent_summary_context(company_id, agent.agent_id, session_id, self)}"
+                ),
+                workflow_state=agent_workflow_state(company_id, agent.agent_id, session_id, self),
+                agent_service=self,
+                resolve_affirmative_followup=_bind(resolvers.resolve_affirmative_workflow_followup),
+                resolve_greeting_followup=_bind(resolvers.resolve_greeting_workflow_followup),
+                resolve_workflow_resume=_bind(resolvers.resolve_workflow_resume_followup),
+                legacy_preflight=_bind(resolvers.legacy_checkout_preflight_response),
+                resolve_checkout_followup=_bind(resolvers.resolve_checkout_workflow_followup),
+                update_memory=_bind(resolvers.update_agent_memory_from_payload),
+                fetch_addresses=_bind(resolvers.fetch_saved_addresses_for_user),
+                create_address=_bind(resolvers.create_address_for_user),
+                process_reminders=_bind(resolvers.process_workflow_reminders_once),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "agent_commerce_router_failed agent_id=%s company_id=%s session_id=%s detail=%s",
+                agent.agent_id,
+                company_id,
+                session_id,
+                exc,
+            )
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+        products = payload.get("products") if isinstance(payload.get("products"), list) else None
+        if str(payload.get("intent_label") or "") == "product_lookup" and not products:
+            # El catalogo de ClubHx no encontro nada ("que cafes tienen?"): mejor responde el RAG,
+            # que tiene el surtido y las FAQ, en vez de un "no encontre productos".
+            logger.info("agent_commerce_lookup_empty_fallback_rag agent_id=%s session_id=%s", agent.agent_id, session_id)
+            return None
+        answer_text = enforce_channel_response_contract(
+            str(payload.get("answer") or "").strip(),
+            query=message,
+            channel=channel,
+        )
+        if not answer_text:
+            return None
+
+        if products:
+            remember_commerce_products(session_id, products)
+        intent_label = str(payload.get("intent_label") or "commerce").strip() or "commerce"
+        try:
+            resolvers.update_agent_memory_from_payload(
+                agent_id=agent.agent_id,
+                company_id=company_id,
+                session_id=session_id,
+                user_message=message,
+                answer=answer_text,
+                payload=payload,
+                channel=channel,
+                reminder_recipient=reminder_recipient_for_channel(channel, session_id),
+                agent_service=self,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("agent_commerce_memory_update_failed agent_id=%s session_id=%s detail=%s", agent.agent_id, session_id, exc)
+        logger.info(
+            "agent_chat_commerce_answer agent_id=%s company_id=%s session_id=%s channel=%s intent=%s",
+            agent.agent_id,
+            company_id,
+            session_id,
+            channel,
+            intent_label,
+        )
+        return RAGAnswer(
+            answer=answer_text,
+            company_id=company_id,
+            sources=[],
+            retrieved_chunks=[],
+            intent_label=intent_label,
+            route="tool",
+            route_reason="shared_commerce",
+            response_mode="tool_only",
+            redirect_to=str(payload.get("redirect_to") or "").strip() or None,
+            workflow_action=payload.get("workflow_action") if isinstance(payload.get("workflow_action"), dict) else None,
+            cart_action=payload.get("cart_action") if isinstance(payload.get("cart_action"), dict) else None,
+            cart_actions=payload.get("cart_actions") if isinstance(payload.get("cart_actions"), list) else None,
+            products=products,
+        )
+
     def ensure_index_local(self, agent: AgentRecord) -> bool:
         # True si el indice esta disponible en disco (bajandolo del storage remoto si hace falta).
         try:
@@ -1430,6 +1567,17 @@ class AgentService:
             agent_id=agent.agent_id,
             session_id=clean_session_id,
         )
+        commerce_answer = self._resolve_commerce_answer(
+            agent=agent,
+            message=message,
+            company_id=company_id,
+            session_id=clean_session_id,
+            channel=channel,
+            user_id=(external_user_id or visitor_id or clean_session_id or "").strip(),
+            role_context=role_context,
+        )
+        if commerce_answer is not None:
+            return commerce_answer
         contextual_query = self._build_query(
             message=message,
             history=history,

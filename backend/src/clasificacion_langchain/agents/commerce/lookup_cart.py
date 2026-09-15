@@ -58,6 +58,15 @@ def _is_cart_status_message(message: str) -> bool:
     return "carrito" in normalized and any(token in normalized for token in ["como va", "resumen", "estado", "mi carrito", "carrito actual", "va el carrito"])
 
 
+def _looks_like_product_question(message: str) -> bool:
+    normalized = normalize_text(message)
+    if not normalized:
+        return False
+    if message.strip().endswith("?") or message.strip().startswith("¿"):
+        return True
+    return bool(re.match(r"^(tienen|tenes|tiene|hay|venden|vende|manejan|trabajan|cuanto|cuánto|que|qué|cual|cuál)", normalized))
+
+
 def _extract_widget_cart_requests(message: str) -> list[dict[str, Any]]:
     normalized = normalize_text(message)
     if not normalized or not has_explicit_add_to_cart_intent(message):
@@ -254,6 +263,43 @@ class LookupCartResolver:
         awaiting_slot = str(workflow_state.get("awaiting_slot") or "").strip().lower()
         if pending_next_step != "add_to_cart" and workflow_stage != "product_lookup":
             return None
+        # Una pregunta ("Tienen Omo?", "Hay cafe?") es una consulta, no una orden de agregar:
+        # sigue el camino de busqueda aunque el estado anterior haya quedado en product_lookup.
+        if _looks_like_product_question(state.user_goal) and not (
+            has_explicit_add_to_cart_intent(state.user_goal) or is_quantity_only_followup(state.user_goal)
+        ):
+            return None
+        # "quiero 1 omo y 1 nescafe": varios productos en un mensaje -> resolver todos contra el catalogo.
+        multi_requests: list[dict[str, Any]] = []
+        if command is not None and command.product_queries and len(command.product_queries) > 1:
+            multi_requests = [
+                {"quantity": command.quantity or 1, "product_query": str(query).strip()}
+                for query in command.product_queries
+                if str(query).strip()
+            ]
+        if len(multi_requests) < 2:
+            extracted = _extract_widget_cart_requests(state.user_goal)
+            if len(extracted) > 1:
+                multi_requests = extracted
+        if len(multi_requests) > 1:
+            canonical_results = [
+                self.executor.execute(
+                    tenant_id=state.company_id,
+                    tool="get_product_availability",
+                    channel=state.channel,
+                    user_id=state.user_id,
+                    arguments={
+                        "query": str(cart_request.get("product_query") or "").strip(),
+                        "limit": 5,
+                        "session_id": state.session_id,
+                    },
+                )
+                for cart_request in multi_requests
+            ]
+            payload = _build_multi_cart_tool_payload(canonical_results, multi_requests)
+            if isinstance(payload, dict):
+                payload["awaiting_slot"] = "shipping_method"
+                return payload
         recent_products = self.recent_products_provider(state.session_id)
         selected_product = None
         recent_query = ""

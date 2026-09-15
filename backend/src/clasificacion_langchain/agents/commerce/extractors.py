@@ -263,9 +263,27 @@ def extract_pickup_location(message: str) -> str:
     return ""
 
 
+def _normalize_basic(text: str) -> str:
+    import unicodedata
+    lowered = "".join(ch for ch in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(ch))
+    return " ".join(lowered.split())
+
+
+def is_question_message(message: str) -> bool:
+    raw = (message or "").strip()
+    if not raw:
+        return False
+    if raw.endswith("?") or raw.startswith("¿"):
+        return True
+    return bool(re.match(r"^(cuanto|cuánto|cuanta|cuánta|que|qué|cual|cuál|como|cómo|donde|dónde|cuando|cuándo|hay|tienen|puedo|se puede)", _normalize_basic(raw)))
+
+
 def extract_address(message: str) -> str:
     raw = (message or "").strip()
     if not raw:
+        return ""
+    # "Cuanto cuesta el despacho a Lagunillas?" es una pregunta de precio, no una direccion.
+    if is_question_message(raw):
         return ""
     patterns = [
         r"(?:direccion|dir|envio a|despacho a|domicilio en|para|calle|av|avda|pje|pasaje)\s+(.+)$",
@@ -563,6 +581,11 @@ def canonical_tool_succeeded(result: Any, expected_statuses: set[str] | None = N
     if not isinstance(result, dict) or not result.get("ok"):
         return False
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    # Un `ok: true` del sobre solo dice que la tool se ejecuto; el resultado real viene en data.
+    # Si la tool declara explicitamente verified/sent/valid en false, es un fallo aunque code sea "ok".
+    for flag in ("verified", "sent", "valid", "success"):
+        if data.get(flag) is False:
+            return False
     if data.get("ok") is True:
         return True
     status = str(data.get("status") or result.get("code") or result.get("status") or "").strip().lower()

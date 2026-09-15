@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from dataclasses import dataclass, field
 
 
@@ -43,3 +45,9 @@ class RAGAnswer:
     response_mode: str | None = None
     fallback_applied: bool = False
     retrieval_min_score: float | None = None
+    # Campos del flujo commerce (checkout conversacional). Vacios en respuestas RAG puras.
+    redirect_to: str | None = None
+    workflow_action: dict[str, Any] | None = None
+    cart_action: dict[str, Any] | None = None
+    cart_actions: list[dict[str, Any]] | None = None
+    products: list[dict[str, Any]] | None = None

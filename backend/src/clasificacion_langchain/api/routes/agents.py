@@ -169,4 +169,9 @@ def chat_with_agent(
         response_mode=answer.response_mode,
         fallback_applied=answer.fallback_applied,
         retrieval_min_score=answer.retrieval_min_score,
+        redirect_to=answer.redirect_to,
+        workflow_action=answer.workflow_action,
+        cart_action=answer.cart_action,
+        cart_actions=answer.cart_actions,
+        products=answer.products,
     )

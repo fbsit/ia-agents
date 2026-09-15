@@ -61,6 +61,21 @@ def build_checkout_workflow_graph(
                 "pending_next_step": checkout_state.pending_next_step,
                 "awaiting_slot": checkout_state.awaiting_slot,
             }
+            if state.get("tool_guard_reason") == "auth_required":
+                # Dejar el checkout esperando el correo: el siguiente mensaje con un email dispara el OTP.
+                payload.update(
+                    {
+                        "answer": (
+                            "Antes de continuar con el pago necesito validar tu acceso. "
+                            "Escribime tu correo y te envio un codigo de verificacion."
+                        ),
+                        "intent_label": "checkout_auth_needed",
+                        "workflow_stage": "checkout_ready",
+                        "checkout_stage": "auth_pending",
+                        "pending_next_step": "auth_confirmation",
+                        "awaiting_slot": "",
+                    }
+                )
             return {"payload": payload}
         payload = resolver(checkout_state, state.get("command"))
         return {

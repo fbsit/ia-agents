@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from clasificacion_langchain.agents.commerce.cart_snapshot import cart_snapshot_items
 from clasificacion_langchain.agents.commerce.commands import CheckoutCommand
+from clasificacion_langchain.agents.commerce.extractors import canonical_tool_succeeded, is_email_message
 from clasificacion_langchain.agents.commerce.lookup_cart import LookupCartResolver
 from clasificacion_langchain.agents.commerce.recent_products import normalize_text
 from clasificacion_langchain.agents.commerce.resume_timeout import (
@@ -11,6 +15,8 @@ from clasificacion_langchain.agents.commerce.resume_timeout import (
 )
 from clasificacion_langchain.agents.commerce.state import WhatsAppCheckoutState
 from clasificacion_langchain.agents.commerce.tool_ports import CommerceToolExecutor
+
+logger = logging.getLogger(__name__)
 
 
 FallbackResolver = Callable[[WhatsAppCheckoutState, CheckoutCommand | None], dict[str, Any] | None]
@@ -111,7 +117,13 @@ def _completed_answer(state: WhatsAppCheckoutState, result_data: dict[str, Any])
     lines = ["Perfecto, ya deje registrada tu compra."]
     if order_reference:
         lines.append(f"Orden: {order_reference}")
-    if state.selected_products:
+    cart_items = cart_snapshot_items(state.to_workflow_state_dict())
+    if cart_items:
+        lines.append("Detalle:")
+        for item in cart_items[:8]:
+            quantity = int(item.get("quantity") or 1)
+            lines.append(f"• {item.get('name') or 'Producto'} x{quantity}")
+    elif state.selected_products:
         lines.append("Detalle:")
         for name in state.selected_products[:8]:
             lines.append(f"• {name}")
@@ -195,13 +207,34 @@ class CheckoutWorkflowResolver:
 
         if state.checkout_stage == "otp_pending" or state.pending_next_step == "otp_verification":
             if state.otp_email and _is_numeric_code(state.user_goal):
-                self.executor.execute(
+                verify_result = self.executor.execute(
                     tenant_id=state.company_id,
                     tool="verify_verification_code",
                     channel=state.channel,
                     user_id=state.user_id,
                     arguments={"email": state.otp_email, "code": state.user_goal.strip()},
                 )
+                if not canonical_tool_succeeded(verify_result, expected_statuses={"verified", "valid", "ok", "success"}):
+                    return {
+                        "answer": "El codigo ingresado no es valido o expiro. Intenta de nuevo o escribe tu correo para reenviar el codigo.",
+                        "intent_label": "checkout_otp_invalid",
+                        "workflow_stage": "checkout_auth",
+                        "checkout_stage": "otp_pending",
+                        "pending_next_step": "otp_verification",
+                        "awaiting_slot": "otp_code",
+                        "otp_email": state.otp_email,
+                    }
+                # Sesion de cliente en ClubHx (customer_id) para que el pedido quede a su nombre.
+                try:
+                    self.executor.execute(
+                        tenant_id=state.company_id,
+                        tool="login_with_code",
+                        channel=state.channel,
+                        user_id=state.user_id,
+                        arguments={"email": state.otp_email, "code": state.user_goal.strip()},
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
                 return {
                     "answer": "Perfecto, ya estas autenticado. Ahora dime si prefieres retiro en tienda o despacho.",
                     "intent_label": "checkout_auth_confirmed",
@@ -210,15 +243,28 @@ class CheckoutWorkflowResolver:
                     "pending_next_step": "shipping_selection",
                     "awaiting_slot": "shipping_method",
                 }
-            return {
-                "answer": "El codigo ingresado no es valido. Intenta de nuevo o escribe tu correo para reenviar el codigo.",
-                "intent_label": "checkout_otp_invalid",
-                "workflow_stage": "checkout_auth",
-                "checkout_stage": "otp_pending",
-                "pending_next_step": "otp_verification",
-                "awaiting_slot": "otp_code",
-                "otp_email": state.otp_email,
-            }
+            if is_email_message(state.user_goal):
+                email = state.user_goal.strip()
+                sent = self.executor.execute(
+                    tenant_id=state.company_id,
+                    tool="send_verification_code",
+                    channel=state.channel,
+                    user_id=state.user_id,
+                    arguments={"email": email},
+                )
+                if canonical_tool_succeeded(sent, expected_statuses={"sent", "ok", "success"}):
+                    return {
+                        "answer": f"Te reenvie el codigo de verificacion a {email}. Ingresalo aca para continuar.",
+                        "intent_label": "checkout_otp_sent",
+                        "workflow_stage": "checkout_auth",
+                        "checkout_stage": "otp_pending",
+                        "pending_next_step": "otp_verification",
+                        "awaiting_slot": "otp_code",
+                        "otp_email": email,
+                    }
+            # Ni codigo ni correo (p. ej. una pregunta de despacho): que responda el conocimiento.
+            # El checkout sigue esperando el codigo; no se reinicia.
+            return None
 
         payment_intent = command.intent if command else ""
         wants_checkout_progression = payment_intent in {"checkout_continue", "payment_options", "create_payment_link", "create_order_draft"}
@@ -348,12 +394,24 @@ class CheckoutWorkflowResolver:
 
         if state.checkout_stage == "order_summary_pending" or state.pending_next_step == "order_confirmation":
             if _is_affirmative(state.user_goal):
-                items = []
-                for index, name in enumerate(state.selected_products, start=1):
-                    items.append({"product_id": f"item-{index}", "name": name, "quantity": 1})
+                # Items reales del carrito (ids de ClubHx). Solo si no hay snapshot se cae a los nombres.
+                items = [
+                    {
+                        "product_id": str(item.get("product_id") or "").strip(),
+                        "checkout_product_id": str(item.get("checkout_product_id") or item.get("product_id") or "").strip(),
+                        "variant_id": str(item.get("variant_id") or item.get("product_id") or "").strip(),
+                        "quantity": max(1, int(item.get("quantity") or 1)),
+                        "name": str(item.get("name") or "").strip(),
+                    }
+                    for item in cart_snapshot_items(state.to_workflow_state_dict())
+                    if str(item.get("product_id") or "").strip()
+                ]
+                if not items:
+                    for index, name in enumerate(state.selected_products, start=1):
+                        items.append({"product_id": f"item-{index}", "name": name, "quantity": 1})
                 result = self.executor.execute(
                     tenant_id=state.company_id,
-                    tool="create_order",
+                    tool="create_order_draft",
                     channel=state.channel,
                     user_id=state.user_id,
                     arguments={
@@ -367,7 +425,32 @@ class CheckoutWorkflowResolver:
                     },
                 )
                 data = result.get("data") if isinstance(result.get("data"), dict) else {}
-                answer = _completed_answer(state, data)
+                checkout_info = data.get("checkout") if isinstance(data.get("checkout"), dict) else {}
+                draft_ok = bool(isinstance(result, dict) and result.get("ok")) and data.get("ok") is not False and str(
+                    result.get("code") or ""
+                ).strip().lower() not in {"tool_failed", "error"}
+                if not draft_ok:
+                    # ClubHx no pudo crear el borrador: no prometer nada, dejar el pedido armado y derivar.
+                    detail = str(result.get("message") or data.get("message") or "").strip()
+                    logger.warning(
+                        "commerce_order_draft_failed session_id=%s code=%s detail=%s",
+                        state.session_id,
+                        result.get("code") if isinstance(result, dict) else None,
+                        detail,
+                    )
+                    return {
+                        "answer": (
+                            "No pude registrar el pedido en este momento. Ya quedo armado con tus productos, "
+                            "medio de pago y datos; una persona del equipo lo va a revisar y te confirma por este mismo chat."
+                        ),
+                        "intent_label": "order_failed",
+                        "workflow_stage": "payment_selection",
+                        "checkout_stage": "order_summary_pending",
+                        "pending_next_step": "order_confirmation",
+                        "workflow_action": {"type": "human_handoff", "payload": {"reason": "order_draft_failed", "detail": detail[:200]}},
+                    }
+                merged = {**checkout_info, **data}
+                answer = _completed_answer(state, merged)
                 payload: dict[str, Any] = {
                     "answer": answer,
                     "intent_label": "order_created",
@@ -377,7 +460,7 @@ class CheckoutWorkflowResolver:
                     "awaiting_slot": "",
                     "reset_workflow": True,
                 }
-                payment_url = str((data.get("payment_url") or data.get("payment_link") or data.get("checkout_url") or data.get("url") or "")).strip()
+                payment_url = str((merged.get("payment_url") or merged.get("payment_link") or merged.get("checkout_url") or merged.get("init_point") or merged.get("url") or "")).strip()
                 if payment_url:
                     payload["redirect_to"] = payment_url
                 return payload

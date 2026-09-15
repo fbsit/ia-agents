@@ -76,4 +76,9 @@ def public_widget_chat(
         route=answer.route,
         intent_label=answer.intent_label,
         response_mode=answer.response_mode,
+        redirect_to=answer.redirect_to,
+        workflow_action=answer.workflow_action,
+        cart_action=answer.cart_action,
+        cart_actions=answer.cart_actions,
+        products=answer.products,
     )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -120,8 +121,9 @@ def update_agent_memory_from_payload(
     invoice_rut = invoice_data.get("rut")
     invoice_business_name = invoice_data.get("business_name")
     invoice_address = invoice_data.get("invoice_address")
-    customer_authenticated = True if is_login_confirmed_message(user_message) else None
-    if customer_authenticated is None and isinstance(payload, dict):
+    # La autenticacion solo la confirma el payload del flujo (OTP verificado), nunca la frase del usuario.
+    customer_authenticated = None
+    if isinstance(payload, dict):
         intent = str(payload.get("intent_label") or "").strip()
         if intent in {"checkout_auth_confirmed", "checkout_otp_sent", "checkout_otp_invalid"}:
             customer_authenticated = intent == "checkout_auth_confirmed"
@@ -194,6 +196,25 @@ def update_agent_memory_from_payload(
         )
 
 
+_TOOL_CONTRACT_CACHE: dict[str, set[str]] = {}
+
+
+def _tool_available(clubhx_tools_client: Any, tool_name: str) -> bool:
+    """Consulta (y cachea por base_url+shop) las tools que publica ClubHx en /ai/tools/contracts."""
+    key = f"{getattr(clubhx_tools_client, 'base_url', '')}|{getattr(clubhx_tools_client, 'shop_domain', '')}"
+    tools = _TOOL_CONTRACT_CACHE.get(key)
+    if tools is None:
+        try:
+            payload = clubhx_tools_client.contracts()
+            rows = payload.get("tools") if isinstance(payload, dict) else []
+            tools = {str(row.get("name") or "").strip() for row in rows if isinstance(row, dict)}
+        except Exception as exc:  # noqa: BLE001
+            logger.info("clubhx_contracts_unavailable detail=%s", exc)
+            tools = set()
+        _TOOL_CONTRACT_CACHE[key] = tools
+    return not tools or tool_name in tools
+
+
 def fetch_saved_addresses_for_user(
     *,
     clubhx_tools_client: Any | None,
@@ -202,6 +223,10 @@ def fetch_saved_addresses_for_user(
     channel: str | None,
 ) -> list[dict[str, str]]:
     if clubhx_tools_client is None or not user_id:
+        return []
+    # El contrato actual de ClubHx no expone `get_addresses` (solo `create_address`):
+    # se puede consultar en runtime con contracts(); hasta que exista, no hay direcciones guardadas.
+    if not _tool_available(clubhx_tools_client, "get_addresses"):
         return []
     try:
         result = clubhx_tools_client.execute_canonical(
@@ -564,6 +589,31 @@ def resolve_checkout_workflow_followup(
 
     if current_pending_next_step == "otp_verification" or current_checkout_stage == "otp_pending":
         otp_email = str((workflow_state or {}).get("otp_email") or "").strip()
+        if not re.fullmatch(r"\d{4,8}", message.strip()):
+            if is_email_message(message) and clubhx_tools_client is not None:
+                # Otro correo durante la espera: reenviar el codigo a ese correo.
+                try:
+                    resend = clubhx_tools_client.execute_canonical(
+                        tenant_id=company_id or "",
+                        tool="send_verification_code",
+                        channel=channel or "",
+                        user_id=user_id,
+                        arguments={"email": message.strip()},
+                    )
+                    if canonical_tool_succeeded(resend, expected_statuses={"sent", "ok", "success"}):
+                        return {
+                            "answer": f"Te reenvie el codigo de verificacion a {message.strip()}. Ingresalo aca para continuar.",
+                            "intent_label": "checkout_otp_sent",
+                            "workflow_stage": "checkout_ready",
+                            "checkout_stage": "otp_pending",
+                            "pending_next_step": "otp_verification",
+                            "otp_email": message.strip(),
+                            "workflow_action": workflow_action("otp_sent"),
+                        }
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("checkout_followup_resend_otp_failed session_id=%s detail=%s", session_id, exc)
+            # Ni codigo ni correo: que responda el conocimiento; el checkout sigue esperando el codigo.
+            return None
         logger.info(
             "checkout_followup_verify_otp_attempt session_id=%s message=%s stage=%s pending_next_step=%s otp_email=%s",
             session_id,
@@ -591,6 +641,23 @@ def resolve_checkout_workflow_followup(
                 )
                 if canonical_tool_succeeded(result, expected_statuses={"verified", "valid", "ok", "success"}):
                     otp_ok = True
+                    try:
+                        login_result = clubhx_tools_client.execute_canonical(
+                            tenant_id=company_id or "",
+                            tool="login_with_code",
+                            channel=channel or "",
+                            user_id=user_id,
+                            arguments={"email": otp_email, "code": message.strip()},
+                        )
+                        login_data = login_result.get("data") if isinstance(login_result.get("data"), dict) else {}
+                        logger.info(
+                            "checkout_followup_login_with_code session_id=%s customer_id=%s ok=%s",
+                            session_id,
+                            login_data.get("customer_id"),
+                            login_result.get("ok"),
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("checkout_followup_login_with_code_failed session_id=%s detail=%s", session_id, exc)
             except Exception as exc:
                 logger.warning(
                     "checkout_followup_verify_otp_failed session_id=%s code=%s otp_email=%s detail=%s",
@@ -626,15 +693,15 @@ def resolve_checkout_workflow_followup(
             "workflow_action": workflow_action("auth_confirmed", authenticated=True),
         }
 
-    if is_login_confirmed_message(message):
+    if is_login_confirmed_message(message) and not current_customer_authenticated:
+        # Decir "ya inicie sesion" no autentica: la unica via es el codigo verificado por ClubHx.
         return {
-            "answer": "Perfecto, tomo que ya iniciaste sesion. Ahora dime si prefieres retiro en tienda o despacho.",
-            "intent_label": "checkout_auth_confirmed",
-            "workflow_stage": "shipping_selection",
-            "checkout_stage": "shipping_method_pending",
-            "pending_next_step": "shipping_selection",
-            "authenticated_at": datetime.now(UTC).isoformat(),
-            "workflow_action": workflow_action("auth_confirmed", authenticated=True),
+            "answer": "Para validar tu acceso necesito el codigo que te enviamos al correo. Si no lo recibiste, escribime tu correo y te lo reenvio.",
+            "intent_label": "checkout_auth_needed",
+            "workflow_stage": "checkout_ready",
+            "checkout_stage": "auth_pending",
+            "pending_next_step": "auth_confirmation",
+            "workflow_action": workflow_action("auth_required"),
         }
 
     pickup_location = extract_pickup_location(message)
@@ -679,7 +746,14 @@ def resolve_checkout_workflow_followup(
                     tool="get_shipping_options",
                     channel=channel or "",
                     user_id=user_id,
-                    arguments={"session_id": session_id or ""},
+                    arguments={
+                        "commune": str(
+                            (workflow_state or {}).get("shipping_preference")
+                            or (workflow_state or {}).get("delivery_address")
+                            or ""
+                        ).strip(),
+                        "session_id": session_id or "",
+                    },
                 )
                 pickup_names = pickup_option_names_from_result(shipping_result)
             except Exception as exc:  # noqa: BLE001

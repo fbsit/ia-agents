@@ -4323,7 +4323,11 @@ def test_checkout_followup_verifies_otp_success(monkeypatch: pytest.MonkeyPatch)
     assert payload["checkout_stage"] == "shipping_method_pending"
     assert payload["pending_next_step"] == "shipping_selection"
     assert payload["intent_label"] == "checkout_auth_confirmed"
-    assert calls == [("verify_verification_code", {"email": "ehl_piphe3@outlook.com", "code": "842384"})]
+    # Tras verificar, se llama login_with_code para obtener el customer_id del cliente en ClubHx.
+    assert calls == [
+        ("verify_verification_code", {"email": "ehl_piphe3@outlook.com", "code": "842384"}),
+        ("login_with_code", {"email": "ehl_piphe3@outlook.com", "code": "842384"}),
+    ]
 
 
 def test_checkout_followup_verifies_otp_rejects_invalid_code(monkeypatch: pytest.MonkeyPatch) -> None:
