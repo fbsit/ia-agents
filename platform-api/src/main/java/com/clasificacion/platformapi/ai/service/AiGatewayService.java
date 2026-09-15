@@ -48,6 +48,7 @@ public class AiGatewayService {
     private final AiEngineClient aiEngineClient;
     private final String integrationServiceToken;
     private final long identityCacheMillis;
+    private final String aiEnginePublicBaseUrl;
     /**
      * Cache corto (por bearer token) del usuario + organizaciones ya resueltos.
      * Cada request proxied hacia el AI Engine necesitaba dos consultas a una base remota
@@ -67,13 +68,30 @@ public class AiGatewayService {
         TenancyService tenancyService,
         AiEngineClient aiEngineClient,
         @Value("${app.integration.service-token:}") String integrationServiceToken,
-        @Value("${app.ai-engine.identity-cache-seconds:30}") long identityCacheSeconds
+        @Value("${app.ai-engine.identity-cache-seconds:30}") long identityCacheSeconds,
+        @Value("${app.ai-engine.public-base-url:}") String aiEnginePublicBaseUrl
     ) {
         this.authService = authService;
         this.tenancyService = tenancyService;
         this.aiEngineClient = aiEngineClient;
         this.integrationServiceToken = integrationServiceToken == null ? "" : integrationServiceToken.trim();
         this.identityCacheMillis = Math.max(0L, identityCacheSeconds) * 1000L;
+        this.aiEnginePublicBaseUrl = aiEnginePublicBaseUrl == null ? "" : aiEnginePublicBaseUrl.trim();
+    }
+
+    /**
+     * Base publica hacia donde debe apuntar el widget embebible o el webhook de WhatsApp.
+     * El header X-Public-Base-Url que arma el controller a partir de Origin/Referer del
+     * llamador NO sirve para esto: refleja el origen de quien pide la config (la consola),
+     * no la direccion publica del AI Engine, que es lo que el navegador o Meta necesitan
+     * llamar. Por eso ese override solo se respeta si vino explicito; si no, se usa esta
+     * property (app.ai-engine.public-base-url), configurada por quien despliega.
+     */
+    private String resolvePublicBaseUrl(String provided) {
+        if (provided != null && !provided.isBlank()) {
+            return provided;
+        }
+        return aiEnginePublicBaseUrl.isBlank() ? null : aiEnginePublicBaseUrl;
     }
 
     private CachedIdentity resolveIdentity(String authorization) {
@@ -415,7 +433,7 @@ public class AiGatewayService {
             requestedOrgId,
             requestId
         );
-        return aiEngineClient.getAgentWidgetConfig(context, agentId, publicBaseUrl);
+        return aiEngineClient.getAgentWidgetConfig(context, agentId, resolvePublicBaseUrl(publicBaseUrl));
     }
 
     public AiAgentWhatsAppConfigResponse getAgentWhatsAppConfig(
@@ -432,7 +450,7 @@ public class AiGatewayService {
             requestedOrgId,
             requestId
         );
-        return aiEngineClient.getAgentWhatsAppConfig(context, agentId, publicBaseUrl);
+        return aiEngineClient.getAgentWhatsAppConfig(context, agentId, resolvePublicBaseUrl(publicBaseUrl));
     }
 
     public AiAgentWhatsAppConfigResponse updateAgentWhatsAppConfig(
@@ -454,7 +472,7 @@ public class AiGatewayService {
             request.business_account_id(),
             request.verify_token()
         );
-        return aiEngineClient.updateAgentWhatsAppConfig(context, agentId, payload, publicBaseUrl);
+        return aiEngineClient.updateAgentWhatsAppConfig(context, agentId, payload, resolvePublicBaseUrl(publicBaseUrl));
     }
 
     public AiAgentWhatsAppValidationResponse validateAgentWhatsAppConfig(
@@ -471,7 +489,7 @@ public class AiGatewayService {
             requestedOrgId,
             requestId
         );
-        return aiEngineClient.validateAgentWhatsAppConfig(context, agentId, publicBaseUrl);
+        return aiEngineClient.validateAgentWhatsAppConfig(context, agentId, resolvePublicBaseUrl(publicBaseUrl));
     }
 
     public AiAgentFeedbackSummaryResponse getAgentFeedbackSummary(

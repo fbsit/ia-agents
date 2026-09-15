@@ -245,7 +245,7 @@ set EVAL_EMBEDDED_WORKER_ENABLED=false
 - `CHAT_AUTH_COMPAT_MODE` (`true` o `false`, default `true`) para migracion gradual de `/chat` a modo autenticado
 - `AI_ENGINE_SHARED_SECRET` (opcional pero recomendado) firma HMAC para requests internas desde `platform-api` hacia `/internal/ai/*`
 - `PUBLIC_WIDGET_SIGNING_SECRET` (recomendado) firma HMAC para exponer widgets publicos
-- `PUBLIC_WIDGET_API_BASE_URL` (opcional) URL publica del backend para generar snippet (`https://api.tudominio.com`)
+- `PUBLIC_WIDGET_API_BASE_URL` (opcional, pero requerida en produccion) URL publica del AI Engine para generar el snippet embebible (`https://api.tudominio.com`). Sin ella, el widget cae en `http://localhost:8080` y el chat embebido en el sitio del integrador no funciona.
 - `PUBLIC_WIDGET_ALLOW_ORIGINS` (default `*`) origins permitidos para `POST /public/widget/chat`
 - `PUBLIC_WIDGET_RATE_LIMIT_WINDOW_SECONDS` (default `60`) ventana de rate limit del widget
 - `PUBLIC_WIDGET_RATE_LIMIT_MAX_REQUESTS` (default `30`) maximo de requests por IP+widget en cada ventana

@@ -60,6 +60,7 @@ Default local ports:
 - `app.ai-engine.path-prefix`
 - `app.ai-engine.connect-timeout`
 - `app.ai-engine.read-timeout`
+- `app.ai-engine.public-base-url` (env `AI_ENGINE_PUBLIC_BASE_URL`, default = `app.ai-engine.base-url`) URL publica del AI Engine que se entrega en el widget embebible y en el webhook de WhatsApp. No se adivina desde el Origin/Referer de quien pide la config (esa consola no es el AI Engine)
 - `app.ai-engine.shared-secret`
 
 Si configuras `app.ai-engine.shared-secret`, el backend Python debe tener el mismo valor en `AI_ENGINE_SHARED_SECRET`.

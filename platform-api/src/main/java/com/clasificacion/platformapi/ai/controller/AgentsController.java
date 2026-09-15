@@ -581,55 +581,17 @@ public class AgentsController {
         );
     }
 
+    /**
+     * Solo se respeta un X-Public-Base-Url EXPLICITO (p. ej. para pruebas). El Origin/Referer
+     * de este request es el de quien pide la config (la consola), no el del AI Engine: usarlo
+     * como base publica del widget o del webhook de WhatsApp apuntaria al dominio equivocado.
+     * Sin override, AiGatewayService aplica su propio default (app.ai-engine.public-base-url).
+     */
     private String resolvePublicBaseUrl(HttpServletRequest request) {
         String explicitPublicBase = request.getHeader("X-Public-Base-Url");
         if (explicitPublicBase != null && !explicitPublicBase.isBlank()) {
             return explicitPublicBase.strip();
         }
-
-        String origin = request.getHeader("Origin");
-        String originBase = toBaseUrl(origin);
-        if (originBase != null) {
-            return originBase;
-        }
-
-        String referer = request.getHeader("Referer");
-        String refererBase = toBaseUrl(referer);
-        if (refererBase != null) {
-            return refererBase;
-        }
-
-        String scheme = request.getScheme();
-        String host = request.getServerName();
-        int port = request.getServerPort();
-        boolean standardPort = ("http".equalsIgnoreCase(scheme) && port == 80)
-            || ("https".equalsIgnoreCase(scheme) && port == 443);
-        if (standardPort) {
-            return scheme + "://" + host;
-        }
-        return scheme + "://" + host + ":" + port;
-    }
-
-    private String toBaseUrl(String rawUrl) {
-        if (rawUrl == null || rawUrl.isBlank()) {
-            return null;
-        }
-        try {
-            URI uri = URI.create(rawUrl.trim());
-            String scheme = uri.getScheme();
-            String host = uri.getHost();
-            int port = uri.getPort();
-            if (scheme == null || host == null) {
-                return null;
-            }
-            boolean standardPort = ("http".equalsIgnoreCase(scheme) && port == 80)
-                || ("https".equalsIgnoreCase(scheme) && port == 443);
-            if (port < 0 || standardPort) {
-                return scheme + "://" + host;
-            }
-            return scheme + "://" + host + ":" + port;
-        } catch (RuntimeException ignored) {
-            return null;
-        }
+        return null;
     }
 }
