@@ -53,10 +53,7 @@ def _create_list_link(
     payload_items: list[dict[str, Any]],
     session_id: str,
 ) -> WebCheckoutLink | None:
-    storefront_url = str(getattr(client, "storefront_url", "") or "").strip()
-    if not storefront_url or not payload_items:
-        if not storefront_url:
-            logger.info("commerce_web_checkout_no_storefront_url session_id=%s", session_id)
+    if not payload_items:
         return None
 
     try:
@@ -69,9 +66,19 @@ def _create_list_link(
         logger.warning("commerce_web_checkout_shopping_list_failed session_id=%s detail=%s", session_id, exc)
         return None
 
-    public_token = str((result or {}).get("public_token") or "").strip()
-    if not public_token:
-        logger.warning("commerce_web_checkout_no_token session_id=%s result=%s", session_id, result)
+    # ClubHx ahora arma la URL completa (public_url), fuente de verdad de su
+    # lado (tenants.storefront_url), asi que ya no dependemos de mantener
+    # nuestro propio clubhx_storefront_url en sincronia. Mientras su deploy
+    # todavia no lo devuelva (o el tenant no lo tenga cargado), caemos a
+    # armarla nosotros con storefront_url + public_token, igual que antes.
+    public_url = str((result or {}).get("public_url") or "").strip()
+    if not public_url:
+        public_token = str((result or {}).get("public_token") or "").strip()
+        storefront_url = str(getattr(client, "storefront_url", "") or "").strip()
+        if public_token and storefront_url:
+            public_url = f"{storefront_url.rstrip('/')}/lista/{public_token}"
+    if not public_url:
+        logger.warning("commerce_web_checkout_no_url session_id=%s result=%s", session_id, result)
         return None
 
     totals = (result or {}).get("totals") if isinstance((result or {}).get("totals"), dict) else {}
@@ -85,7 +92,7 @@ def _create_list_link(
         ambiguous_count = 0
 
     return WebCheckoutLink(
-        url=f"{storefront_url.rstrip('/')}/lista/{public_token}",
+        url=public_url,
         unmatched_count=unmatched_count,
         ambiguous_count=ambiguous_count,
     )
