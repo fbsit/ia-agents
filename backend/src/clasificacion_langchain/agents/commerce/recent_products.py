@@ -74,7 +74,11 @@ def is_implicit_add_to_cart_message(message: str) -> bool:
             "metelo al carrito",
             "metela al carrito",
         ]
-    ) or normalized in {"dale", "si", "ok", "oka", "va", "bueno"}
+    ) or normalized in {
+        "dale", "si", "ok", "oka", "va", "bueno",
+        "ese", "esa", "eso", "ese mismo", "esa misma", "el mismo", "la misma", "ya ese", "ya esa",
+        "si ese", "si esa", "dale ese", "dale esa", "ese porfa", "esa porfa", "ese por favor", "el primero", "la primera",
+    }
 
 
 def has_explicit_add_to_cart_intent(message: str) -> bool:
@@ -85,11 +89,69 @@ def has_explicit_add_to_cart_intent(message: str) -> bool:
         return True
     return bool(
         re.search(
-            r"\b(?:agrega|agregame|agregar|suma|sumame|sumar|pon|poneme|poner|mete|meteme|anade|añade|llevo)\b",
+            r"\b(?:agrega|agregame|agregar|suma|sumame|sumar|pon|poneme|poner|mete|meteme|anade|añade|llevo|dame|damelo|dejame|mejor|cambia|cambialo)\b",
             normalized,
             flags=re.IGNORECASE,
         )
     )
+
+
+_ORDINALS = {
+    "primero": 0, "primera": 0, "primer": 0, "1": 0, "uno": 0,
+    "segundo": 1, "segunda": 1, "2": 1,
+    "tercero": 2, "tercera": 2, "tercer": 2, "3": 2,
+    "cuarto": 3, "cuarta": 3, "4": 3,
+    "quinto": 4, "quinta": 4, "5": 4,
+    "ultimo": -1, "ultima": -1,
+}
+
+
+def ordinal_choice_from_message(message: str) -> int | None:
+    """'la segunda', 'el 3', 'opcion 2', 'la ultima' -> indice en la lista de opciones mostrada.
+
+    Un numero suelto ("2", "quiero 2") es una cantidad, no una eleccion: solo cuenta como
+    ordinal si viene con articulo o con la palabra opcion/numero.
+    """
+    normalized = normalize_text(message)
+    if not normalized:
+        return None
+    digit_choice = re.fullmatch(r"(?:dale |si |ok )?(?:el|la|opcion|numero|nro|la de|el de)\s+([1-5])", normalized)
+    if digit_choice:
+        return int(digit_choice.group(1)) - 1
+    tokens = re.sub(r"\b(?:el|la|los|las|ese|esa|quiero|dale|si|ok|opcion|numero|nro)\b", " ", normalized).split()
+    if not tokens or len(tokens) > 3:
+        return None
+    for token in tokens:
+        if token in _ORDINALS and not token.isdigit():
+            return _ORDINALS[token]
+    return None
+
+
+def confident_product_match(query: str, items: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """
+    Elige un item sin preguntar solo cuando la coincidencia es clara: un unico resultado, o
+    exactamente un resultado cuyo nombre contiene todas las palabras pedidas. Si hay varias
+    variantes plausibles ("confort" -> Confort Noble, Confort Swan, Manga Confort...) devuelve None
+    para que el agente ofrezca las opciones y el cliente confirme.
+    """
+    safe_items = [item for item in items if isinstance(item, dict) and str(item.get("id") or "").strip()]
+    if not safe_items:
+        return None
+    if len(safe_items) == 1:
+        return safe_items[0]
+    query_tokens = [token for token in normalize_text(query).split() if len(token) > 2 and not token.isdigit()]
+    if not query_tokens:
+        return None
+    exact = [item for item in safe_items if normalize_text(str(item.get("name") or "")) == " ".join(query_tokens)]
+    if len(exact) == 1:
+        return exact[0]
+    containing = [
+        item for item in safe_items
+        if all(token in normalize_text(str(item.get("name") or "")) for token in query_tokens)
+    ]
+    if len(containing) == 1:
+        return containing[0]
+    return None
 
 
 def match_recent_product_from_message(message: str, recent_products: list[dict[str, Any]]) -> dict[str, Any] | None:

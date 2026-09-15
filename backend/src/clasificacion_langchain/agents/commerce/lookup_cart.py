@@ -16,8 +16,14 @@ from clasificacion_langchain.agents.commerce.extractors import (
     is_remove_from_cart_message,
     is_set_cart_quantity_message,
 )
+from clasificacion_langchain.agents.commerce.helpers import (
+    pop_pending_cart_quantity,
+    remember_pending_cart_quantity,
+)
 from clasificacion_langchain.agents.commerce.recent_products import (
+    confident_product_match,
     has_explicit_add_to_cart_intent,
+    ordinal_choice_from_message,
     is_implicit_add_to_cart_message,
     is_quantity_only_followup,
     match_recent_product_from_message,
@@ -168,10 +174,37 @@ def _normalize_catalog_product(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _build_multi_cart_tool_payload(canonical_results: list[dict[str, Any]], cart_requests: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _build_choice_payload(query: str, options: list[dict[str, Any]], quantity: int, session_id: str, added_summary: str = "") -> dict[str, Any]:
+    """Varias variantes para lo pedido: listar numeradas y esperar confirmacion antes de agregar."""
+    normalized = [_normalize_catalog_product(item) for item in options[:5]]
+    lines = [f"{index}. {p['name']} — ${p['price']}" if p.get("price") else f"{index}. {p['name']}" for index, p in enumerate(normalized, start=1)]
+    qty_hint = f" (x{quantity})" if quantity > 1 else ""
+    intro = f"{added_summary} " if added_summary else ""
+    answer = (
+        f"{intro}Para «{query}»{qty_hint} encontre varias opciones:\n" + "\n".join(lines)
+        + "\nDecime cual queres (por ejemplo «la primera» o el nombre) y lo agrego."
+    ).strip()
+    remember_pending_cart_quantity(session_id, quantity)
+    return {
+        "answer": answer,
+        "intent_label": "product_choice",
+        "products": normalized,
+        "focused_product": query,
+        "workflow_stage": "product_lookup",
+        "pending_next_step": "add_to_cart",
+        "awaiting_slot": "quantity_or_action",
+    }
+
+
+def _build_multi_cart_tool_payload(
+    canonical_results: list[dict[str, Any]],
+    cart_requests: list[dict[str, Any]],
+    session_id: str = "",
+) -> dict[str, Any] | None:
     cart_actions: list[dict[str, Any]] = []
     products: list[dict[str, Any]] = []
     seen_products: set[str] = set()
+    ambiguous: tuple[str, list[dict[str, Any]], int] | None = None
     for cart_request, result in zip(cart_requests, canonical_results):
         if not isinstance(result, dict) or not result.get("ok"):
             continue
@@ -180,7 +213,12 @@ def _build_multi_cart_tool_payload(canonical_results: list[dict[str, Any]], cart
         safe_items = [item for item in items if isinstance(item, dict)]
         if not safe_items:
             continue
-        first = safe_items[0]
+        query = str(cart_request.get("product_query") or "").strip()
+        first = confident_product_match(query, safe_items) if query else None
+        if first is None:
+            if ambiguous is None:
+                ambiguous = (query, safe_items, int(cart_request.get("quantity") or 1))
+            continue
         product_id = str(first.get("id") or "").strip()
         if not product_id:
             continue
@@ -201,11 +239,19 @@ def _build_multi_cart_tool_payload(canonical_results: list[dict[str, Any]], cart
                 continue
             seen_products.add(current_id)
             products.append(_normalize_catalog_product(item))
-    if not cart_actions:
-        return None
     summary = " y ".join(
         f"{action['item']['quantity']} {action['item']['name']}" for action in cart_actions if isinstance(action, dict)
     )
+    if ambiguous is not None:
+        query, options, quantity = ambiguous
+        added = f"Listo, agregue {summary} al carrito." if cart_actions else ""
+        payload = _build_choice_payload(query, options, quantity, session_id, added_summary=added)
+        if cart_actions:
+            payload["cart_action"] = cart_actions[0]
+            payload["cart_actions"] = cart_actions
+        return payload
+    if not cart_actions:
+        return None
     return {
         "answer": f'Listo, agregue {summary} al carrito. Si queres, seguimos con checkout cuando me digas "quiero pagar".',
         "intent_label": "add_to_cart",
@@ -240,9 +286,14 @@ def _build_multi_product_lookup_payload(canonical_results: list[dict[str, Any]],
         return None
     normalized_message = normalize_text(user_message)
     answer = "Si, encontre estas opciones:" if any(token in normalized_message for token in ["stock", "disponible", "precio", "cuesta", "tienen", "tiene", "hay"]) else "Te paso las opciones:"
-    formatted = "\n".join(f"• {p['name']} — ${p['price']}" for p in products[:5] if p.get("name"))
+    formatted = "\n".join(
+        (f"{index}. {p['name']} — ${p['price']}" if len(products) > 1 else f"• {p['name']} — ${p['price']}")
+        for index, p in enumerate(products[:5], start=1)
+        if p.get("name")
+    )
     if formatted:
         answer = f"{answer}\n{formatted}"
+    answer += "\nDecime cual queres y lo agrego." if len(products) > 1 else "\nTe lo agrego?"
     return {
         "answer": answer,
         "products": products[:6],
@@ -416,16 +467,24 @@ class LookupCartResolver:
                 self._lookup(state, str(cart_request.get("product_query") or "").strip())
                 for cart_request in multi_requests
             ]
-            payload = _build_multi_cart_tool_payload(canonical_results, multi_requests)
+            payload = _build_multi_cart_tool_payload(canonical_results, multi_requests, state.session_id)
             if isinstance(payload, dict):
-                payload["awaiting_slot"] = "shipping_method"
+                if payload.get("intent_label") != "product_choice":
+                    payload["awaiting_slot"] = "shipping_method"
                 return payload
         recent_products = self.recent_products_provider(state.session_id)
         selected_product = None
         recent_query = ""
         if command is not None and command.product_queries:
             recent_query = str(command.product_queries[0] or "").strip()
-        if is_implicit_add_to_cart_message(state.user_goal):
+        ordinal = ordinal_choice_from_message(state.user_goal)
+        if ordinal is not None and recent_products:
+            # "la segunda", "el 3", "la ultima" sobre la lista de opciones mostrada
+            try:
+                selected_product = recent_products[ordinal]
+            except IndexError:
+                selected_product = None
+        elif is_implicit_add_to_cart_message(state.user_goal):
             selected_product = recent_products[0] if recent_products else None
         elif recent_query:
             selected_product = match_recent_product_from_message(recent_query, recent_products)
@@ -438,7 +497,14 @@ class LookupCartResolver:
             checkout_product_id = str(selected_product.get("checkout_product_id") or product_id).strip()
             variant_id = str(selected_product.get("variant_id") or product_id).strip()
             name = str(selected_product.get("name") or "Producto").strip() or "Producto"
-            quantity = command.quantity if command is not None and command.quantity else parse_quantity(state.user_goal)
+            pending_quantity = pop_pending_cart_quantity(state.session_id)
+            has_quantity_in_message = bool(re.search(r"\b\d+\b|\b(?:dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b", normalize_text(state.user_goal))) and ordinal is None
+            if command is not None and command.quantity and has_quantity_in_message:
+                quantity = command.quantity
+            elif has_quantity_in_message:
+                quantity = parse_quantity(state.user_goal)
+            else:
+                quantity = pending_quantity or 1
             cart_action = {
                 "type": "add_to_cart",
                 "item": {
@@ -459,7 +525,35 @@ class LookupCartResolver:
                 "products": [selected_product],
             }
         implicit_add = is_implicit_add_to_cart_message(state.user_goal)
-        if awaiting_slot != "quantity_or_action" and not is_quantity_only_followup(state.user_goal) and not implicit_add:
+        quantity_only = is_quantity_only_followup(state.user_goal)
+        if not implicit_add and not quantity_only and ordinal is None:
+            # No es "dale"/"2"/un ordinal: puede que el cliente haya nombrado un producto
+            # distinto al que se le mostro ("mejor dame el milo" tras ofrecerle variantes de
+            # otra cosa). Si no matcheo nada reciente, buscarlo de cero en vez de asumir que
+            # confirma la primera opcion ya ofrecida.
+            named_query = recent_query
+            if not named_query:
+                widget_requests = _extract_widget_cart_requests(state.user_goal)
+                named_query = str(widget_requests[0].get("product_query") or "").strip() if widget_requests else ""
+            # Limpiar articulos/muletillas: el LLM a veces devuelve la frase cruda ("El Milo").
+            cleaned_query = re.sub(
+                r"\b(?:el|la|los|las|un|una|unos|unas|quiero|llevo|dame|me|mejor|dejame|cambia|cambialo|porfa|por|favor)\b",
+                " ",
+                named_query,
+                flags=re.IGNORECASE,
+            )
+            cleaned_query = re.sub(r"\s+", " ", cleaned_query).strip()
+            if cleaned_query and _names_a_product(cleaned_query):
+                fresh_quantity = command.quantity if (command is not None and command.quantity) else parse_quantity(state.user_goal)
+                fresh_result = self._lookup(state, cleaned_query)
+                fresh_payload = _build_multi_cart_tool_payload(
+                    [fresh_result], [{"product_query": cleaned_query, "quantity": fresh_quantity}], state.session_id
+                )
+                if fresh_payload is not None:
+                    if fresh_payload.get("intent_label") != "product_choice":
+                        fresh_payload["awaiting_slot"] = "shipping_method"
+                    return fresh_payload
+        if awaiting_slot != "quantity_or_action" and not quantity_only and not implicit_add:
             return None
         workflow_requests = _selected_product_requests_from_workflow_state(workflow_state)
         if not workflow_requests:
@@ -478,8 +572,8 @@ class LookupCartResolver:
                 "session_id": state.session_id,
             },
         )
-        payload = _build_multi_cart_tool_payload([canonical_result], [cart_request])
-        if isinstance(payload, dict):
+        payload = _build_multi_cart_tool_payload([canonical_result], [cart_request], state.session_id)
+        if isinstance(payload, dict) and payload.get("intent_label") != "product_choice":
             payload["focused_product"] = str(workflow_state.get("focused_product") or cart_request.get("product_query") or "").strip()
             payload["awaiting_slot"] = "shipping_method"
         return payload
@@ -504,7 +598,7 @@ class LookupCartResolver:
             for cart_request in cart_requests
             if str(cart_request.get("product_query") or "").strip()
         ]
-        return _build_multi_cart_tool_payload(canonical_results, cart_requests)
+        return _build_multi_cart_tool_payload(canonical_results, cart_requests, state.session_id)
 
     def _resolve_clear_cart(self, state: WhatsAppCheckoutState) -> dict[str, Any] | None:
         if not _is_clear_cart_message(state.user_goal):

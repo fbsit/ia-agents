@@ -134,6 +134,29 @@ def remember_commerce_products(session_id: str, products: list[dict[str, Any]]) 
         }
 
 
+def remember_pending_cart_quantity(session_id: str, quantity: int) -> None:
+    """Cantidad pedida antes de elegir variante ("agregame 2 X" -> opciones -> "la segunda")."""
+    clean_session_id = str(session_id or "").strip()
+    if not clean_session_id:
+        return
+    with COMMERCE_CONTEXT_LOCK:
+        payload = COMMERCE_PRODUCT_CONTEXT.setdefault(clean_session_id, {"products": [], "updated_at": time.time()})
+        payload["pending_quantity"] = max(1, int(quantity or 1))
+        payload["updated_at"] = time.time()
+
+
+def pop_pending_cart_quantity(session_id: str) -> int | None:
+    clean_session_id = str(session_id or "").strip()
+    if not clean_session_id:
+        return None
+    with COMMERCE_CONTEXT_LOCK:
+        payload = COMMERCE_PRODUCT_CONTEXT.get(clean_session_id)
+        if not isinstance(payload, dict):
+            return None
+        value = payload.pop("pending_quantity", None)
+    return int(value) if isinstance(value, int) else None
+
+
 def recent_commerce_products(session_id: str, max_age_seconds: int = 900) -> list[dict[str, Any]]:
     clean_session_id = str(session_id or "").strip()
     if not clean_session_id:
