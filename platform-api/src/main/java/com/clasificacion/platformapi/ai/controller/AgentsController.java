@@ -26,10 +26,14 @@ import com.clasificacion.platformapi.ai.dto.UpdateAgentWhatsAppConfigRequest;
 import com.clasificacion.platformapi.ai.dto.UpdateAgentRequest;
 import com.clasificacion.platformapi.ai.dto.MediaTranscriptionResponse;
 import com.clasificacion.platformapi.ai.service.AiGatewayService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import java.net.URI;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -45,15 +49,45 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping
 public class AgentsController {
     private static final Logger log = LoggerFactory.getLogger(AgentsController.class);
+    private static final long CONVERSATION_STREAM_POLL_MS = 2000;
+    private static final long CONVERSATION_STREAM_TIMEOUT_MS = 5 * 60 * 1000;
     private final AiGatewayService aiGatewayService;
+    private final ObjectMapper objectMapper;
+    private final ScheduledExecutorService conversationStreamScheduler;
 
-    public AgentsController(AiGatewayService aiGatewayService) {
+    public AgentsController(
+        AiGatewayService aiGatewayService,
+        ObjectMapper objectMapper,
+        ScheduledExecutorService conversationStreamScheduler
+    ) {
         this.aiGatewayService = aiGatewayService;
+        this.objectMapper = objectMapper;
+        this.conversationStreamScheduler = conversationStreamScheduler;
+    }
+
+    private static String resolveAuthorization(String authorization, String accessToken) {
+        if (authorization != null && !authorization.isBlank()) {
+            return authorization;
+        }
+        if (accessToken != null && !accessToken.isBlank()) {
+            return "Bearer " + accessToken;
+        }
+        return authorization;
+    }
+
+    private String writeJsonQuietly(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception exc) {
+            log.warn("conversation_stream_serialize_error error={}", exc.getMessage());
+            return "[]";
+        }
     }
 
     @GetMapping("/settings/llm")
@@ -674,6 +708,112 @@ public class AgentsController {
     ) {
         var response = aiGatewayService.releaseConversation(authorization, requestId, agentId, sessionId, companyId, orgId);
         return new ConversationStatusResponse(response.session_id(), response.status());
+    }
+
+    /**
+     * Streaming SSE de la lista de conversaciones de un agente. EventSource nativo del
+     * navegador no puede mandar headers custom, por eso acepta el JWT tambien como
+     * access_token de query (mismo alcance que el header Authorization de siempre).
+     * Reemplaza el polling por setInterval del frontend: en vez de que el browser
+     * pregunte cada 8s, este endpoint pregunta el cada 2s del lado del server y solo
+     * empuja un evento cuando el resultado cambio.
+     */
+    @GetMapping(path = "/agents/{agentId}/conversations/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamConversations(
+        @PathVariable String agentId,
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestParam(value = "access_token", required = false) String accessToken,
+        @RequestParam(value = "company_id", required = false) String companyId,
+        @RequestParam(value = "org_id", required = false) String orgId,
+        @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "limit", required = false, defaultValue = "50") int limit
+    ) {
+        String effectiveAuthorization = resolveAuthorization(authorization, accessToken);
+        SseEmitter emitter = new SseEmitter(CONVERSATION_STREAM_TIMEOUT_MS);
+        AtomicReference<String> lastFingerprint = new AtomicReference<>(null);
+
+        ScheduledFuture<?> task = conversationStreamScheduler.scheduleWithFixedDelay(() -> {
+            try {
+                var rows = aiGatewayService.listConversations(
+                    effectiveAuthorization, null, agentId, companyId, orgId, status, limit
+                );
+                String fingerprint = rows.stream()
+                    .map(row -> row.session_id() + ":" + row.status() + ":" + row.message_count() + ":" + row.updated_at())
+                    .reduce("", (a, b) -> a + "|" + b);
+                if (!fingerprint.equals(lastFingerprint.get())) {
+                    lastFingerprint.set(fingerprint);
+                    var payload = rows.stream()
+                        .map(row -> new ConversationSummaryResponse(
+                            row.session_id(),
+                            row.channel(),
+                            row.status(),
+                            row.message_count(),
+                            row.started_at(),
+                            row.updated_at(),
+                            row.visitor_id(),
+                            row.external_user_id(),
+                            row.authenticated_user_id(),
+                            row.last_message_preview()
+                        ))
+                        .toList();
+                    emitter.send(SseEmitter.event().name("update").data(writeJsonQuietly(payload), MediaType.APPLICATION_JSON));
+                }
+            } catch (Exception exc) {
+                log.warn("conversation_stream_poll_error agent_id={} error={}", agentId, exc.getMessage());
+                emitter.completeWithError(exc);
+            }
+        }, 0, CONVERSATION_STREAM_POLL_MS, TimeUnit.MILLISECONDS);
+
+        emitter.onCompletion(() -> task.cancel(true));
+        emitter.onTimeout(() -> task.cancel(true));
+        emitter.onError((exc) -> task.cancel(true));
+        return emitter;
+    }
+
+    /**
+     * Streaming SSE de los mensajes de una conversacion puntual. Mismo patron que
+     * streamConversations: poll cada 2s contra Python via aiGatewayService, push solo
+     * si cambio.
+     */
+    @GetMapping(
+        path = "/agents/{agentId}/conversations/{sessionId}/messages/stream",
+        produces = MediaType.TEXT_EVENT_STREAM_VALUE
+    )
+    public SseEmitter streamConversationMessages(
+        @PathVariable String agentId,
+        @PathVariable String sessionId,
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestParam(value = "access_token", required = false) String accessToken,
+        @RequestParam(value = "company_id", required = false) String companyId,
+        @RequestParam(value = "org_id", required = false) String orgId
+    ) {
+        String effectiveAuthorization = resolveAuthorization(authorization, accessToken);
+        SseEmitter emitter = new SseEmitter(CONVERSATION_STREAM_TIMEOUT_MS);
+        AtomicReference<String> lastFingerprint = new AtomicReference<>(null);
+
+        ScheduledFuture<?> task = conversationStreamScheduler.scheduleWithFixedDelay(() -> {
+            try {
+                var rows = aiGatewayService.getConversationMessages(
+                    effectiveAuthorization, null, agentId, sessionId, companyId, orgId
+                );
+                String fingerprint = rows.size() + ":" + (rows.isEmpty() ? "" : rows.get(rows.size() - 1).created_at());
+                if (!fingerprint.equals(lastFingerprint.get())) {
+                    lastFingerprint.set(fingerprint);
+                    var payload = rows.stream()
+                        .map(row -> new ConversationMessageResponse(row.role(), row.message_text(), row.created_at(), row.intent_label()))
+                        .toList();
+                    emitter.send(SseEmitter.event().name("update").data(writeJsonQuietly(payload), MediaType.APPLICATION_JSON));
+                }
+            } catch (Exception exc) {
+                log.warn("conversation_messages_stream_poll_error agent_id={} session_id={} error={}", agentId, sessionId, exc.getMessage());
+                emitter.completeWithError(exc);
+            }
+        }, 0, CONVERSATION_STREAM_POLL_MS, TimeUnit.MILLISECONDS);
+
+        emitter.onCompletion(() -> task.cancel(true));
+        emitter.onTimeout(() -> task.cancel(true));
+        emitter.onError((exc) -> task.cancel(true));
+        return emitter;
     }
 
     /**
