@@ -37,4 +37,4 @@ La politica de cambios, devoluciones y garantia no esta definida en el sistema. 
 
 ## Horario de atencion
 
-El horario de atencion de la tienda y de WhatsApp no esta definido en el sistema. Si el cliente lo pregunta, el agente debe derivar a un humano.
+La atencion por WhatsApp y por la tienda online es 24/7, todos los dias del año, sin horario de corte. El cliente puede escribir y hacer pedidos a cualquier hora.

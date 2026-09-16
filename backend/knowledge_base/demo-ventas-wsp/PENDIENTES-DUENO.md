@@ -24,7 +24,8 @@ Datos que no estan en el sistema. Mientras falten, el agente deriva a un humano.
 - Plazo y requisitos para reclamar producto vencido o en mal estado.
 
 ## Horarios
-- Tienda fisica, WhatsApp, telefono y pedidos web.
+- Resuelto: atencion por WhatsApp y tienda online es 24/7 (confirmado por el cliente).
+- Sigue pendiente: horario de la tienda fisica para retiro en persona (ver "Retiro en tienda" arriba).
 
 ## Catalogo
 - acondicionador-ballerina: moneda '$' normalizada a CLP
