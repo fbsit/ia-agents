@@ -502,6 +502,7 @@ public class AgentsController {
             response.agent_id(),
             response.widget_id(),
             response.endpoint_url(),
+            response.messages_stream_url(),
             response.widget_token(),
             response.allowed_origins(),
             response.rate_limit_window_seconds(),

@@ -78,7 +78,7 @@ def public_widget_origin_allowed(origin: str | None) -> bool:
 
 
 class PublicWidgetCORSMiddleware:
-    """CORS propio de `/public/widget/chat`, gobernado por PUBLIC_WIDGET_ALLOW_ORIGINS.
+    """CORS propio de `/public/widget/*`, gobernado por PUBLIC_WIDGET_ALLOW_ORIGINS.
 
     El `CORSMiddleware` global de la app solo permite `CORS_ALLOW_ORIGINS`
     (localhost por default) porque protege la API autenticada. El widget
@@ -89,6 +89,10 @@ class PublicWidgetCORSMiddleware:
     a la respuesta real; si el origen ya trae headers CORS del middleware
     global (coincide con la whitelist de localhost) los reemplaza para no
     duplicar `Access-Control-Allow-Origin`.
+
+    `path` es un PREFIJO (no una ruta exacta): cubre tanto `/public/widget/chat`
+    como `/public/widget/chat/stream` (SSE de respuestas humanas en vivo), que
+    el navegador del cliente llama cross-origin igual que al chat.
     """
 
     def __init__(self, app, path: str) -> None:
@@ -96,7 +100,7 @@ class PublicWidgetCORSMiddleware:
         self.path = path
 
     async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] != "http" or scope.get("path") != self.path:
+        if scope["type"] != "http" or not str(scope.get("path") or "").startswith(self.path):
             await self.app(scope, receive, send)
             return
 

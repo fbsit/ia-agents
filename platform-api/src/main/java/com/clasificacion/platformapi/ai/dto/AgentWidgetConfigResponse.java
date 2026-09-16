@@ -6,6 +6,7 @@ public record AgentWidgetConfigResponse(
     String agent_id,
     String widget_id,
     String endpoint_url,
+    String messages_stream_url,
     String widget_token,
     List<String> allowed_origins,
     int rate_limit_window_seconds,

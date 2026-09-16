@@ -76,7 +76,7 @@ def create_app() -> FastAPI:
     # CORSMiddleware: necesita quedar mas afuera para resolver el preflight y
     # los headers de esta ruta publica sin depender de la whitelist
     # restringida (localhost) de la API autenticada.
-    app.add_middleware(PublicWidgetCORSMiddleware, path=f"{api_prefix}/public/widget/chat")
+    app.add_middleware(PublicWidgetCORSMiddleware, path=f"{api_prefix}/public/widget/")
     app.include_router(system_router)
     app.include_router(auth_router, prefix=api_prefix)
     app.include_router(tenancy_router, prefix=api_prefix)

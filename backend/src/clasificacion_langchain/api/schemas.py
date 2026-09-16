@@ -203,6 +203,7 @@ class AgentWidgetConfigPayload(BaseModel):
     agent_id: str
     widget_id: str
     endpoint_url: str
+    messages_stream_url: str
     widget_token: str
     allowed_origins: list[str]
     rate_limit_window_seconds: int

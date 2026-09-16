@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
+import json
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 
 from clasificacion_langchain.api.schemas import (
     AgentWidgetConfigPayload,
@@ -86,3 +89,53 @@ def public_widget_chat(
         cart_actions=answer.cart_actions,
         products=answer.products,
     )
+
+
+MESSAGES_STREAM_POLL_SECONDS = 2.0
+
+
+@router.get("/public/widget/chat/stream")
+async def public_widget_chat_stream(
+    request: Request,
+    widget_id: str = Query(...),
+    widget_token: str = Query(...),
+    session_id: str = Query(...),
+    runtime: RuntimeContainer = Depends(get_runtime),
+) -> StreamingResponse:
+    """
+    SSE para que el widget reciba en vivo una respuesta humana (tomada desde
+    Conversaciones en vivo): el widget solo reacciona a lo que el cliente
+    pregunta, nunca al reves, asi que sin esto una respuesta humana quedaba
+    guardada pero jamas llegaba al navegador si ya no habia otro mensaje del
+    cliente disparando una nueva respuesta.
+    """
+    agent = runtime.agent_service.repository.get_agent(widget_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Widget no encontrado")
+    expected_token = public_widget_token(agent.agent_id, agent.company_id)
+    if not hmac.compare_digest(expected_token, widget_token):
+        raise HTTPException(status_code=403, detail="widget_token invalido")
+
+    async def event_generator():
+        sent_human_messages = 0
+        while True:
+            if await request.is_disconnected():
+                break
+            # Sin channel: la misma conversacion web puede haber quedado con
+            # "widget_public" (snippet propio) o "web" (integracion de ClubHx)
+            # segun quien la origino; no vale la pena adivinar. list_messages
+            # ya devuelve [] sin lanzar si la auditoria esta apagada.
+            messages = runtime.chat_audit_service.list_messages(
+                company_id=agent.company_id,
+                agent_id=agent.agent_id,
+                session_id=session_id,
+                channel=None,
+            )
+            human_messages = [msg for msg in messages if msg.role == "human_agent"]
+            for msg in human_messages[sent_human_messages:]:
+                data = json.dumps({"role": msg.role, "text": msg.message_text, "created_at": msg.created_at.isoformat()})
+                yield f"event: update\ndata: {data}\n\n"
+            sent_human_messages = len(human_messages)
+            await asyncio.sleep(MESSAGES_STREAM_POLL_SECONDS)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

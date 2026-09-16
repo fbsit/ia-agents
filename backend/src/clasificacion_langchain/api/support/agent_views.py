@@ -129,6 +129,7 @@ def widget_config_payload(agent, base_url: str) -> AgentWidgetConfigPayload:
         agent_id=agent.agent_id,
         widget_id=widget_id,
         endpoint_url=f"{base_url.rstrip('/')}/public/widget/chat",
+        messages_stream_url=f"{base_url.rstrip('/')}/public/widget/chat/stream",
         widget_token=token,
         allowed_origins=["*"],
         rate_limit_window_seconds=public_widget_rate_limit_window_seconds(),
