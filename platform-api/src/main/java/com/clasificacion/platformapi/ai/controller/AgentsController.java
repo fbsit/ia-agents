@@ -12,6 +12,11 @@ import com.clasificacion.platformapi.ai.dto.AgentSetupStepResponse;
 import com.clasificacion.platformapi.ai.dto.AgentWhatsAppConfigResponse;
 import com.clasificacion.platformapi.ai.dto.AgentWhatsAppValidationResponse;
 import com.clasificacion.platformapi.ai.dto.AgentWidgetConfigResponse;
+import com.clasificacion.platformapi.ai.dto.ConversationMessageResponse;
+import com.clasificacion.platformapi.ai.dto.ConversationReplyRequest;
+import com.clasificacion.platformapi.ai.dto.ConversationReplyResponse;
+import com.clasificacion.platformapi.ai.dto.ConversationStatusResponse;
+import com.clasificacion.platformapi.ai.dto.ConversationSummaryResponse;
 import com.clasificacion.platformapi.ai.dto.CreateAgentRequest;
 import com.clasificacion.platformapi.ai.dto.DeleteAgentResponse;
 import com.clasificacion.platformapi.ai.dto.DocumentDeleteResponse;
@@ -582,6 +587,93 @@ public class AgentsController {
             response.with_comment(),
             response.with_expected_answer()
         );
+    }
+
+    @GetMapping("/agents/{agentId}/conversations")
+    public java.util.List<ConversationSummaryResponse> listConversations(
+        @PathVariable String agentId,
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestHeader(value = "X-Request-Id", required = false) String requestId,
+        @RequestParam(value = "company_id", required = false) String companyId,
+        @RequestParam(value = "org_id", required = false) String orgId,
+        @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "limit", required = false, defaultValue = "50") int limit
+    ) {
+        return aiGatewayService
+            .listConversations(authorization, requestId, agentId, companyId, orgId, status, limit)
+            .stream()
+            .map(row -> new ConversationSummaryResponse(
+                row.session_id(),
+                row.channel(),
+                row.status(),
+                row.message_count(),
+                row.started_at(),
+                row.updated_at(),
+                row.visitor_id(),
+                row.external_user_id(),
+                row.authenticated_user_id(),
+                row.last_message_preview()
+            ))
+            .toList();
+    }
+
+    @GetMapping("/agents/{agentId}/conversations/{sessionId}/messages")
+    public java.util.List<ConversationMessageResponse> getConversationMessages(
+        @PathVariable String agentId,
+        @PathVariable String sessionId,
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestHeader(value = "X-Request-Id", required = false) String requestId,
+        @RequestParam(value = "company_id", required = false) String companyId,
+        @RequestParam(value = "org_id", required = false) String orgId
+    ) {
+        return aiGatewayService
+            .getConversationMessages(authorization, requestId, agentId, sessionId, companyId, orgId)
+            .stream()
+            .map(row -> new ConversationMessageResponse(row.role(), row.message_text(), row.created_at(), row.intent_label()))
+            .toList();
+    }
+
+    @PostMapping("/agents/{agentId}/conversations/{sessionId}/reply")
+    public ConversationReplyResponse replyToConversation(
+        @PathVariable String agentId,
+        @PathVariable String sessionId,
+        @Valid @RequestBody ConversationReplyRequest request,
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestHeader(value = "X-Request-Id", required = false) String requestId,
+        @RequestParam(value = "company_id", required = false) String companyId,
+        @RequestParam(value = "org_id", required = false) String orgId
+    ) {
+        var response = aiGatewayService.replyToConversation(
+            authorization, requestId, agentId, sessionId, companyId, orgId,
+            new com.clasificacion.platformapi.ai.contract.AiConversationReplyRequest(request.message())
+        );
+        return new ConversationReplyResponse(response.delivered(), response.channel());
+    }
+
+    @PostMapping("/agents/{agentId}/conversations/{sessionId}/takeover")
+    public ConversationStatusResponse takeoverConversation(
+        @PathVariable String agentId,
+        @PathVariable String sessionId,
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestHeader(value = "X-Request-Id", required = false) String requestId,
+        @RequestParam(value = "company_id", required = false) String companyId,
+        @RequestParam(value = "org_id", required = false) String orgId
+    ) {
+        var response = aiGatewayService.takeoverConversation(authorization, requestId, agentId, sessionId, companyId, orgId);
+        return new ConversationStatusResponse(response.session_id(), response.status());
+    }
+
+    @PostMapping("/agents/{agentId}/conversations/{sessionId}/release")
+    public ConversationStatusResponse releaseConversation(
+        @PathVariable String agentId,
+        @PathVariable String sessionId,
+        @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestHeader(value = "X-Request-Id", required = false) String requestId,
+        @RequestParam(value = "company_id", required = false) String companyId,
+        @RequestParam(value = "org_id", required = false) String orgId
+    ) {
+        var response = aiGatewayService.releaseConversation(authorization, requestId, agentId, sessionId, companyId, orgId);
+        return new ConversationStatusResponse(response.session_id(), response.status());
     }
 
     /**

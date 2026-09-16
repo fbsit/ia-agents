@@ -6,6 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from clasificacion_langchain.analytics.chat_audit import ChatAuditService
 from clasificacion_langchain.agents.conversation_policy import build_conversation_policy_from_env
 from clasificacion_langchain.agents.postgres_repository import PostgresAgentRepository
 from clasificacion_langchain.agents.repository import InMemoryAgentRepository
@@ -147,7 +148,10 @@ def build_llm_settings_service() -> TenantLlmSettingsService:
     )
 
 
-def build_agent_service(llm_settings_service: TenantLlmSettingsService | None) -> AgentService:
+def build_agent_service(
+    llm_settings_service: TenantLlmSettingsService | None,
+    chat_audit_service: ChatAuditService | None = None,
+) -> AgentService:
     backend = persistence_backend()
     if backend == "sqlite":
         repository = SQLiteAgentRepository(sqlite_db_path())
@@ -164,4 +168,5 @@ def build_agent_service(llm_settings_service: TenantLlmSettingsService | None) -
         session_store=session_store,
         knowledge_root=os.getenv("AGENTS_KNOWLEDGE_ROOT", "knowledge_base/agents"),
         index_root=os.getenv("AGENTS_INDEX_ROOT", "models/agents"),
+        chat_audit_service=chat_audit_service,
     )

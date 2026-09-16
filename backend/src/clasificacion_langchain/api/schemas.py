@@ -476,3 +476,37 @@ class ChatResponsePayload(BaseModel):
     delivery_status: str | None = None
     delivery_message_id: str | None = None
     delivery_error: str | None = None
+
+
+class ConversationSummaryPayload(BaseModel):
+    session_id: str
+    channel: str
+    status: str
+    message_count: int
+    started_at: str
+    updated_at: str
+    visitor_id: str | None = None
+    external_user_id: str | None = None
+    authenticated_user_id: str | None = None
+    last_message_preview: str
+
+
+class ConversationMessagePayload(BaseModel):
+    role: str
+    message_text: str
+    created_at: str
+    intent_label: str | None = None
+
+
+class ConversationReplyRequestPayload(BaseModel):
+    message: str = Field(min_length=1)
+
+
+class ConversationReplyResponsePayload(BaseModel):
+    delivered: bool
+    channel: str
+
+
+class ConversationStatusResponsePayload(BaseModel):
+    session_id: str
+    status: str

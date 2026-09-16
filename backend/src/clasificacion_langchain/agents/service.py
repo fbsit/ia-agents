@@ -19,6 +19,7 @@ from clasificacion_langchain.agents.repository import (
     AgentRepository,
     AgentRecord,
 )
+from clasificacion_langchain.analytics.chat_audit import ChatAuditRecord, ChatAuditService
 from clasificacion_langchain.agents.document_storage import (
     DocumentStorage,
     build_document_storage_from_env,
@@ -314,9 +315,11 @@ class AgentService:
         knowledge_root: str | Path = "knowledge_base/agents",
         index_root: str | Path = "models/agents",
         document_storage: DocumentStorage | None = None,
+        chat_audit_service: ChatAuditService | None = None,
     ) -> None:
         self.repository = repository
         self.llm_settings_service = llm_settings_service
+        self.chat_audit_service = chat_audit_service
         self.orchestrator = orchestrator or AgentIntentOrchestrator()
         self.conversation_policy = conversation_policy
         self.knowledge_root = Path(knowledge_root)
@@ -884,7 +887,10 @@ class AgentService:
             question = item["question"]
             expected_answer = item["expected_answer"]
             started = time.perf_counter()
-            response = self.chat(
+            # _chat_inner (no self.chat): esto es una corrida de evaluacion
+            # sintetica, no una conversacion real, no debe aparecer en la
+            # auditoria de chat ni en la bandeja de conversaciones.
+            response = self._chat_inner(
                 agent=agent,
                 message=question,
                 company_id=agent.company_id,
@@ -1563,6 +1569,69 @@ class AgentService:
         return result
 
     def chat(
+        self,
+        agent: AgentRecord,
+        message: str,
+        company_id: str,
+        top_k: int = 4,
+        session_id: str | None = None,
+        visitor_id: str | None = None,
+        external_user_id: str | None = None,
+        channel: str = "api",
+        use_openai: bool | None = None,
+        generation_provider: str | None = None,
+        generation_model: str | None = None,
+    ) -> RAGAnswer:
+        """
+        Envoltorio fino sobre _chat_inner: mide latencia y graba la auditoria de
+        chat (chat_conversations/chat_messages) sin tocar la logica de _chat_inner,
+        para que TODOS los canales (widget, WhatsApp, consola) queden auditados
+        sin duplicar la llamada en cada route (CHAT_API_DIRECTIVE.md).
+        """
+        started_at = time.perf_counter()
+        answer = self._chat_inner(
+            agent=agent,
+            message=message,
+            company_id=company_id,
+            top_k=top_k,
+            session_id=session_id,
+            visitor_id=visitor_id,
+            external_user_id=external_user_id,
+            channel=channel,
+            use_openai=use_openai,
+            generation_provider=generation_provider,
+            generation_model=generation_model,
+        )
+        clean_session_id = (session_id or "").strip()
+        if self.chat_audit_service is not None and self.chat_audit_service.enabled() and clean_session_id:
+            latency_ms = int((time.perf_counter() - started_at) * 1000)
+            workflow_action = answer.workflow_action if isinstance(answer.workflow_action, dict) else {}
+            try:
+                self.chat_audit_service.record(
+                    ChatAuditRecord(
+                        company_id=company_id,
+                        agent_id=agent.agent_id,
+                        session_id=clean_session_id,
+                        channel=channel,
+                        user_message=message,
+                        assistant_message=answer.answer,
+                        intent_label=answer.intent_label,
+                        route=answer.route,
+                        response_mode=answer.response_mode,
+                        sources_count=len(answer.sources or []),
+                        used_llm=answer.route == "rag_llm",
+                        cached_response=answer.response_mode in {"repeat_cached", "repeat_generic"},
+                        latency_ms=latency_ms,
+                        visitor_id=visitor_id,
+                        external_user_id=external_user_id,
+                        workflow_action_type=str(workflow_action.get("type") or "") or None,
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("chat_audit_record_failed agent_id=%s session_id=%s detail=%s", agent.agent_id, clean_session_id, exc)
+        return answer
+
+    def _chat_inner(
         self,
         agent: AgentRecord,
         message: str,

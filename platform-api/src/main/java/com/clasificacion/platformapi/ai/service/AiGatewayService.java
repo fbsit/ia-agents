@@ -16,6 +16,11 @@ import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppConfigResponse;
 import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppConfigUpdateRequest;
 import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppValidationResponse;
 import com.clasificacion.platformapi.ai.contract.AiAgentWidgetConfigResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationMessageResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationReplyRequest;
+import com.clasificacion.platformapi.ai.contract.AiConversationReplyResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationStatusResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationSummaryResponse;
 import com.clasificacion.platformapi.ai.contract.AiDeleteResponse;
 import com.clasificacion.platformapi.ai.contract.AiDocumentDeleteResponse;
 import com.clasificacion.platformapi.ai.contract.AiMediaTranscriptionRequest;
@@ -515,6 +520,68 @@ public class AiGatewayService {
             requestId
         );
         return aiEngineClient.getAgentFeedbackSummary(context, agentId, days);
+    }
+
+    public java.util.List<AiConversationSummaryResponse> listConversations(
+        String authorization,
+        String requestId,
+        String agentId,
+        String requestedCompanyId,
+        String requestedOrgId,
+        String status,
+        int limit
+    ) {
+        AiRequestContext context = resolveContext(authorization, requestedCompanyId, requestedOrgId, requestId);
+        return aiEngineClient.listConversations(context, agentId, status, limit);
+    }
+
+    public java.util.List<AiConversationMessageResponse> getConversationMessages(
+        String authorization,
+        String requestId,
+        String agentId,
+        String sessionId,
+        String requestedCompanyId,
+        String requestedOrgId
+    ) {
+        AiRequestContext context = resolveContext(authorization, requestedCompanyId, requestedOrgId, requestId);
+        return aiEngineClient.getConversationMessages(context, agentId, sessionId);
+    }
+
+    public AiConversationReplyResponse replyToConversation(
+        String authorization,
+        String requestId,
+        String agentId,
+        String sessionId,
+        String requestedCompanyId,
+        String requestedOrgId,
+        AiConversationReplyRequest payload
+    ) {
+        AiRequestContext context = resolveContext(authorization, requestedCompanyId, requestedOrgId, requestId);
+        return aiEngineClient.replyToConversation(context, agentId, sessionId, payload);
+    }
+
+    public AiConversationStatusResponse takeoverConversation(
+        String authorization,
+        String requestId,
+        String agentId,
+        String sessionId,
+        String requestedCompanyId,
+        String requestedOrgId
+    ) {
+        AiRequestContext context = resolveContext(authorization, requestedCompanyId, requestedOrgId, requestId);
+        return aiEngineClient.takeoverConversation(context, agentId, sessionId);
+    }
+
+    public AiConversationStatusResponse releaseConversation(
+        String authorization,
+        String requestId,
+        String agentId,
+        String sessionId,
+        String requestedCompanyId,
+        String requestedOrgId
+    ) {
+        AiRequestContext context = resolveContext(authorization, requestedCompanyId, requestedOrgId, requestId);
+        return aiEngineClient.releaseConversation(context, agentId, sessionId);
     }
 
     public AiTenantLlmSettingsResponse getTenantLlmSettings(

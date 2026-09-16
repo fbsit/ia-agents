@@ -29,6 +29,32 @@ class ChatAuditRecord:
     authenticated_user_id: str | None = None
     visitor_id: str | None = None
     external_user_id: str | None = None
+    # Cuando el turno disparo un workflow_action de tipo "human_handoff" (ver
+    # agents/commerce/resolver.py), se pasa aca para que record() marque la
+    # conversacion como needs_human en la misma transaccion.
+    workflow_action_type: str | None = None
+
+
+@dataclass(frozen=True)
+class ConversationSummary:
+    session_id: str
+    channel: str
+    status: str
+    message_count: int
+    started_at: datetime
+    updated_at: datetime
+    visitor_id: str | None
+    external_user_id: str | None
+    authenticated_user_id: str | None
+    last_message_preview: str
+
+
+@dataclass(frozen=True)
+class ConversationMessageRow:
+    role: str
+    message_text: str
+    created_at: datetime
+    intent_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,9 +81,140 @@ class ChatAuditCostRow:
 class InMemoryChatAuditStore:
     def __init__(self) -> None:
         self._rows: list[tuple[datetime, ChatAuditRecord]] = []
+        # key = (company_id, agent_id, session_id, channel)
+        self._conversations: dict[tuple[str, str, str, str], dict[str, object]] = {}
+        self._messages: dict[tuple[str, str, str, str], list[ConversationMessageRow]] = {}
+
+    def _conv_key(self, company_id: str, agent_id: str, session_id: str, channel: str) -> tuple[str, str, str, str]:
+        return (company_id, agent_id, session_id, channel)
+
+    def _find_key(self, company_id: str, agent_id: str, session_id: str, channel: str | None) -> tuple[str, str, str, str] | None:
+        if channel:
+            key = self._conv_key(company_id, agent_id, session_id, channel)
+            return key if key in self._conversations else None
+        matches = [
+            key
+            for key in self._conversations
+            if key[0] == company_id and key[1] == agent_id and key[2] == session_id
+        ]
+        if not matches:
+            return None
+        return max(matches, key=lambda key: self._conversations[key]["updated_at"])
 
     def record(self, record: ChatAuditRecord) -> None:
         self._rows.append((datetime.now(UTC), record))
+        key = self._conv_key(record.company_id, record.agent_id, record.session_id, record.channel)
+        conv = self._conversations.setdefault(
+            key,
+            {"status": "open", "started_at": datetime.now(UTC), "message_count": 0},
+        )
+        conv["updated_at"] = datetime.now(UTC)
+        conv["message_count"] = int(conv["message_count"]) + 2
+        conv["visitor_id"] = record.visitor_id
+        conv["external_user_id"] = record.external_user_id
+        conv["authenticated_user_id"] = record.authenticated_user_id
+        if record.response_mode == "conversation_closed":
+            conv["status"] = "closed"
+        elif record.workflow_action_type == "human_handoff" and conv["status"] == "open":
+            conv["status"] = "needs_human"
+        now = datetime.now(UTC)
+        self._messages.setdefault(key, []).extend(
+            [
+                ConversationMessageRow(role="user", message_text=record.user_message, created_at=now),
+                ConversationMessageRow(
+                    role="assistant",
+                    message_text=record.assistant_message,
+                    created_at=now,
+                    intent_label=record.intent_label,
+                ),
+            ]
+        )
+
+    def list_conversations(
+        self, *, company_id: str, agent_id: str, status: str | None = None, limit: int = 50
+    ) -> list[ConversationSummary]:
+        rows = [
+            ConversationSummary(
+                session_id=key[2],
+                channel=key[3],
+                status=str(conv["status"]),
+                message_count=int(conv["message_count"]),
+                started_at=conv["started_at"],
+                updated_at=conv["updated_at"],
+                visitor_id=conv.get("visitor_id"),
+                external_user_id=conv.get("external_user_id"),
+                authenticated_user_id=conv.get("authenticated_user_id"),
+                last_message_preview=(self._messages.get(key) or [ConversationMessageRow("", "", datetime.now(UTC))])[-1].message_text,
+            )
+            for key, conv in self._conversations.items()
+            if key[0] == company_id and key[1] == agent_id and (status is None or conv["status"] == status)
+        ]
+        rows.sort(key=lambda row: row.updated_at, reverse=True)
+        return rows[: max(1, min(limit, 200))]
+
+    def list_messages(
+        self, *, company_id: str, agent_id: str, session_id: str, channel: str | None = None
+    ) -> list[ConversationMessageRow]:
+        key = self._find_key(company_id, agent_id, session_id, channel)
+        if key is None:
+            return []
+        return list(self._messages.get(key, []))
+
+    def add_human_message(
+        self, *, company_id: str, agent_id: str, session_id: str, message_text: str, channel: str | None = None
+    ) -> str | None:
+        key = self._find_key(company_id, agent_id, session_id, channel)
+        if key is None:
+            return None
+        self._messages.setdefault(key, []).append(
+            ConversationMessageRow(role="human_agent", message_text=message_text, created_at=datetime.now(UTC))
+        )
+        conv = self._conversations[key]
+        conv["message_count"] = int(conv["message_count"]) + 1
+        conv["updated_at"] = datetime.now(UTC)
+        return key[3]
+
+    def add_customer_message(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+        channel: str,
+        message_text: str,
+        visitor_id: str | None = None,
+        external_user_id: str | None = None,
+    ) -> None:
+        key = self._conv_key(company_id, agent_id, session_id, channel)
+        conv = self._conversations.setdefault(
+            key,
+            {"status": "human_active", "started_at": datetime.now(UTC), "message_count": 0},
+        )
+        conv["updated_at"] = datetime.now(UTC)
+        conv["message_count"] = int(conv["message_count"]) + 1
+        conv["visitor_id"] = visitor_id
+        conv["external_user_id"] = external_user_id
+        self._messages.setdefault(key, []).append(
+            ConversationMessageRow(role="user", message_text=message_text, created_at=datetime.now(UTC))
+        )
+
+    def set_conversation_status(
+        self, *, company_id: str, agent_id: str, session_id: str, status: str, channel: str | None = None
+    ) -> bool:
+        key = self._find_key(company_id, agent_id, session_id, channel)
+        if key is None:
+            return False
+        self._conversations[key]["status"] = status
+        self._conversations[key]["updated_at"] = datetime.now(UTC)
+        return True
+
+    def get_conversation_status(
+        self, *, company_id: str, agent_id: str, session_id: str, channel: str | None = None
+    ) -> str | None:
+        key = self._find_key(company_id, agent_id, session_id, channel)
+        if key is None:
+            return None
+        return str(self._conversations[key]["status"])
 
     def summary(self, company_id: str | None = None, since_days: int = 30) -> list[ChatAuditSummaryRow]:
         cutoff = datetime.now(UTC) - timedelta(days=max(1, since_days))
@@ -346,12 +503,17 @@ class PostgresChatAuditStore:
                     SET
                         message_count = message_count + 2,
                         updated_at = NOW(),
-                        status = CASE WHEN %s = 'conversation_closed' THEN 'closed' ELSE status END,
+                        status = CASE
+                            WHEN %s = 'conversation_closed' THEN 'closed'
+                            WHEN %s = 'human_handoff' AND status = 'open' THEN 'needs_human'
+                            ELSE status
+                        END,
                         ended_at = CASE WHEN %s = 'conversation_closed' THEN NOW() ELSE ended_at END
                     WHERE id = %s
                     """,
                     (
                         record.response_mode,
+                        record.workflow_action_type,
                         record.response_mode,
                         conversation_id,
                     ),
@@ -469,6 +631,255 @@ class PostgresChatAuditStore:
         ]
 
 
+    def list_conversations(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[ConversationSummary]:
+        where_status = ""
+        params: list[object] = [company_id, agent_id]
+        if status:
+            where_status = " AND c.status = %s"
+            params.append(status)
+        params.append(max(1, min(limit, 200)))
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT
+                        c.session_id, c.channel, c.status, c.message_count,
+                        c.started_at, c.updated_at, c.visitor_id, c.external_user_id,
+                        c.authenticated_user_id,
+                        COALESCE(
+                            (SELECT m.message_text FROM {self.schema}.chat_messages m
+                             WHERE m.conversation_id = c.id
+                             ORDER BY m.id DESC LIMIT 1),
+                            ''
+                        ) AS last_message_preview
+                    FROM {self.schema}.chat_conversations c
+                    WHERE c.company_id = %s AND c.agent_id = %s{where_status}
+                    ORDER BY c.updated_at DESC
+                    LIMIT %s
+                    """,
+                    tuple(params),
+                )
+                rows = cur.fetchall()
+
+        return [
+            ConversationSummary(
+                session_id=str(row[0]),
+                channel=str(row[1]),
+                status=str(row[2]),
+                message_count=int(row[3]),
+                started_at=row[4],
+                updated_at=row[5],
+                visitor_id=row[6],
+                external_user_id=row[7],
+                authenticated_user_id=row[8],
+                last_message_preview=str(row[9] or ""),
+            )
+            for row in rows
+        ]
+
+    def list_messages(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+        channel: str | None = None,
+    ) -> list[ConversationMessageRow]:
+        where_channel = ""
+        params: list[object] = [company_id, agent_id, session_id]
+        if channel:
+            where_channel = " AND channel = %s"
+            params.append(channel)
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT role, message_text, created_at, intent_label
+                    FROM {self.schema}.chat_messages
+                    WHERE company_id = %s AND agent_id = %s AND session_id = %s{where_channel}
+                    ORDER BY id ASC
+                    """,
+                    tuple(params),
+                )
+                rows = cur.fetchall()
+
+        return [
+            ConversationMessageRow(
+                role=str(row[0]),
+                message_text=str(row[1]),
+                created_at=row[2],
+                intent_label=row[3],
+            )
+            for row in rows
+        ]
+
+    def _find_conversation_id(self, cur, *, company_id: str, agent_id: str, session_id: str, channel: str | None) -> int | None:
+        params: list[object] = [company_id, agent_id, session_id]
+        where_channel = ""
+        if channel:
+            where_channel = " AND channel = %s"
+            params.append(channel)
+        cur.execute(
+            f"""
+            SELECT id, channel FROM {self.schema}.chat_conversations
+            WHERE company_id = %s AND agent_id = %s AND session_id = %s{where_channel}
+            ORDER BY updated_at DESC LIMIT 1
+            """,
+            tuple(params),
+        )
+        row = cur.fetchone()
+        return (int(row[0]), str(row[1])) if row else None
+
+    def add_human_message(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+        message_text: str,
+        channel: str | None = None,
+    ) -> str | None:
+        """Graba una respuesta escrita por una persona. Devuelve el channel de la
+        conversacion (para que el llamador sepa si tiene que entregarla por
+        WhatsApp), o None si no existe la conversacion."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                found = self._find_conversation_id(
+                    cur, company_id=company_id, agent_id=agent_id, session_id=session_id, channel=channel
+                )
+                if found is None:
+                    return None
+                conversation_id, resolved_channel = found
+                cur.execute(
+                    f"""
+                    INSERT INTO {self.schema}.chat_messages (
+                        conversation_id, company_id, agent_id, session_id, role, message_text
+                    ) VALUES (%s, %s, %s, %s, 'human_agent', %s)
+                    """,
+                    (conversation_id, company_id, agent_id, session_id, message_text),
+                )
+                cur.execute(
+                    f"""
+                    UPDATE {self.schema}.chat_conversations
+                    SET message_count = message_count + 1, updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (conversation_id,),
+                )
+            conn.commit()
+        return resolved_channel
+
+    def add_customer_message(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+        channel: str,
+        message_text: str,
+        visitor_id: str | None = None,
+        external_user_id: str | None = None,
+    ) -> None:
+        """Registra un mensaje entrante del cliente sin invocar al bot (se usa
+        cuando la conversacion esta en human_active y el bot esta pausado)."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO {self.schema}.chat_conversations (
+                        company_id, agent_id, session_id, channel,
+                        visitor_id, external_user_id, status, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, 'human_active', NOW())
+                    ON CONFLICT (company_id, agent_id, session_id, channel)
+                    DO UPDATE SET updated_at = NOW()
+                    RETURNING id
+                    """,
+                    (company_id, agent_id, session_id, channel, visitor_id, external_user_id),
+                )
+                row = cur.fetchone()
+                conversation_id = int(row[0])
+                cur.execute(
+                    f"""
+                    INSERT INTO {self.schema}.chat_messages (
+                        conversation_id, company_id, agent_id, session_id, role, message_text
+                    ) VALUES (%s, %s, %s, %s, 'user', %s)
+                    """,
+                    (conversation_id, company_id, agent_id, session_id, message_text),
+                )
+                cur.execute(
+                    f"""
+                    UPDATE {self.schema}.chat_conversations
+                    SET message_count = message_count + 1, updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (conversation_id,),
+                )
+            conn.commit()
+
+    def set_conversation_status(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+        status: str,
+        channel: str | None = None,
+    ) -> bool:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                found = self._find_conversation_id(
+                    cur, company_id=company_id, agent_id=agent_id, session_id=session_id, channel=channel
+                )
+                if found is None:
+                    return False
+                conversation_id, _ = found
+                cur.execute(
+                    f"""
+                    UPDATE {self.schema}.chat_conversations
+                    SET status = %s, updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (status, conversation_id),
+                )
+            conn.commit()
+        return True
+
+    def get_conversation_status(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+        channel: str | None = None,
+    ) -> str | None:
+        params: list[object] = [company_id, agent_id, session_id]
+        where_channel = ""
+        if channel:
+            where_channel = " AND channel = %s"
+            params.append(channel)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT status FROM {self.schema}.chat_conversations
+                    WHERE company_id = %s AND agent_id = %s AND session_id = %s{where_channel}
+                    ORDER BY updated_at DESC LIMIT 1
+                    """,
+                    tuple(params),
+                )
+                row = cur.fetchone()
+        return str(row[0]) if row else None
+
+
 class ChatAuditService:
     def __init__(
         self,
@@ -501,6 +912,70 @@ class ChatAuditService:
             avg_llm_cost_usd=avg_llm_cost_usd,
             company_id=company_id,
             since_days=since_days,
+        )
+
+    def list_conversations(
+        self, *, company_id: str, agent_id: str, status: str | None = None, limit: int = 50
+    ) -> list[ConversationSummary]:
+        if self.store is None:
+            return []
+        return self.store.list_conversations(company_id=company_id, agent_id=agent_id, status=status, limit=limit)
+
+    def list_messages(
+        self, *, company_id: str, agent_id: str, session_id: str, channel: str | None = None
+    ) -> list[ConversationMessageRow]:
+        if self.store is None:
+            return []
+        return self.store.list_messages(company_id=company_id, agent_id=agent_id, session_id=session_id, channel=channel)
+
+    def add_human_message(
+        self, *, company_id: str, agent_id: str, session_id: str, message_text: str, channel: str | None = None
+    ) -> str | None:
+        if self.store is None:
+            return None
+        return self.store.add_human_message(
+            company_id=company_id, agent_id=agent_id, session_id=session_id, message_text=message_text, channel=channel
+        )
+
+    def add_customer_message(
+        self,
+        *,
+        company_id: str,
+        agent_id: str,
+        session_id: str,
+        channel: str,
+        message_text: str,
+        visitor_id: str | None = None,
+        external_user_id: str | None = None,
+    ) -> None:
+        if self.store is None:
+            return
+        self.store.add_customer_message(
+            company_id=company_id,
+            agent_id=agent_id,
+            session_id=session_id,
+            channel=channel,
+            message_text=message_text,
+            visitor_id=visitor_id,
+            external_user_id=external_user_id,
+        )
+
+    def set_conversation_status(
+        self, *, company_id: str, agent_id: str, session_id: str, status: str, channel: str | None = None
+    ) -> bool:
+        if self.store is None:
+            return False
+        return self.store.set_conversation_status(
+            company_id=company_id, agent_id=agent_id, session_id=session_id, status=status, channel=channel
+        )
+
+    def get_conversation_status(
+        self, *, company_id: str, agent_id: str, session_id: str, channel: str | None = None
+    ) -> str | None:
+        if self.store is None:
+            return None
+        return self.store.get_conversation_status(
+            company_id=company_id, agent_id=agent_id, session_id=session_id, channel=channel
         )
 
 

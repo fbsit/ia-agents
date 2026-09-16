@@ -51,8 +51,8 @@ def build_runtime() -> RuntimeContainer:
     chat_service = build_service()
     auth_service, tenancy_service, token_service = build_identity_stack()
     llm_settings_service = build_llm_settings_service()
-    agent_service = build_agent_service(llm_settings_service)
     chat_audit_service = build_chat_audit_service_from_env()
+    agent_service = build_agent_service(llm_settings_service, chat_audit_service)
     retrieval_audit_service = build_retrieval_audit_service_from_env()
     feedback_service = build_agent_feedback_service_from_env()
     evaluation_job_store = build_evaluation_job_store_from_env(

@@ -19,6 +19,11 @@ from clasificacion_langchain.api.schemas import (
     AgentWhatsAppConfigUpdatePayload,
     AgentWhatsAppValidationPayload,
     AgentWidgetConfigPayload,
+    ConversationMessagePayload,
+    ConversationReplyRequestPayload,
+    ConversationReplyResponsePayload,
+    ConversationStatusResponsePayload,
+    ConversationSummaryPayload,
     InternalAgentDocumentUploadPayload,
     MediaTranscriptionRequestPayload,
     MediaTranscriptionPayload,
@@ -26,6 +31,7 @@ from clasificacion_langchain.api.schemas import (
     TenantLlmSettingsPayload,
     TenantLlmSettingsUpdatePayload,
 )
+from clasificacion_langchain.channels.whatsapp_send import send_whatsapp_reply
 from clasificacion_langchain.api.support.agent_views import (
     index_status_payload,
     rebuild_index_payload,
@@ -416,6 +422,135 @@ def internal_validate_whatsapp_config(
     base_url = public_widget_api_base_url_internal(x_public_base_url)
     config = runtime.agent_service.get_whatsapp_channel_config(agent)
     return whatsapp_validation_payload(agent, config, whatsapp_webhook_url(base_url, agent.agent_id))
+
+
+# --- Conversaciones (control humano) ---------------------------------------
+
+
+@router.get("/agents/{agent_id}/conversations", response_model=list[ConversationSummaryPayload])
+def internal_list_conversations(
+    request: Request,
+    agent=Depends(internal_agent),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[ConversationSummaryPayload]:
+    runtime = get_runtime(request)
+    rows = runtime.chat_audit_service.list_conversations(
+        company_id=agent.company_id, agent_id=agent.agent_id, status=status, limit=limit
+    )
+    return [
+        ConversationSummaryPayload(
+            session_id=row.session_id,
+            channel=row.channel,
+            status=row.status,
+            message_count=row.message_count,
+            started_at=row.started_at.isoformat(),
+            updated_at=row.updated_at.isoformat(),
+            visitor_id=row.visitor_id,
+            external_user_id=row.external_user_id,
+            authenticated_user_id=row.authenticated_user_id,
+            last_message_preview=row.last_message_preview,
+        )
+        for row in rows
+    ]
+
+
+@router.get(
+    "/agents/{agent_id}/conversations/{session_id}/messages",
+    response_model=list[ConversationMessagePayload],
+)
+def internal_list_conversation_messages(
+    session_id: str,
+    request: Request,
+    agent=Depends(internal_agent),
+) -> list[ConversationMessagePayload]:
+    runtime = get_runtime(request)
+    rows = runtime.chat_audit_service.list_messages(
+        company_id=agent.company_id, agent_id=agent.agent_id, session_id=session_id
+    )
+    return [
+        ConversationMessagePayload(
+            role=row.role,
+            message_text=row.message_text,
+            created_at=row.created_at.isoformat(),
+            intent_label=row.intent_label,
+        )
+        for row in rows
+    ]
+
+
+@router.post(
+    "/agents/{agent_id}/conversations/{session_id}/reply",
+    response_model=ConversationReplyResponsePayload,
+)
+def internal_reply_to_conversation(
+    session_id: str,
+    payload: ConversationReplyRequestPayload,
+    request: Request,
+    agent=Depends(internal_agent),
+) -> ConversationReplyResponsePayload:
+    """
+    Respuesta escrita por una persona. Se graba siempre (rol human_agent); si
+    el canal es whatsapp, ademas se entrega de verdad via send_whatsapp_reply
+    (mismo camino real que usa la respuesta automatica del bot). El canal web
+    (widget) no tiene hoy forma de empujarle un mensaje a un navegador ya
+    abierto, asi que ahi la respuesta queda grabada pero no se entrega en vivo.
+    """
+    runtime = get_runtime(request)
+    channel = runtime.chat_audit_service.add_human_message(
+        company_id=agent.company_id,
+        agent_id=agent.agent_id,
+        session_id=session_id,
+        message_text=payload.message,
+    )
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Conversacion no encontrada")
+
+    delivered = False
+    if channel == "whatsapp":
+        config = runtime.agent_service.get_whatsapp_channel_config(agent)
+        phone_number_id = str(config.get("phone_number_id") or "").strip()
+        if phone_number_id:
+            delivered = send_whatsapp_reply(
+                phone_number_id=phone_number_id, to_number=session_id, text=payload.message
+            )
+    return ConversationReplyResponsePayload(delivered=delivered, channel=channel)
+
+
+@router.post(
+    "/agents/{agent_id}/conversations/{session_id}/takeover",
+    response_model=ConversationStatusResponsePayload,
+)
+def internal_takeover_conversation(
+    session_id: str,
+    request: Request,
+    agent=Depends(internal_agent),
+) -> ConversationStatusResponsePayload:
+    runtime = get_runtime(request)
+    ok = runtime.chat_audit_service.set_conversation_status(
+        company_id=agent.company_id, agent_id=agent.agent_id, session_id=session_id, status="human_active"
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversacion no encontrada")
+    return ConversationStatusResponsePayload(session_id=session_id, status="human_active")
+
+
+@router.post(
+    "/agents/{agent_id}/conversations/{session_id}/release",
+    response_model=ConversationStatusResponsePayload,
+)
+def internal_release_conversation(
+    session_id: str,
+    request: Request,
+    agent=Depends(internal_agent),
+) -> ConversationStatusResponsePayload:
+    runtime = get_runtime(request)
+    ok = runtime.chat_audit_service.set_conversation_status(
+        company_id=agent.company_id, agent_id=agent.agent_id, session_id=session_id, status="open"
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversacion no encontrada")
+    return ConversationStatusResponsePayload(session_id=session_id, status="open")
 
 
 # --- Feedback -------------------------------------------------------------

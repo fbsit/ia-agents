@@ -16,6 +16,11 @@ import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppConfigResponse;
 import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppConfigUpdateRequest;
 import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppValidationResponse;
 import com.clasificacion.platformapi.ai.contract.AiAgentWidgetConfigResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationMessageResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationReplyRequest;
+import com.clasificacion.platformapi.ai.contract.AiConversationReplyResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationStatusResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationSummaryResponse;
 import com.clasificacion.platformapi.ai.contract.AiDeleteResponse;
 import com.clasificacion.platformapi.ai.contract.AiDocumentDeleteResponse;
 import com.clasificacion.platformapi.ai.contract.AiEngineHeaders;
@@ -419,6 +424,97 @@ public class HttpAiEngineClient implements AiEngineClient {
                 .body(payload)
                 .retrieve()
                 .body(AiRuntimeExecuteResponse.class);
+        } catch (RestClientResponseException exc) {
+            throw mapError(exc);
+        }
+    }
+
+    @Override
+    public List<AiConversationSummaryResponse> listConversations(
+        AiRequestContext context,
+        String agentId,
+        String status,
+        int limit
+    ) {
+        StringBuilder path = new StringBuilder("/internal/ai/agents/" + agentId + "/conversations?limit=" + limit);
+        if (status != null && !status.isBlank()) {
+            path.append("&status=").append(status);
+        }
+        String uri = buildUri(path.toString());
+        try {
+            AiConversationSummaryResponse[] payload = restClient.get()
+                .uri(uri)
+                .headers(headers -> enrichHeaders(headers, context))
+                .retrieve()
+                .body(AiConversationSummaryResponse[].class);
+            return payload == null ? List.of() : Arrays.asList(payload);
+        } catch (RestClientResponseException exc) {
+            throw mapError(exc);
+        }
+    }
+
+    @Override
+    public List<AiConversationMessageResponse> getConversationMessages(
+        AiRequestContext context,
+        String agentId,
+        String sessionId
+    ) {
+        String uri = buildUri("/internal/ai/agents/" + agentId + "/conversations/" + sessionId + "/messages");
+        try {
+            AiConversationMessageResponse[] payload = restClient.get()
+                .uri(uri)
+                .headers(headers -> enrichHeaders(headers, context))
+                .retrieve()
+                .body(AiConversationMessageResponse[].class);
+            return payload == null ? List.of() : Arrays.asList(payload);
+        } catch (RestClientResponseException exc) {
+            throw mapError(exc);
+        }
+    }
+
+    @Override
+    public AiConversationReplyResponse replyToConversation(
+        AiRequestContext context,
+        String agentId,
+        String sessionId,
+        AiConversationReplyRequest payload
+    ) {
+        String uri = buildUri("/internal/ai/agents/" + agentId + "/conversations/" + sessionId + "/reply");
+        try {
+            return restClient.post()
+                .uri(uri)
+                .headers(headers -> enrichHeaders(headers, context))
+                .body(payload)
+                .retrieve()
+                .body(AiConversationReplyResponse.class);
+        } catch (RestClientResponseException exc) {
+            throw mapError(exc);
+        }
+    }
+
+    @Override
+    public AiConversationStatusResponse takeoverConversation(AiRequestContext context, String agentId, String sessionId) {
+        String uri = buildUri("/internal/ai/agents/" + agentId + "/conversations/" + sessionId + "/takeover");
+        try {
+            return restClient.post()
+                .uri(uri)
+                .headers(headers -> enrichHeaders(headers, context))
+                .retrieve()
+                .body(AiConversationStatusResponse.class);
+        } catch (RestClientResponseException exc) {
+            throw mapError(exc);
+        }
+    }
+
+    @Override
+    public AiConversationStatusResponse releaseConversation(AiRequestContext context, String agentId, String sessionId) {
+        String uri = buildUri("/internal/ai/agents/" + agentId + "/conversations/" + sessionId + "/release");
+        try {
+            return restClient.post()
+                .uri(uri)
+                .headers(headers -> enrichHeaders(headers, context))
+                .retrieve()
+                .body(AiConversationStatusResponse.class);
         } catch (RestClientResponseException exc) {
             throw mapError(exc);
         }

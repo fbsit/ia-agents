@@ -15,6 +15,11 @@ import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppConfigResponse;
 import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppConfigUpdateRequest;
 import com.clasificacion.platformapi.ai.contract.AiAgentWhatsAppValidationResponse;
 import com.clasificacion.platformapi.ai.contract.AiAgentWidgetConfigResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationMessageResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationReplyRequest;
+import com.clasificacion.platformapi.ai.contract.AiConversationReplyResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationStatusResponse;
+import com.clasificacion.platformapi.ai.contract.AiConversationSummaryResponse;
 import com.clasificacion.platformapi.ai.contract.AiDeleteResponse;
 import com.clasificacion.platformapi.ai.contract.AiDocumentDeleteResponse;
 import com.clasificacion.platformapi.ai.contract.AiMediaTranscriptionRequest;
@@ -108,4 +113,28 @@ public interface AiEngineClient {
         String flowId,
         AiRuntimeExecuteRequest payload
     );
+
+    List<AiConversationSummaryResponse> listConversations(
+        AiRequestContext context,
+        String agentId,
+        String status,
+        int limit
+    );
+
+    List<AiConversationMessageResponse> getConversationMessages(
+        AiRequestContext context,
+        String agentId,
+        String sessionId
+    );
+
+    AiConversationReplyResponse replyToConversation(
+        AiRequestContext context,
+        String agentId,
+        String sessionId,
+        AiConversationReplyRequest payload
+    );
+
+    AiConversationStatusResponse takeoverConversation(AiRequestContext context, String agentId, String sessionId);
+
+    AiConversationStatusResponse releaseConversation(AiRequestContext context, String agentId, String sessionId);
 }

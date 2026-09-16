@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
 from clasificacion_langchain.channels.idempotency import InMemoryIdempotencyStore
-from clasificacion_langchain.channels.meta_whatsapp_api import MetaWhatsAppClient
 from clasificacion_langchain.channels.whatsapp import parse_whatsapp_messages
+from clasificacion_langchain.channels.whatsapp_send import send_whatsapp_reply
 
 from ..dependencies import get_runtime
 
@@ -56,8 +55,6 @@ async def receive_whatsapp_webhook(agent_id: str, request: Request) -> dict[str,
     messages = parse_whatsapp_messages(payload)
     processed = 0
     sent = 0
-    access_token = os.getenv("WHATSAPP_ACCESS_TOKEN", "").strip()
-    client = MetaWhatsAppClient(access_token=access_token) if access_token else None
     for incoming in messages:
         if incoming.phone_number_id and incoming.phone_number_id != (runtime.agent_service.get_whatsapp_channel_config(agent).get("phone_number_id") or ""):
             continue
@@ -66,6 +63,27 @@ async def receive_whatsapp_webhook(agent_id: str, request: Request) -> dict[str,
         processed += 1
         if incoming.message_type != "text" or not incoming.text.strip():
             continue
+
+        # Si una persona ya tomo esta conversacion (ver /conversations/{id}/takeover),
+        # el bot no responde: solo se registra el mensaje entrante para que la
+        # persona lo vea en la consola.
+        status = runtime.chat_audit_service.get_conversation_status(
+            company_id=agent.company_id,
+            agent_id=agent.agent_id,
+            session_id=incoming.session_id,
+            channel="whatsapp",
+        )
+        if status == "human_active":
+            runtime.chat_audit_service.add_customer_message(
+                company_id=agent.company_id,
+                agent_id=agent.agent_id,
+                session_id=incoming.session_id,
+                channel="whatsapp",
+                message_text=incoming.text,
+                external_user_id=incoming.from_number,
+            )
+            continue
+
         answer = runtime.agent_service.chat(
             agent=agent,
             message=incoming.text,
@@ -74,14 +92,6 @@ async def receive_whatsapp_webhook(agent_id: str, request: Request) -> dict[str,
             external_user_id=incoming.from_number,
             channel="whatsapp",
         )
-        if client is not None:
-            try:
-                client.send_text_message(
-                    phone_number_id=incoming.phone_number_id,
-                    to_number=incoming.from_number,
-                    text=answer.answer,
-                )
-                sent += 1
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("whatsapp_reply_failed agent_id=%s detail=%s", agent.agent_id, exc)
+        if send_whatsapp_reply(phone_number_id=incoming.phone_number_id, to_number=incoming.from_number, text=answer.answer):
+            sent += 1
     return {"status": "ok", "processed": processed, "sent": sent}
