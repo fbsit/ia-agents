@@ -989,7 +989,15 @@ def build_chat_audit_service_from_env() -> ChatAuditService:
         return ChatAuditService(store=InMemoryChatAuditStore())
 
     if backend == "postgres":
-        dsn = os.getenv("CHAT_AUDIT_POSTGRES_DSN", "").strip()
+        # Sin DSN propio, reusa la conexion que ya tiene configurada la persistencia
+        # principal (POSTGRES_DSN/DATABASE_URL, ver runtime/builders.py:postgres_dsn()):
+        # en produccion esa var ya existe (ahi viven agentes/usuarios/orgs), asi que
+        # activar el audit no exige cargar una DSN nueva a mano.
+        dsn = (
+            os.getenv("CHAT_AUDIT_POSTGRES_DSN", "").strip()
+            or os.getenv("POSTGRES_DSN", "").strip()
+            or os.getenv("DATABASE_URL", "").strip()
+        )
         schema = os.getenv("CHAT_AUDIT_POSTGRES_SCHEMA", "public").strip() or "public"
         if not dsn:
             logger.warning("chat_audit_disabled reason=missing_postgres_dsn")
