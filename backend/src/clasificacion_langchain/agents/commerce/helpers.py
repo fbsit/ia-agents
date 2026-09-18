@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 COMMERCE_CONTEXT_LOCK = threading.Lock()
 COMMERCE_PRODUCT_CONTEXT: dict[str, dict[str, Any]] = {}
-WORKFLOW_EXPIRATION_SECONDS = 300
-WORKFLOW_RESET_CONFIRMATION_SECONDS = 180
+WORKFLOW_EXPIRATION_SECONDS = 1800  # 30 min sin actividad antes de preguntar "seguimos?"
+WORKFLOW_RESET_CONFIRMATION_SECONDS = 86400  # 24h de margen para retomar antes de reiniciar de cero
 
 GREETING_TERMS = {
     "hola",

@@ -18,7 +18,7 @@ class ResumeTimeoutResolution:
 
 
 def timeout_message() -> str:
-    return "El proceso quedo pausado por inactividad. Si quieres retomarlo donde lo dejamos, responde 'si' dentro de 3 minutos. Si no, reinicio todo."
+    return "El proceso quedo pausado por inactividad. Si quieres retomarlo donde lo dejamos, responde 'si' (podes hacerlo mas tarde, no hace falta que sea ahora). Si preferis, dime que necesitas y arrancamos de nuevo."
 
 
 def _stage_is_active(value: object) -> bool:
@@ -188,7 +188,7 @@ def resolve_legacy_preflight(
     if str((workflow_state or {}).get("workflow_expired") or "").strip().lower() in {"1", "true", "yes", "si"}:
         return ResumeTimeoutResolution(
             payload={
-                "answer": "El proceso anterior se reinicio por inactividad despues de 5 minutos. Arranquemos de nuevo: dime que necesitas.",
+                "answer": "El proceso anterior se reinicio por inactividad. Arranquemos de nuevo: dime que necesitas.",
                 "intent_label": "workflow_reset",
                 "workflow_stage": "browsing",
                 "checkout_stage": "",

@@ -2863,7 +2863,7 @@ def test_expired_workflow_requests_confirmation_before_reset(monkeypatch: pytest
         agent_id="demo-agent",
         session_id="expired-session",
     )
-    summary.updated_at = (datetime.now(UTC) - timedelta(minutes=6)).isoformat()
+    summary.updated_at = (datetime.now(UTC) - timedelta(minutes=35)).isoformat()
 
     workflow_state = module._agent_workflow_state("demo-company", "demo-agent", "expired-session")  # type: ignore[attr-defined]
     assert workflow_state.get("workflow_timeout_confirmation") == "true"
@@ -2884,7 +2884,7 @@ def test_expired_workflow_requests_confirmation_before_reset(monkeypatch: pytest
 
     assert payload is not None
     assert payload["intent_label"] == "workflow_resume_confirmation"
-    assert "3 minutos" in payload["answer"].lower()
+    assert "podes hacerlo mas tarde" in payload["answer"].lower()
 
     summary_after = module.agent_service.get_session_summary(  # type: ignore[attr-defined]
         company_id="demo-company",
@@ -3001,7 +3001,7 @@ def test_timeout_confirmation_resume_from_payment_stage_is_actionable(monkeypatc
     assert "como quieres continuar" not in payload["answer"].lower()
 
 
-def test_timeout_confirmation_resets_after_additional_three_minutes(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_timeout_confirmation_resets_after_additional_grace_window(monkeypatch: pytest.MonkeyPatch) -> None:
     module, _client = _load_api(monkeypatch, compat_mode="false")
 
     module.agent_service.update_session_summary(  # type: ignore[attr-defined]
@@ -3012,7 +3012,7 @@ def test_timeout_confirmation_resets_after_additional_three_minutes(monkeypatch:
         checkout_stage="order_summary_pending",
         pending_next_step="order_confirmation",
         selected_products=["Milo"],
-        workflow_reset_started_at=(datetime.now(UTC) - timedelta(minutes=4)).isoformat(),
+        workflow_reset_started_at=(datetime.now(UTC) - timedelta(hours=25)).isoformat(),
     )
 
     workflow_state = module._agent_workflow_state("demo-company", "demo-agent", "hard-reset-session")  # type: ignore[attr-defined]
@@ -3062,7 +3062,7 @@ def test_long_inactivity_resets_without_confirmation_prompt(monkeypatch: pytest.
         agent_id="demo-agent",
         session_id="very-old-session",
     )
-    summary.updated_at = (datetime.now(UTC) - timedelta(hours=3)).isoformat()
+    summary.updated_at = (datetime.now(UTC) - timedelta(hours=30)).isoformat()
 
     workflow_state = module._agent_workflow_state("demo-company", "demo-agent", "very-old-session")  # type: ignore[attr-defined]
     assert workflow_state == {"workflow_expired": "true"}
@@ -3111,7 +3111,7 @@ def test_workflow_reminder_worker_sends_proactive_whatsapp_message(monkeypatch: 
         agent_id="demo-agent",
         session_id="56912345678",
     )
-    summary.updated_at = (datetime.now(UTC) - timedelta(minutes=6)).isoformat()
+    summary.updated_at = (datetime.now(UTC) - timedelta(minutes=35)).isoformat()
 
     module._process_workflow_reminders_once()  # type: ignore[attr-defined]
 
@@ -3119,7 +3119,11 @@ def test_workflow_reminder_worker_sends_proactive_whatsapp_message(monkeypatch: 
         {
             "tenant_id": "demo-company",
             "to": "56912345678",
-            "message": "El proceso quedo pausado por inactividad. Si quieres retomarlo donde lo dejamos, responde 'si' dentro de 3 minutos. Si no, reinicio todo.",
+            "message": (
+                "El proceso quedo pausado por inactividad. Si quieres retomarlo donde lo dejamos, "
+                "responde 'si' (podes hacerlo mas tarde, no hace falta que sea ahora). "
+                "Si preferis, dime que necesitas y arrancamos de nuevo."
+            ),
         }
     ]
     summary_after = module.agent_service.get_session_summary(  # type: ignore[attr-defined]
