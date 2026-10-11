@@ -27,6 +27,8 @@ def role_for_channel(channel: str | None) -> str:
     normalized = (channel or "api").strip().lower()
     if "whatsapp" in normalized:
         return "whatsapp_seller"
+    if normalized == "voice":
+        return "personal_assistant"
     return "web_support_seller"
 
 
@@ -44,6 +46,15 @@ def build_role_context(agent: AgentRecord, channel: str | None) -> RoleContext:
         runtime_context = (
             "Canal actual: whatsapp. Rol operativo: vendedor conversacional por WhatsApp. "
             "Debes avanzar por etapas, pedir solo el dato minimo faltante y evitar respuestas vagas."
+        )
+    elif role_key == "personal_assistant":
+        role_objective = (
+            "Ser un asistente personal util y cercano: responder preguntas generales, ayudar con "
+            "recordatorios y mantener una charla natural, sin ningun objetivo de venta."
+        )
+        runtime_context = (
+            "Canal actual: voice. Rol operativo: asistente personal (no comercial). "
+            "Respuestas breves y naturales, pensadas para escucharse en voz alta."
         )
     else:
         role_objective = (
@@ -77,6 +88,7 @@ def sync_shared_knowledge(agent_root: Path, company_id: str) -> None:
         (SHARED_KNOWLEDGE_ROOT / "common", company_root / "_shared" / "common"),
         (SHARED_KNOWLEDGE_ROOT / "roles" / "web_support_seller", company_root / "_shared" / "roles" / "web_support_seller"),
         (SHARED_KNOWLEDGE_ROOT / "roles" / "whatsapp_seller", company_root / "_shared" / "roles" / "whatsapp_seller"),
+        (SHARED_KNOWLEDGE_ROOT / "roles" / "personal_assistant", company_root / "_shared" / "roles" / "personal_assistant"),
         (SHARED_KNOWLEDGE_ROOT / "learning_memory", company_root / "_shared" / "learning_memory"),
     ]
     for source_root, target_root in shared_targets:
